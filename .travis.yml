@@ -1,9 +1,20 @@
 language: scala
+env:
+  - TEST_TASK=scalajs-test/test
 script:
-  - sbt package scalajs-test/test
+  - sbt package $TEST_TASK
 scala:
   - 2.11.0-M7
 jdk:
   - oraclejdk7
   - openjdk7
   - openjdk6
+matrix:
+  include:
+    - jdk: openjdk6
+      env:
+        - TEST_TASK=scalajs-partest-suite/test
+  allow_failures:
+    - env:
+        - TEST_TASK=scalajs-partest-suite/test
+  fast_finish: true
