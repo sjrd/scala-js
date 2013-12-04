@@ -371,6 +371,11 @@ run/t5655.scala
 run/t5072.scala
 run/repl-colon-type.scala
 run/kind-repl-command.scala
+run/repl-trim-stack-trace.scala
+run/t4594-repl-settings.scala
+run/repl-save.scala
+run/repl-paste-raw.scala
+run/repl-paste-4.scala
 
 # Using the compiler API
 
