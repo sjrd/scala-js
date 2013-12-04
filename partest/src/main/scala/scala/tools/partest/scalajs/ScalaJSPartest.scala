@@ -68,7 +68,7 @@ trait ScalaJSSuiteRunner extends SuiteRunner {
   private lazy val testUnknownOnly =
     scala.util.Properties.propOrFalse("scala.tools.partest.scalajs.testunknownonly")
 
-  private lazy val buglistedTestFileNames = 
+  private lazy val buglistedTestFileNames =
     readTestList("/scala/tools/partest/scalajs/BuglistedTests.txt")
 
   private lazy val blacklistedTestFileNames =
@@ -100,7 +100,7 @@ trait ScalaJSSuiteRunner extends SuiteRunner {
        !whitelistedTestFileNames.contains(absPath) &&
        !buglistedTestFileNames.contains(absPath))
     else if (useBlacklist) !blacklistedTestFileNames.contains(absPath)
-    else !whitelistedTestFileNames.contains(absPath)
+    else whitelistedTestFileNames.contains(absPath)
   }
 }
 
