@@ -100,7 +100,7 @@ trait ScalaJSSuiteRunner extends SuiteRunner {
        !whitelistedTestFileNames.contains(absPath) &&
        !buglistedTestFileNames.contains(absPath))
     else if (useBlacklist) !blacklistedTestFileNames.contains(absPath)
-    else !whitelistedTestFileNames.contains(absPath)
+    else whitelistedTestFileNames.contains(absPath)
   }
 }
 
