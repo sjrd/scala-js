@@ -2519,4 +2519,4 @@ run/macro-expand-recursive
 run/t5552.scala
 run/t949.scala
 run/macro-bundle-toplevel
-
+run/t1909b.scala
