@@ -112,6 +112,10 @@ run/t4294.scala
 
 run/Predef.readLine.scala
 
+# Using System.getProperties
+
+run/t6240b.scala
+
 # Using reflection
 
 run/t6063
@@ -214,6 +218,7 @@ run/reflection-allmirrors-tostring.scala
 run/valueclasses-typetag-existential.scala
 run/toolbox_console_reporter.scala
 run/reflection-enclosed-inner-inner-basic.scala
+run/t5256b.scala
 
 run/reify_newimpl_29.scala
 run/reify_magicsymbols.scala
@@ -315,6 +320,8 @@ run/collection-conversions.scala
 run/concurrent-map-conversions.scala
 run/t4761.scala
 run/concurrent-stream.scala
+run/t7498.scala
+run/t6448.scala
 
 # Using parser combinators
 
@@ -376,6 +383,7 @@ run/t4594-repl-settings.scala
 run/repl-save.scala
 run/repl-paste-raw.scala
 run/repl-paste-4.scala
+run/t7801.scala
 
 # Using the compiler API
 

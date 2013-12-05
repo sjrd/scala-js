@@ -1,0 +1,11 @@
+# I don't understand the error
+run/runtime.scala
+
+# does hashing has to be consistend with scala?
+# both run, but do not produce the same hashes
+run/caseClassHash.scala
+
+# actually uses threads. what to do?
+run/t6969.scala
+
+
