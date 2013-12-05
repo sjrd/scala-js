@@ -4,3 +4,4 @@
 # BlacklistedTests.txt
 run/t7899.scala
 run/t5857.scala
+run/bitsets.scala
