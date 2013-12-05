@@ -385,6 +385,57 @@ run/repl-paste-raw.scala
 run/repl-paste-4.scala
 run/t7801.scala
 
+# Using the Repl (scala.tools.partest.ReplTest)
+jvm/interpreter.scala
+jvm/throws-annot-from-java/Test_3.scala
+jvm/xml05.scala
+run/class-symbol-contravariant.scala
+run/lub-visibility.scala
+run/macro-bundle-repl.scala
+run/macro-repl-basic.scala
+run/macro-repl-dontexpand.scala
+run/macro-system-properties.scala
+run/reflection-equality.scala
+run/reflection-repl-elementary.scala
+run/reify_newimpl_26.scala
+run/repl-empty-package/s_2.scala
+run/repl-javap-app.scala
+run/repl-out-dir.scala
+run/repl-term-macros.scala
+run/repl-transcript.scala
+run/repl-type-verbose.scala
+run/t3376.scala
+run/t4025.scala
+run/t4172.scala
+run/t4216.scala
+run/t4542.check
+run/t4542.scala
+run/t4671.check
+run/t4671.scala
+run/t5256d.scala
+run/t5535.scala
+run/t5537.scala
+run/t5789.scala
+run/t6086-repl.scala
+run/t6146b.scala
+run/t6187.scala
+run/t6320.scala
+run/t6329_repl_bug.pending
+run/t6381.scala
+run/t6434.scala
+run/t6439.scala
+run/t6507.scala
+run/t6549.scala
+run/t6937.scala
+run/t7185.scala
+run/t7319.scala
+run/t7482a.scala
+run/t7634.scala
+run/t7747-repl.scala
+run/t7805-repl-i.scala
+run/tpeCache-tyconCache.scala
+
+
 # Using the compiler API
 
 run/t2512.scala
