@@ -2520,3 +2520,5 @@ run/t5552.scala
 run/t949.scala
 run/macro-bundle-toplevel
 run/t1909b.scala
+run/delambdafy-nested-by-name.scala
+run/delambdafy-two-lambdas.scala
