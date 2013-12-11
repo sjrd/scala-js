@@ -97,9 +97,12 @@ run/t4601.scala
 run/colltest.scala
 run/equality.scala
 
-# Uses java.math.Big*
+# Uses java.math.BigDecimal / BigInteger
 run/bigDecimalCache.scala 
 run/hashhash.scala
+
+#  This test uses range on Doubles which uses BigDecimal in return
+run/t5857.scala
 
 # Using Threads
 run/t6969.scala
@@ -116,6 +119,10 @@ run/bridges.scala
 
 run/tailcalls.scala
 run/t4294.scala
+
+# Using scala.Symbol
+
+run/fors.scala
 
 # Using IO
 
@@ -478,3 +485,5 @@ run/t2106.scala
 run/t4317
 run/t4238
 
+# Using arguments to partests
+run/absoverride.scala
