@@ -1,11 +1,10 @@
 # I don't understand the error
 run/runtime.scala
-
-# does hashing has to be consistend with scala?
-# both run, but do not produce the same hashes
-run/caseClassHash.scala
-
-# actually uses threads. what to do?
-run/t6969.scala
-
+run/delambdafy_t6028.scala
+run/delambdafy_t6555.scala
+run/delambdafy_uncurry_byname_inline.scala
+run/delambdafy_uncurry_byname_method.scala
+run/delambdafy_uncurry_inline.scala
+run/delambdafy_uncurry_method.scala
+run/existential-rangepos.scala
 
