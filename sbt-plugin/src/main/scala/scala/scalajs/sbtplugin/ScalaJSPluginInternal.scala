@@ -43,6 +43,11 @@ import java.net.URLClassLoader
  */
 object ScalaJSPluginInternal {
 
+  /* To avoid counting at least the first run of fastOptJS, when the JVM
+   * warms up the optimizer code.
+   */
+  private var firstFastOptJSInThisJVM: Boolean = true
+
   import ScalaJSPlugin.autoImport._
 
   /** Dummy setting to ensure we do not fork in Scala.js run & test. */
@@ -143,21 +148,35 @@ object ScalaJSPluginInternal {
 
         val opts = (scalaJSOptimizerOptions in fastOptJS).value
 
-        import ScalaJSOptimizer._
-        val outCP = (scalaJSOptimizer in fastOptJS).value.optimizeCP(
-            (scalaJSPreLinkClasspath in fastOptJS).value,
-            Config(
-                output = WritableFileVirtualJSFile(output),
-                cache = Some(taskCache),
-                wantSourceMap = (emitSourceMaps in fastOptJS).value,
-                relativizeSourceMapBase = relSourceMapBase,
-                bypassLinkingErrors = opts.bypassLinkingErrors,
-                checkIR = opts.checkScalaJSIR,
-                disableOptimizer = opts.disableOptimizer,
-                batchMode = opts.batchMode),
-            s.log)
+        val measurementsFile = baseDirectory.value / s"sjs-measurements-${output.getName}.log"
+        val measurementsWriter = new java.io.PrintStream(new java.io.BufferedOutputStream(
+            new java.io.FileOutputStream(measurementsFile, true)), true, "utf-8")
+        try {
+          val baseLogger: org.scalajs.core.tools.logging.Logger = s.log
+          val measureLogger =
+            if (firstFastOptJSInThisJVM) baseLogger
+            else new org.scalajs.core.tools.optimizer.IncOptBenchmarkLogger(
+                baseLogger, measurementsWriter)
 
-         Attributed.blank(output).put(scalaJSCompleteClasspath, outCP)
+          import ScalaJSOptimizer._
+          val outCP = (scalaJSOptimizer in fastOptJS).value.optimizeCP(
+              (scalaJSPreLinkClasspath in fastOptJS).value,
+              Config(
+                  output = WritableFileVirtualJSFile(output),
+                  cache = Some(taskCache),
+                  wantSourceMap = (emitSourceMaps in fastOptJS).value,
+                  relativizeSourceMapBase = relSourceMapBase,
+                  bypassLinkingErrors = opts.bypassLinkingErrors,
+                  checkIR = opts.checkScalaJSIR,
+                  disableOptimizer = opts.disableOptimizer,
+                  batchMode = opts.batchMode),
+              measureLogger)
+
+          firstFastOptJSInThisJVM = false
+          Attributed.blank(output).put(scalaJSCompleteClasspath, outCP)
+        } finally {
+          measurementsWriter.close()
+        }
       },
       fastOptJS <<=
         fastOptJS.dependsOn(packageJSDependencies, packageScalaJSLauncher),

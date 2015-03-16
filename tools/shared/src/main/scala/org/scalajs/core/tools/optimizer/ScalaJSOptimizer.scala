@@ -116,6 +116,14 @@ class ScalaJSOptimizer(val semantics: Semantics, val outputMode: OutputMode,
   def optimizeIR(irFiles: Traversable[VirtualScalaJSIRFile],
       cfg: OptimizerConfig, builder: JSTreeBuilder, logger: Logger): Unit = {
 
+    val measureLogger = logger match {
+      case logger: IncOptBenchmarkLogger => Some(logger)
+      case _                             => None
+    }
+
+
+    measureLogger.foreach(_.startRun())
+
     // Update state that is a per-run configuration for the overall optimizer,
     // but not the phases
     if (cfg.wantSourceMap != withSourceMap) {
@@ -146,8 +154,28 @@ class ScalaJSOptimizer(val semantics: Semantics, val outputMode: OutputMode,
       resetStateFromOptimizer()
 
     val finalResult = if (useOptimizer) {
-      val rawOptimized = logTime(logger, "Inc. optimizer") {
-        optimizer.update(linkResult, logger)
+      val runs =
+        if (measureLogger.isEmpty) 0 to 0
+        else if (cfg.batchMode) 1 to 1 // 2 is really too slow to give to users
+        else 0 to 1 // ditto for 2
+
+      var rawOptimized: LinkingUnit = null
+      for (run <- runs) {
+        val opt = run match {
+          case 0 =>
+            measureLogger.foreach(_.startIncremental())
+            optimizer
+          case 1 =>
+            measureLogger.foreach(_.startBatch())
+            optimizerFactory(semantics, withSourceMap)
+          case 2 =>
+            measureLogger.foreach(_.startBatchSingleThread())
+            new IncOptimizer(semantics, withSourceMap)
+        }
+
+        rawOptimized = logTime(logger, "Inc. optimizer") {
+          opt.update(linkResult, logger)
+        }
       }
 
       logTime(logger, "Refiner") {
@@ -162,6 +190,8 @@ class ScalaJSOptimizer(val semantics: Semantics, val outputMode: OutputMode,
     logTime(logger, "Emitter (write output)") {
       emitter.emit(finalResult, builder, logger)
     }
+
+    measureLogger.foreach(_.endRun())
   }
 
   /** Resets all persistent state of this optimizer */

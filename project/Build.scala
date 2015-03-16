@@ -123,8 +123,8 @@ object Build extends sbt.Build {
   private def publishToBintraySettings = (
       bintrayPublishSettings
   ) ++ Seq(
-      repository in bintray := "scala-js-releases",
-      bintrayOrganization in bintray := Some("scala-js")
+      repository in bintray := "scala-js-experiments",
+      bintrayOrganization in bintray := Some("sjrd")
   )
 
   val publishIvySettings = (
@@ -289,7 +289,7 @@ object Build extends sbt.Build {
   )
 
   val commonToolsSettings = (
-      commonSettings ++ publishSettings
+      commonSettings ++ publishIvySettings
   ) ++ Seq(
       name := "Scala.js tools",
 
@@ -309,6 +309,7 @@ object Build extends sbt.Build {
       id = "tools",
       base = file("tools/jvm"),
       settings = commonToolsSettings ++ Seq(
+          version := "0.6.2+bench.1",
           libraryDependencies ++= Seq(
               "com.google.javascript" % "closure-compiler" % "v20130603",
               "com.googlecode.json-simple" % "json-simple" % "1.1.1",
@@ -365,7 +366,8 @@ object Build extends sbt.Build {
   lazy val jsEnvs: Project = Project(
       id = "jsEnvs",
       base = file("js-envs"),
-      settings = commonSettings ++ publishSettings ++ Seq(
+      settings = commonSettings ++ publishIvySettings ++ Seq(
+          version := "0.6.2+bench.1",
           name := "Scala.js JS Envs",
           libraryDependencies ++= Seq(
               "io.apigee" % "rhino" % "1.7R5pre4",
@@ -380,7 +382,8 @@ object Build extends sbt.Build {
   lazy val testAdapter = Project(
       id = "testAdapter",
       base = file("test-adapter"),
-      settings = commonSettings ++ publishSettings ++ Seq(
+      settings = commonSettings ++ publishIvySettings ++ Seq(
+          version := "0.6.2+bench.1",
           name := "Scala.js sbt test adapter",
           libraryDependencies += "org.scala-sbt" % "test-interface" % "1.0",
           previousArtifact := Some(
@@ -392,6 +395,7 @@ object Build extends sbt.Build {
       id = "sbtPlugin",
       base = file("sbt-plugin"),
       settings = commonSettings ++ publishIvySettings ++ Seq(
+          version := "0.6.2+bench.1",
           name := "Scala.js sbt plugin",
           normalizedName := "sbt-scalajs",
           name in bintray := "sbt-scalajs-plugin", // "sbt-scalajs" was taken
