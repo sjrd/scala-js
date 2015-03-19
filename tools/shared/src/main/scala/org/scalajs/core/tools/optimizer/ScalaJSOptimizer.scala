@@ -173,9 +173,12 @@ class ScalaJSOptimizer(val semantics: Semantics, val outputMode: OutputMode,
             new IncOptimizer(semantics, withSourceMap)
         }
 
-        rawOptimized = logTime(logger, "Inc. optimizer") {
+        val newRawOptimized = logTime(logger, "Inc. optimizer") {
           opt.update(linkResult, logger)
         }
+
+        if (rawOptimized == null)
+          rawOptimized = newRawOptimized
       }
 
       logTime(logger, "Refiner") {

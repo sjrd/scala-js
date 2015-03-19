@@ -309,7 +309,7 @@ object Build extends sbt.Build {
       id = "tools",
       base = file("tools/jvm"),
       settings = commonToolsSettings ++ Seq(
-          version := "0.6.2+bench.1",
+          version := "0.6.2+bench.2",
           libraryDependencies ++= Seq(
               "com.google.javascript" % "closure-compiler" % "v20130603",
               "com.googlecode.json-simple" % "json-simple" % "1.1.1",
@@ -367,7 +367,7 @@ object Build extends sbt.Build {
       id = "jsEnvs",
       base = file("js-envs"),
       settings = commonSettings ++ publishIvySettings ++ Seq(
-          version := "0.6.2+bench.1",
+          version := "0.6.2+bench.2",
           name := "Scala.js JS Envs",
           libraryDependencies ++= Seq(
               "io.apigee" % "rhino" % "1.7R5pre4",
@@ -383,7 +383,7 @@ object Build extends sbt.Build {
       id = "testAdapter",
       base = file("test-adapter"),
       settings = commonSettings ++ publishIvySettings ++ Seq(
-          version := "0.6.2+bench.1",
+          version := "0.6.2+bench.2",
           name := "Scala.js sbt test adapter",
           libraryDependencies += "org.scala-sbt" % "test-interface" % "1.0",
           previousArtifact := Some(
@@ -395,7 +395,7 @@ object Build extends sbt.Build {
       id = "sbtPlugin",
       base = file("sbt-plugin"),
       settings = commonSettings ++ publishIvySettings ++ Seq(
-          version := "0.6.2+bench.1",
+          version := "0.6.2+bench.2",
           name := "Scala.js sbt plugin",
           normalizedName := "sbt-scalajs",
           name in bintray := "sbt-scalajs-plugin", // "sbt-scalajs" was taken
