@@ -1940,7 +1940,14 @@ private[emitter] class JSDesugaring(internalOptions: InternalOptions) {
           genRawJSClassConstructor(linkedClass)
 
         case LoadJSModule(cls) =>
-          genLoadModule(cls.className)
+          val linkedClass = classEmitter.linkedClassByName(cls.className)
+          if (linkedClass.kind == ClassKind.JSModuleClass) {
+            genLoadModule(linkedClass.encodedName)
+          } else {
+            require(linkedClass.kind == ClassKind.NativeJSModuleClass)
+            assert(linkedClass.jsNativeLoadSpec.isDefined)
+            genLoadJSFromSpec(linkedClass.jsNativeLoadSpec.get)
+          }
 
         case JSSpread(items) =>
           assert(outputMode == OutputMode.ECMAScript6)
@@ -2267,10 +2274,19 @@ private[emitter] class JSDesugaring(internalOptions: InternalOptions) {
     if (linkedClass.kind == ClassKind.JSClass) {
       encodeClassVar(linkedClass.encodedName)
     } else {
-      require(linkedClass.jsName.isDefined)
-      linkedClass.jsName.get.split("\\.").foldLeft(envField("g")) {
-        (prev, part) => genBracketSelect(prev, js.StringLiteral(part))
-      }
+      require(linkedClass.kind == ClassKind.NativeJSClass)
+      assert(linkedClass.jsNativeLoadSpec.isDefined)
+      genLoadJSFromSpec(linkedClass.jsNativeLoadSpec.get)
+    }
+  }
+
+  private[emitter] def genLoadJSFromSpec(spec: JSNativeLoadSpec)(
+      implicit outputMode: OutputMode, pos: Position): js.Tree = {
+    spec match {
+      case JSNativeLoadSpec.Global(path) =>
+        path.foldLeft(envField("g")) {
+          (prev, part) => genBracketSelect(prev, js.StringLiteral(part))
+        }
     }
   }
 
