@@ -20,6 +20,7 @@ import org.scalajs.core.tools.linker.{LinkedClass, LinkingUnit}
 import org.scalajs.core.tools.javascript._
 import org.scalajs.core.tools.io._
 
+import org.scalajs.core.tools.linker.backend.ModuleKind.NoModule
 import org.scalajs.core.tools.linker.backend.OutputMode.ECMAScript51Global
 import org.scalajs.core.tools.linker.backend.emitter._
 
@@ -43,7 +44,8 @@ private[rhino] class ScalaJSCoreLib(linkingUnit: LinkingUnit) {
 
   def insertInto(context: Context, scope: Scriptable): Unit = {
     val semantics = linkingUnit.semantics
-    context.evaluateFile(scope, CoreJSLibs.lib(semantics, ECMAScript51Global))
+    context.evaluateFile(scope,
+        CoreJSLibs.lib(semantics, ECMAScript51Global, NoModule))
     lazifyScalaJSFields(scope)
 
     // Make sure exported symbols are loaded

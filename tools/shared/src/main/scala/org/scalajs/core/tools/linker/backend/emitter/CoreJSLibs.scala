@@ -15,7 +15,7 @@ import org.scalajs.core.ir.ScalaJSVersions
 import org.scalajs.core.tools.io._
 
 import org.scalajs.core.tools.sem._
-import org.scalajs.core.tools.linker.backend.OutputMode
+import org.scalajs.core.tools.linker.backend.{ModuleKind, OutputMode}
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
@@ -23,7 +23,7 @@ import scala.collection.mutable
 // The only reason this is not private[backend] is that Rhino needs it
 private[scalajs] object CoreJSLibs {
 
-  private type Config = (Semantics, OutputMode)
+  private type Config = (Semantics, OutputMode, ModuleKind)
 
   private val cachedLibByConfig =
     mutable.HashMap.empty[Config, VirtualJSFile]
@@ -34,20 +34,22 @@ private[scalajs] object CoreJSLibs {
   private val gitHubBaseURI =
     new URI("https://raw.githubusercontent.com/scala-js/scala-js/")
 
-  def lib(semantics: Semantics, outputMode: OutputMode): VirtualJSFile = {
+  def lib(semantics: Semantics, outputMode: OutputMode,
+      moduleKind: ModuleKind): VirtualJSFile = {
     synchronized {
       cachedLibByConfig.getOrElseUpdate(
-          (semantics, outputMode), makeLib(semantics, outputMode))
+          (semantics, outputMode, moduleKind),
+          makeLib(semantics, outputMode, moduleKind))
     }
   }
 
-  private def makeLib(semantics: Semantics,
-      outputMode: OutputMode): VirtualJSFile = {
-    new ScalaJSEnvVirtualJSFile(makeContent(semantics, outputMode))
+  private def makeLib(semantics: Semantics, outputMode: OutputMode,
+      moduleKind: ModuleKind): VirtualJSFile = {
+    new ScalaJSEnvVirtualJSFile(makeContent(semantics, outputMode, moduleKind))
   }
 
-  private def makeContent(semantics: Semantics,
-      outputMode: OutputMode): String = {
+  private def makeContent(semantics: Semantics, outputMode: OutputMode,
+      moduleKind: ModuleKind): String = {
     // This is a basic sort-of-C-style preprocessor
 
     def getOption(name: String): String = name match {
@@ -62,6 +64,8 @@ private[scalajs] object CoreJSLibs {
         semantics.productionMode.toString()
       case "outputMode" =>
         outputMode.toString()
+      case "moduleKind" =>
+        moduleKind.toString()
     }
 
     val originalLines = ScalaJSEnvLines

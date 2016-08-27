@@ -40,7 +40,7 @@ final class ClosureLinkerBackend(
 ) extends LinkerBackend(semantics, ESLevel.ES5, withSourceMap, config) {
 
   private[this] val emitter = {
-    new Emitter(semantics, OutputMode.ECMAScript51Isolated)
+    new Emitter(semantics, OutputMode.ECMAScript51Isolated, config.moduleKind)
       .withOptimizeBracketSelects(false)
   }
 
@@ -69,7 +69,7 @@ final class ClosureLinkerBackend(
     val module = new JSModule("Scala.js")
 
     module.add(new CompilerInput(toClosureSource(
-        CoreJSLibs.lib(semantics, OutputMode.ECMAScript51Isolated))))
+        CoreJSLibs.lib(semantics, OutputMode.ECMAScript51Isolated, config.moduleKind))))
 
     val ast = builder.closureAST
     module.add(new CompilerInput(ast, ast.getInputId(), false))
@@ -190,7 +190,9 @@ private object ClosureLinkerBackend {
     Function.prototype.constructor = function() {};
     Function.prototype.call = function() {};
     Function.prototype.apply = function() {};
+    function require() {}
     var global = {};
+    var exports = {};
     var __ScalaJSEnv = {};
     var NaN = 0.0/0.0, Infinity = 1.0/0.0, undefined = void 0;
     """

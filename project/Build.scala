@@ -1163,7 +1163,9 @@ object Build {
       settings = exampleSettings ++ Seq(
           name := "Hello World - Scala.js example",
           moduleName := "helloworld",
-          persistLauncher := true
+          //persistLauncher := true
+          scalaJSModuleKind := org.scalajs.core.tools.linker.backend.ModuleKind.NodeJSModule,
+          scalaJSUseRhino := false
       )
   ).withScalaJSCompiler.dependsOn(library)
 

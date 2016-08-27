@@ -547,9 +547,20 @@ abstract class PrepJSInterop extends plugins.PluginComponent
               ownerLoadSpec match {
                 case JSNativeLoadSpec.Global(path) =>
                   JSNativeLoadSpec.Global(path :+ jsName)
+                case JSNativeLoadSpec.Import(module, path) =>
+                  JSNativeLoadSpec.Import(module, path :+ jsName)
               }
             } else if (isJSGlobalScope(implDef)) {
               JSNativeLoadSpec.Global(Nil)
+            } else if (sym.hasAnnotation(JSImportAnnotation)) {
+              val annot = sym.getAnnotation(JSImportAnnotation).get
+              val module = annot.stringArg(0).get
+              annot.stringArg(1).fold {
+                JSNativeLoadSpec.Import(module, Nil)
+              } { pathName =>
+                val path = pathName.split('.').toList
+                JSNativeLoadSpec.Import(module, path)
+              }
             } else {
               val needsExplicitJSName = {
                 (enclosingOwner is OwnerKind.ScalaMod) &&

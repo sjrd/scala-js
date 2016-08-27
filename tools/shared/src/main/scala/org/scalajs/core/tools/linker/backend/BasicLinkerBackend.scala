@@ -28,7 +28,8 @@ final class BasicLinkerBackend(
     config: LinkerBackend.Config
 ) extends LinkerBackend(semantics, outputMode.esLevel, withSourceMap, config) {
 
-  private[this] val emitter = new Emitter(semantics, outputMode)
+  private[this] val emitter =
+    new Emitter(semantics, outputMode, config.moduleKind)
 
   val symbolRequirements: SymbolRequirement = emitter.symbolRequirements
 
