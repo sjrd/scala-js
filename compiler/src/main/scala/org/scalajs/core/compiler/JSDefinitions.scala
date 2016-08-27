@@ -63,6 +63,7 @@ trait JSDefinitions { self: JSGlobalAddons =>
     lazy val JSExportDescendentClassesAnnotation = getRequiredClass("scala.scalajs.js.annotation.JSExportDescendentClasses")
     lazy val JSExportAllAnnotation     = getRequiredClass("scala.scalajs.js.annotation.JSExportAll")
     lazy val JSExportNamedAnnotation   = getRequiredClass("scala.scalajs.js.annotation.JSExportNamed")
+    lazy val JSImportAnnotation        = getRequiredClass("scala.scalajs.js.annotation.JSImport")
     lazy val ScalaJSDefinedAnnotation  = getRequiredClass("scala.scalajs.js.annotation.ScalaJSDefined")
     lazy val SJSDefinedAnonymousClassAnnotation = getRequiredClass("scala.scalajs.js.annotation.SJSDefinedAnonymousClass")
     lazy val HasJSNativeLoadSpecAnnotation = getRequiredClass("scala.scalajs.js.annotation.internal.HasJSNativeLoadSpec")

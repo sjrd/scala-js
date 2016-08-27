@@ -14,6 +14,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 import org.scalajs.core.ir.{ClassKind, Position}
+import org.scalajs.core.ir.Trees.JSNativeLoadSpec
 
 import org.scalajs.core.tools.sem._
 import org.scalajs.core.tools.logging._
@@ -22,16 +23,27 @@ import org.scalajs.core.tools.javascript.{Trees => js, _}
 
 import org.scalajs.core.tools.linker._
 import org.scalajs.core.tools.linker.analyzer.SymbolRequirement
-import org.scalajs.core.tools.linker.backend.OutputMode
+import org.scalajs.core.tools.linker.backend.{OutputMode, ModuleKind}
 
 /** Emits a desugared JS tree to a builder */
 final class Emitter private (semantics: Semantics, outputMode: OutputMode,
-    internalOptions: InternalOptions) {
+    moduleKind: ModuleKind, internalOptions: InternalOptions) {
 
   import Emitter._
 
+  require(
+      outputMode != OutputMode.ECMAScript51Global || moduleKind == ModuleKind.NoModule,
+      "The ECMAScript51Global output mode is not compatible with modules")
+
+  def this(semantics: Semantics, outputMode: OutputMode,
+      moduleKind: ModuleKind) = {
+    this(semantics, outputMode, moduleKind, InternalOptions())
+  }
+
   def this(semantics: Semantics, outputMode: OutputMode) =
-    this(semantics, outputMode, InternalOptions())
+    this(semantics, outputMode, ModuleKind.NodeJSModule, InternalOptions())
+
+  private implicit def implicitOutputMode: OutputMode = outputMode
 
   private val knowledgeGuardian = new KnowledgeGuardian
 
@@ -51,7 +63,7 @@ final class Emitter private (semantics: Semantics, outputMode: OutputMode,
   // Private API for the Closure backend (could be opened if necessary)
   private[backend] def withOptimizeBracketSelects(
       optimizeBracketSelects: Boolean): Emitter = {
-    new Emitter(semantics, outputMode,
+    new Emitter(semantics, outputMode, moduleKind,
         internalOptions.withOptimizeBracketSelects(optimizeBracketSelects))
   }
 
@@ -66,20 +78,28 @@ final class Emitter private (semantics: Semantics, outputMode: OutputMode,
     emitLines(customHeader, builder)
 
   def emitPrelude(builder: JSFileBuilder, logger: Logger): Unit = {
-    outputMode match {
-      case OutputMode.ECMAScript51Global =>
-      case OutputMode.ECMAScript51Isolated | OutputMode.ECMAScript6 =>
-        builder.addLine("(function(){")
+    moduleKind match {
+      case ModuleKind.NoModule =>
+        outputMode match {
+          case OutputMode.ECMAScript51Global =>
+          case OutputMode.ECMAScript51Isolated | OutputMode.ECMAScript6 =>
+            builder.addLine("(function(){")
+        }
+
+      case ModuleKind.NodeJSModule =>
     }
 
     builder.addLine("'use strict';")
-    builder.addFile(CoreJSLibs.lib(semantics, outputMode))
+    builder.addFile(CoreJSLibs.lib(semantics, outputMode, moduleKind))
   }
 
   def emit(unit: LinkingUnit, builder: JSTreeBuilder, logger: Logger): Unit = {
     startRun(unit)
     try {
       val orderedClasses = unit.classDefs.sortWith(compareClasses)
+
+      emitModuleImports(orderedClasses, builder)
+
       for (classInfo <- orderedClasses)
         emitLinkedClass(classInfo, builder)
     } finally {
@@ -87,11 +107,43 @@ final class Emitter private (semantics: Semantics, outputMode: OutputMode,
     }
   }
 
+  private def emitModuleImports(orderedClasses: List[LinkedClass],
+      builder: JSTreeBuilder): Unit = {
+    moduleKind match {
+      case ModuleKind.NoModule =>
+
+      case ModuleKind.NodeJSModule =>
+        val jsDesugaring = new JSDesugaring(internalOptions)
+        val encounteredModuleNames = mutable.Set.empty[String]
+        for (classDef <- orderedClasses) {
+          classDef.jsNativeLoadSpec match {
+            case None =>
+            case Some(JSNativeLoadSpec.Global(_)) =>
+
+            case Some(JSNativeLoadSpec.Import(module, _)) =>
+              if (encounteredModuleNames.add(module)) {
+                implicit val pos = classDef.pos
+                val rhs = js.Apply(js.VarRef(js.Ident("require")),
+                    List(js.StringLiteral(module)))
+                val lhs = jsDesugaring.envModuleField(module)
+                val decl = jsDesugaring.genLet(lhs.ident, mutable = false, rhs)
+                builder.addJSTree(decl)
+              }
+          }
+        }
+    }
+  }
+
   def emitPostlude(builder: JSFileBuilder, logger: Logger): Unit = {
-    outputMode match {
-      case OutputMode.ECMAScript51Global =>
-      case OutputMode.ECMAScript51Isolated | OutputMode.ECMAScript6 =>
-        builder.addLine("}).call(this);")
+    moduleKind match {
+      case ModuleKind.NoModule =>
+        outputMode match {
+          case OutputMode.ECMAScript51Global =>
+          case OutputMode.ECMAScript51Isolated | OutputMode.ECMAScript6 =>
+            builder.addLine("}).call(this);")
+        }
+
+      case ModuleKind.NodeJSModule =>
     }
   }
 
@@ -247,7 +299,7 @@ final class Emitter private (semantics: Semantics, outputMode: OutputMode,
       startRun(linkingUnit)
 
     def getHeaderFile(): org.scalajs.core.tools.io.VirtualJSFile =
-      CoreJSLibs.lib(semantics, outputMode)
+      CoreJSLibs.lib(semantics, outputMode, moduleKind)
 
     def genClassDef(linkedClass: LinkedClass): js.Tree =
       classEmitter.genClassDef(linkedClass)(globalKnowledge)

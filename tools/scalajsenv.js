@@ -22,9 +22,13 @@ ScalaJS.g =
 ScalaJS.env["global"] = ScalaJS.g;
 
 // Where to send exports
+//!if moduleKind == NodeJSModule
+ScalaJS.e = exports;
+//!else
 ScalaJS.e =
   (typeof ScalaJS.env["exportsNamespace"] === "object" && ScalaJS.env["exportsNamespace"])
     ? ScalaJS.env["exportsNamespace"] : ScalaJS.g;
+//!endif
 ScalaJS.env["exportsNamespace"] = ScalaJS.e;
 
 // Freeze the environment info

@@ -2284,7 +2284,55 @@ private[emitter] class JSDesugaring(internalOptions: InternalOptions) {
         path.foldLeft(envField("g")) {
           (prev, part) => genBracketSelect(prev, js.StringLiteral(part))
         }
+
+      case JSNativeLoadSpec.Import(module, path) =>
+        path.foldLeft[js.Tree](envModuleField(module)) {
+          (prev, part) => genBracketSelect(prev, js.StringLiteral(part))
+        }
     }
+  }
+
+  private[emitter] def envModuleField(module: String)(
+      implicit pos: Position): js.VarRef = {
+
+    /* This is written so that the happy path, when `module` contains only
+     * valid characters, is fast.
+     */
+
+    def isValidChar(c: Char): Boolean =
+      (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+
+    def containsOnlyValidChars(): Boolean = {
+      val len = module.length
+      var i = 0
+      while (i != len) {
+        if (!isValidChar(module.charAt(i)))
+          return false
+        i += 1
+      }
+      true
+    }
+
+    def buildValidName(): String = {
+      val result = new java.lang.StringBuilder("$i_")
+      val len = module.length
+      var i = 0
+      while (i != len) {
+        val c = module.charAt(i)
+        if (isValidChar(c))
+          result.append(c)
+        else
+          result.append("$%04x".format(c.toInt))
+        i += 1
+      }
+      result.toString()
+    }
+
+    val varName =
+      if (containsOnlyValidChars()) "$i_" + module
+      else buildValidName()
+
+    js.VarRef(js.Ident(varName, Some(module)))
   }
 
   private[emitter] def envField(field: String, subField: String,

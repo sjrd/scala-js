@@ -65,7 +65,9 @@ object LinkerBackend {
       /** Custom js code that wraps the output */
       val customOutputWrapper: (String, String) = ("", ""),
       /** Pretty-print the output. */
-      val prettyPrint: Boolean = false
+      val prettyPrint: Boolean = false,
+      /** Kind of JavaScript module to emit. */
+      val moduleKind: ModuleKind = ModuleKind.NoModule
   ) {
     def withRelativizeSourceMapBase(relativizeSourceMapBase: Option[URI]): Config =
       copy(relativizeSourceMapBase = relativizeSourceMapBase)
@@ -76,11 +78,16 @@ object LinkerBackend {
     def withPrettyPrint(prettyPrint: Boolean): Config =
       copy(prettyPrint = prettyPrint)
 
+    def withModuleKind(moduleKind: ModuleKind): Config =
+      copy(moduleKind = moduleKind)
+
     private def copy(
         relativizeSourceMapBase: Option[URI] = relativizeSourceMapBase,
         customOutputWrapper: (String, String) = customOutputWrapper,
-        prettyPrint: Boolean = prettyPrint): Config = {
-      new Config(relativizeSourceMapBase, customOutputWrapper, prettyPrint)
+        prettyPrint: Boolean = prettyPrint,
+        moduleKind: ModuleKind = moduleKind): Config = {
+      new Config(relativizeSourceMapBase, customOutputWrapper, prettyPrint,
+          moduleKind)
     }
   }
 

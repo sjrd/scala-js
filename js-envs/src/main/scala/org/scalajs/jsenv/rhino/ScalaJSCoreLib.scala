@@ -20,6 +20,7 @@ import org.scalajs.core.tools.linker.{LinkedClass, LinkingUnit}
 import org.scalajs.core.tools.javascript._
 import org.scalajs.core.tools.io._
 
+import org.scalajs.core.tools.linker.backend.ModuleKind.NoModule
 import org.scalajs.core.tools.linker.backend.OutputMode.ECMAScript51Global
 import org.scalajs.core.tools.linker.backend.emitter._
 
