@@ -88,6 +88,11 @@ object ScalaJSPluginInternal {
       "All .sjsir files on the fullClasspath, used by scalajsp",
       KeyRanks.Invisible)
 
+  val scalaJSModuleIdentifier = TaskKey[Option[String]](
+      "scalaJSModuleIdentifier",
+      "An identifier for the module which contains the exports of Scala.js",
+      KeyRanks.Invisible)
+
   val scalaJSSourceFiles = AttributeKey[Seq[File]]("scalaJSSourceFiles",
       "Files used to compute this value (can be used in FileFunctions later).",
       KeyRanks.Invisible)
@@ -645,6 +650,20 @@ object ScalaJSPluginInternal {
               env.loadLibs(libs :+ ResolvedJSDependency.minimal(file))
             }
         }
+      },
+
+      scalaJSModuleIdentifier <<= Def.taskDyn {
+        scalaJSModuleKind.value match {
+          case ModuleKind.NoModule =>
+            Def.task {
+              None
+            }
+
+          case ModuleKind.NodeJSModule =>
+            Def.task {
+              Some(scalaJSLinkedFile.value.path)
+            }
+        }
       }
   )
 
@@ -661,7 +680,16 @@ object ScalaJSPluginInternal {
 
   private def launcherContent(mainCl: String, moduleKind: ModuleKind,
       moduleIdentifier: Option[String]): String = {
-    val exportsNamespaceExpr = moduleKind match {
+    val exportsNamespaceExpr =
+      makeExportsNamespaceExpr(moduleKind, moduleIdentifier)
+    val parts = mainCl.split('.').map(s => s"""["${escapeJS(s)}"]""").mkString
+    s"$exportsNamespaceExpr$parts().main();\n"
+  }
+
+  private[sbtplugin] def makeExportsNamespaceExpr(moduleKind: ModuleKind,
+      moduleIdentifier: Option[String]): String = {
+    // !!! DUPLICATE code with ScalaJSFramework.optionalExportsNamespacePrefix
+    moduleKind match {
       case ModuleKind.NoModule =>
         jsGlobalExpr
 
@@ -672,9 +700,6 @@ object ScalaJSPluginInternal {
         }
         s"""require("${escapeJS(moduleIdent)}")"""
     }
-
-    val parts = mainCl.split('.').map(s => s"""["${escapeJS(s)}"]""").mkString
-    s"$exportsNamespaceExpr$parts().main();\n"
   }
 
   private def memLauncher(mainCl: String, moduleKind: ModuleKind,
@@ -716,7 +741,7 @@ object ScalaJSPluginInternal {
           Def.task {
             (mainClass in scalaJSLauncher).value map { mainClass =>
               val moduleKind = scalaJSModuleKind.value
-              val moduleIdentifier = Some(scalaJSLinkedFile.value.path)
+              val moduleIdentifier = scalaJSModuleIdentifier.value
               val memLaunch =
                 memLauncher(mainClass, moduleKind, moduleIdentifier)
               Attributed[VirtualJSFile](memLaunch)(
@@ -747,7 +772,7 @@ object ScalaJSPluginInternal {
 
         val mainClass = runMainParser.parsed
         val moduleKind = scalaJSModuleKind.value
-        val moduleIdentifier = Some(scalaJSLinkedFile.value.path)
+        val moduleIdentifier = scalaJSModuleIdentifier.value
         jsRun(loadedJSEnv.value, mainClass,
             memLauncher(mainClass, moduleKind, moduleIdentifier),
             streams.value.log, scalaJSConsole.value)
@@ -775,11 +800,16 @@ object ScalaJSPluginInternal {
             sys.error(s"You need a ComJSEnv to test (found ${jsEnv.name})")
         }
 
-        val detector = new FrameworkDetector(jsEnv)
+        val moduleKind = scalaJSModuleKind.value
+        val moduleIdentifier = scalaJSModuleIdentifier.value
+
+        val detector =
+          new FrameworkDetector(jsEnv, moduleKind, moduleIdentifier)
 
         detector.detect(frameworks) map { case (tf, name) =>
           val toolsLogger = sbtLogger2ToolsLogger(logger)
-          (tf, new ScalaJSFramework(name, jsEnv, toolsLogger, console))
+          (tf, new ScalaJSFramework(name, jsEnv, moduleKind, moduleIdentifier,
+              toolsLogger, console))
         }
       },
       // Override default to avoid triggering a test:fastOptJS in a test:compile
