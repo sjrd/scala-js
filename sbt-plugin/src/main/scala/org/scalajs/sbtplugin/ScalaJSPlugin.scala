@@ -134,6 +134,9 @@ object ScalaJSPlugin extends AutoPlugin {
       new PhantomJSEnv(executable, args, env, autoExit, loader)
     }
 
+    // ModuleKind
+    val ModuleKind = org.scalajs.core.tools.linker.backend.ModuleKind
+
     // All our public-facing keys
 
     val isScalaJSProject = SettingKey[Boolean]("isScalaJSProject",

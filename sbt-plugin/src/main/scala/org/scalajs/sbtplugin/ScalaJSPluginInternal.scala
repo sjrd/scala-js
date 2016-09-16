@@ -44,7 +44,7 @@ import java.net.URLClassLoader
  */
 object ScalaJSPluginInternal {
 
-  import ScalaJSPlugin.autoImport._
+  import ScalaJSPlugin.autoImport.{ModuleKind => _, _}
 
   /** The global Scala.js IR cache */
   val globalIRCache: IRFileCache = new IRFileCache()
