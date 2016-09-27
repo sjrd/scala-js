@@ -32,3 +32,16 @@ object ModuleKind {
   case object NodeJSModule extends ModuleKind
 
 }
+
+/** Aggregates the information on the kind of module structure emitted for
+  * the Scala.js output with the module identifier (if relevant)
+  */
+sealed abstract class ModuleIdentifier
+
+object ModuleIdentifier {
+
+  case object NoModule extends ModuleIdentifier
+
+  case class NodeJSModule(ident: String) extends ModuleIdentifier
+
+}

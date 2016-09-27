@@ -18,8 +18,7 @@ import org.scalajs.core.tools.jsdep._
 import org.scalajs.core.tools.json._
 import org.scalajs.core.tools.linker.{ClearableLinker, Linker}
 import org.scalajs.core.tools.linker.frontend.LinkerFrontend
-import org.scalajs.core.tools.linker.backend.{LinkerBackend, ModuleKind, OutputMode}
-
+import org.scalajs.core.tools.linker.backend.{LinkerBackend, ModuleIdentifier, ModuleKind, OutputMode}
 import org.scalajs.jsenv._
 import org.scalajs.jsenv.phantomjs.PhantomJettyClassLoader
 
@@ -86,7 +85,7 @@ object ScalaJSPluginInternal {
       "All .sjsir files on the fullClasspath, used by scalajsp",
       KeyRanks.Invisible)
 
-  val scalaJSModuleIdentifier = TaskKey[Option[String]](
+  val scalaJSModuleIdentifier = TaskKey[ModuleIdentifier](
       "scalaJSModuleIdentifier",
       "An identifier for the module which contains the exports of Scala.js",
       KeyRanks.Invisible)
@@ -431,9 +430,9 @@ object ScalaJSPluginInternal {
           Def.task {
             mainClass.value map { mainCl =>
               val file = (artifactPath in packageScalaJSLauncher).value
-              val moduleKind = scalaJSModuleKind.value
+              val moduleIdentifier = scalaJSModuleIdentifier.value
               IO.write(file,
-                  launcherContent(mainCl, moduleKind, None),
+                  launcherContent(mainCl, moduleIdentifier),
                   Charset.forName("UTF-8"))
 
               // Attach the name of the main class used, (ab?)using the name key
@@ -649,12 +648,12 @@ object ScalaJSPluginInternal {
         scalaJSModuleKind.value match {
           case ModuleKind.NoModule =>
             Def.task {
-              None
+              ModuleIdentifier.NoModule
             }
 
           case ModuleKind.NodeJSModule =>
             Def.task {
-              Some(scalaJSLinkedFile.value.path)
+              ModuleIdentifier.NodeJSModule(scalaJSLinkedFile.value.path)
             }
         }
       }
@@ -671,34 +670,27 @@ object ScalaJSPluginInternal {
     runner.run(sbtLogger2ToolsLogger(log), console)
   }
 
-  private def launcherContent(mainCl: String, moduleKind: ModuleKind,
-      moduleIdentifier: Option[String]): String = {
+  private def launcherContent(mainCl: String, moduleIdentifier: ModuleIdentifier): String = {
     val exportsNamespaceExpr =
-      makeExportsNamespaceExpr(moduleKind, moduleIdentifier)
+      makeExportsNamespaceExpr(moduleIdentifier)
     val parts = mainCl.split('.').map(s => s"""["${escapeJS(s)}"]""").mkString
     s"$exportsNamespaceExpr$parts().main();\n"
   }
 
-  private[sbtplugin] def makeExportsNamespaceExpr(moduleKind: ModuleKind,
-      moduleIdentifier: Option[String]): String = {
+  private[sbtplugin] def makeExportsNamespaceExpr(moduleIdentifier: ModuleIdentifier): String = {
     // !!! DUPLICATE code with ScalaJSFramework.optionalExportsNamespacePrefix
-    moduleKind match {
-      case ModuleKind.NoModule =>
+    moduleIdentifier match {
+      case ModuleIdentifier.NoModule =>
         jsGlobalExpr
 
-      case ModuleKind.NodeJSModule =>
-        val moduleIdent = moduleIdentifier.getOrElse {
-          throw new IllegalArgumentException(
-              "The module identifier must be specified for Node.js modules")
-        }
+      case ModuleIdentifier.NodeJSModule(moduleIdent) =>
         s"""require("${escapeJS(moduleIdent)}")"""
     }
   }
 
-  private def memLauncher(mainCl: String, moduleKind: ModuleKind,
-      moduleIdentifier: Option[String]): VirtualJSFile = {
+  private def memLauncher(mainCl: String, moduleIdentifier: ModuleIdentifier): VirtualJSFile = {
     new MemVirtualJSFile("Generated launcher file")
-      .withContent(launcherContent(mainCl, moduleKind, moduleIdentifier))
+      .withContent(launcherContent(mainCl, moduleIdentifier))
   }
 
   def discoverJSApps(analysis: inc.Analysis): Seq[String] = {
@@ -733,10 +725,9 @@ object ScalaJSPluginInternal {
         } else {
           Def.task {
             (mainClass in scalaJSLauncher).value map { mainClass =>
-              val moduleKind = scalaJSModuleKind.value
               val moduleIdentifier = scalaJSModuleIdentifier.value
               val memLaunch =
-                memLauncher(mainClass, moduleKind, moduleIdentifier)
+                memLauncher(mainClass, moduleIdentifier)
               Attributed[VirtualJSFile](memLaunch)(
                   AttributeMap.empty.put(name.key, mainClass))
             } getOrElse {
@@ -764,10 +755,9 @@ object ScalaJSPluginInternal {
         assert(scalaJSEnsureUnforked.value)
 
         val mainClass = runMainParser.parsed
-        val moduleKind = scalaJSModuleKind.value
         val moduleIdentifier = scalaJSModuleIdentifier.value
         jsRun(loadedJSEnv.value, mainClass,
-            memLauncher(mainClass, moduleKind, moduleIdentifier),
+            memLauncher(mainClass, moduleIdentifier),
             streams.value.log, scalaJSConsole.value)
       }
   )
@@ -798,10 +788,10 @@ object ScalaJSPluginInternal {
         val moduleIdentifier = scalaJSModuleIdentifier.value
 
         val detector =
-          new FrameworkDetector(jsEnv, moduleKind, moduleIdentifier)
+          new FrameworkDetector(jsEnv, moduleIdentifier)
 
         detector.detect(frameworks, toolsLogger) map { case (tf, name) =>
-          (tf, new ScalaJSFramework(name, jsEnv, moduleKind, moduleIdentifier,
+          (tf, new ScalaJSFramework(name, jsEnv, moduleIdentifier,
               toolsLogger, console))
         }
       },

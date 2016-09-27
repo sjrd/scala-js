@@ -1,18 +1,16 @@
 package org.scalajs.sbtplugin
 
 import sbt._
-
 import org.scalajs.core.tools.io._
 import org.scalajs.core.tools.json._
+import org.scalajs.core.tools.linker.backend.ModuleIdentifier
 import org.scalajs.core.tools.logging.Logger
-import org.scalajs.core.tools.linker.backend.ModuleKind
-
 import org.scalajs.jsenv._
 
 import scala.collection.mutable
 
 private[sbtplugin] final class FrameworkDetector(jsEnv: JSEnv,
-    moduleKind: ModuleKind, moduleIdentifier: Option[String]) {
+    moduleIdentifier: ModuleIdentifier) {
 
   import FrameworkDetector._
 
@@ -33,7 +31,7 @@ private[sbtplugin] final class FrameworkDetector(jsEnv: JSEnv,
     val data = frameworks.map(_.implClassNames.toList).toList.toJSON
 
     val exportsNamespaceExpr =
-      ScalaJSPluginInternal.makeExportsNamespaceExpr(moduleKind, moduleIdentifier)
+      ScalaJSPluginInternal.makeExportsNamespaceExpr(moduleIdentifier)
 
     val code = s"""
       (function(exportsNamespace) {
