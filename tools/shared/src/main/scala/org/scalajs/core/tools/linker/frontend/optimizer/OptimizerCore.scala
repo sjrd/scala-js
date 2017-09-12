@@ -1082,7 +1082,7 @@ private[optimizer] abstract class OptimizerCore(config: CommonPhaseConfig) {
         }
 
       // Select the lo or hi "field" of a Long literal
-      case PreTransLit(LongLiteral(value)) =>
+      case PreTransLit(LongLiteral(value)) if expandLongs =>
         val itemName = item.name
         assert(itemName == inlinedRTLongLoField ||
             itemName == inlinedRTLongHiField)
@@ -2429,6 +2429,9 @@ private[optimizer] abstract class OptimizerCore(config: CommonPhaseConfig) {
   private def expandLongValue(value: PreTransform)(cont: PreTransCont)(
       implicit scope: Scope, pos: Position): TailRec[Tree] = {
 
+    assert(expandLongs,
+        "Asked to expand a long value when expandLongs is false")
+
     /* To force the expansion, we first store the `value` in a temporary
      * variable of type `RuntimeLong` (not `Long`, otherwise we would go into
      * infinite recursion), then we create a `new RuntimeLong` with its lo and
@@ -2453,6 +2456,9 @@ private[optimizer] abstract class OptimizerCore(config: CommonPhaseConfig) {
   private def expandLongOps(pretrans: PreTransform)(cont: PreTransCont)(
       implicit scope: Scope): TailRec[Tree] = {
     implicit val pos = pretrans.pos
+
+    if (!expandLongs)
+      return cont(pretrans)
 
     def rtLongClassType = ClassType(LongImpl.RuntimeLongClass)
 
@@ -2565,6 +2571,9 @@ private[optimizer] abstract class OptimizerCore(config: CommonPhaseConfig) {
     import UnaryOp._
 
     @inline def default = PreTransUnaryOp(op, arg)
+
+    if (!simplifyOps)
+      return default
 
     (op: @switch) match {
       case Boolean_! =>
@@ -2964,6 +2973,9 @@ private[optimizer] abstract class OptimizerCore(config: CommonPhaseConfig) {
 
     @inline def default =
       PreTransBinaryOp(op, lhs, rhs)
+
+    if (!simplifyOps)
+      return default
 
     (op: @switch) match {
       case === | !== =>
@@ -4066,7 +4078,8 @@ private[optimizer] abstract class OptimizerCore(config: CommonPhaseConfig) {
     def withDedicatedVar(tpe: RefinedType): TailRec[Tree] = {
       val rtLongClassType = ClassType(LongImpl.RuntimeLongClass)
 
-      if (tpe.base == LongType && declaredType != rtLongClassType) {
+      if (tpe.base == LongType && declaredType != rtLongClassType &&
+          expandLongs) {
         /* If the value's type is a primitive Long, and the declared type is
          * not RuntimeLong, we want to force the expansion of the primitive
          * Long (which we know is in fact a RuntimeLong) into a local variable,
@@ -4280,6 +4293,12 @@ private[optimizer] abstract class OptimizerCore(config: CommonPhaseConfig) {
 }
 
 private[optimizer] object OptimizerCore {
+
+  private val expandLongs: Boolean =
+    System.getProperty("org.scalajs.core.linker.optimizer.expandlongs") != "false"
+
+  private val simplifyOps: Boolean =
+    System.getProperty("org.scalajs.core.linker.optimizer.simplifyops") != "false"
 
   private final val MaxRollbacksPerMethod = 256
 
