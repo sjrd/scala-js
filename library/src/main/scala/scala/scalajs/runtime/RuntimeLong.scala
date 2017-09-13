@@ -31,7 +31,7 @@ import js.JSStringOps._
  */
 
 /** Emulates a Long on the JavaScript platform. */
-@inline
+//@inline
 final class RuntimeLong(val lo: Int, val hi: Int)
     extends java.lang.Number with java.lang.Comparable[java.lang.Long] {
   a =>
@@ -51,8 +51,23 @@ final class RuntimeLong(val lo: Int, val hi: Int)
 
   // String operations
 
-  @inline override def toString(): String =
+  @inline override def toString(): String = {
+    /*val result = js.Array[String]()
+    var n = this
+    val positive = n.isPositive()
+    if (!positive)
+      n = -n
+    val radix = new RuntimeLong(10, 0)
+    do {
+      val dr = divRem(n, radix)
+      result.push(js.Dynamic.global.String.fromCharCode(48 + dr._2.lo).asInstanceOf[String])
+      n = dr._1
+    } while (n.lo != 0 || n.hi != 0)
+    val res = result.asInstanceOf[js.Dynamic].reverse().join("").asInstanceOf[String]
+    if (positive) res
+    else "-" + res*/
     RuntimeLong.toString(lo, hi)
+  }
 
   // Conversions
 
@@ -63,6 +78,14 @@ final class RuntimeLong(val lo: Int, val hi: Int)
   @inline def toLong: Long = this.asInstanceOf[Long]
   @inline def toFloat: Float = toDouble.toFloat
   @inline def toDouble: Double = RuntimeLong.toDouble(lo, hi)
+
+  def toNumber: Double = {
+    var lo = this.lo.toDouble
+    val hi = this.hi.toDouble
+    if (lo < 0)
+      lo += TwoPow32
+    TwoPow32 * hi + lo
+  }
 
   // java.lang.Number
 
@@ -75,9 +98,26 @@ final class RuntimeLong(val lo: Int, val hi: Int)
 
   // Comparisons and java.lang.Comparable interface
 
-  @inline
-  def compareTo(b: RuntimeLong): Int =
+  private def isPositive: Boolean =
+    (a.hi & 0x80000000) == 0
+
+  private def isNegative: Boolean =
+    (a.hi & 0x80000000) != 0
+
+  def compareTo(b: RuntimeLong): Int = {
+    /*var r = a.hi - b.hi
+    if (r != 0) {
+      r
+    } else {
+      r = (a.lo >>> 1) - (b.lo >>> 1)
+      if (r != 0) {
+        r
+      } else {
+        (a.lo & 1) - (b.lo & 1)
+      }
+    }*/
     RuntimeLong.compare(a.lo, a.hi, b.lo, b.hi)
+  }
 
   @inline
   def compareTo(that: java.lang.Long): Int =
@@ -87,426 +127,238 @@ final class RuntimeLong(val lo: Int, val hi: Int)
   private def inline_equals(b: RuntimeLong): Boolean =
     a.lo == b.lo && a.hi == b.hi
 
-  @inline
   def equals(b: RuntimeLong): Boolean =
-    inline_equals(b)
+    a.lo == b.lo && a.hi == b.hi
 
-  @inline
   def notEquals(b: RuntimeLong): Boolean =
-    !inline_equals(b)
+    a.lo != b.lo || a.hi != b.hi
 
-  @inline
   def <(b: RuntimeLong): Boolean = {
-    /* We should use `inlineUnsignedInt_<(a.lo, b.lo)`, but that first extracts
-     * a.lo and b.lo into local variables, which cause the if/else not to be
-     * a valid JavaScript expression anymore. This causes useless explosion of
-     * JavaScript code at call site, when inlined. So we manually inline
-     * `inlineUnsignedInt_<(a.lo, b.lo)` to avoid that problem.
-     */
-    val ahi = a.hi
-    val bhi = b.hi
-    if (ahi == bhi) (a.lo ^ 0x80000000) < (b.lo ^ 0x80000000)
-    else ahi < bhi
+    if (a.hi > b.hi) {
+      false
+    } else if (a.hi < b.hi) {
+      true
+    } else {
+      val x = a.lo >>> 1
+      val y = b.lo >>> 1
+      if (x != y) {
+        x < y
+      } else {
+        (a.lo & 1) < (b.lo & 1)
+      }
+    }
   }
 
-  @inline
   def <=(b: RuntimeLong): Boolean = {
-    /* Manually inline `inlineUnsignedInt_<=(a.lo, b.lo)`.
-     * See the comment in `<` for the rationale.
-     */
-    val ahi = a.hi
-    val bhi = b.hi
-    if (ahi == bhi) (a.lo ^ 0x80000000) <= (b.lo ^ 0x80000000)
-    else ahi < bhi
+    if (a.hi > b.hi) {
+      false
+    } else if (a.hi < b.hi) {
+      true
+    } else {
+      var x = a.lo >>> 1
+      var y = b.lo >>> 1
+      if (x != y) {
+        x <= y
+      } else {
+        (a.lo & 1) <= (b.lo & 1)
+      }
+    }
   }
 
-  @inline
   def >(b: RuntimeLong): Boolean = {
-    /* Manually inline `inlineUnsignedInt_>a.lo, b.lo)`.
-     * See the comment in `<` for the rationale.
-     */
-    val ahi = a.hi
-    val bhi = b.hi
-    if (ahi == bhi) (a.lo ^ 0x80000000) > (b.lo ^ 0x80000000)
-    else ahi > bhi
+    if (a.hi < b.hi) {
+      false
+    } else if (a.hi > b.hi) {
+      true
+    } else {
+      val x = a.lo >>> 1
+      val y = b.lo >>> 1
+      if (x != y) {
+        x > y
+      } else {
+        (a.lo & 1) > (b.lo & 1)
+      }
+    }
   }
 
-  @inline
   def >=(b: RuntimeLong): Boolean = {
-    /* Manually inline `inlineUnsignedInt_>=(a.lo, b.lo)`.
-     * See the comment in `<` for the rationale.
-     */
-    val ahi = a.hi
-    val bhi = b.hi
-    if (ahi == bhi) (a.lo ^ 0x80000000) >= (b.lo ^ 0x80000000)
-    else ahi > bhi
+    if (a.hi < b.hi) {
+      false
+    } else if (a.hi > b.hi) {
+      true
+    } else {
+      val x = a.lo >>> 1
+      val y = b.lo >>> 1
+      if (x != y) {
+        x >= y
+      } else {
+        (a.lo & 1) >= (b.lo & 1)
+      }
+    }
   }
 
   // Bitwise operations
 
-  @inline
   def unary_~ : RuntimeLong = // scalastyle:ignore
     new RuntimeLong(~lo, ~hi)
 
-  @inline
   def |(b: RuntimeLong): RuntimeLong =
     new RuntimeLong(a.lo | b.lo, a.hi | b.hi)
 
-  @inline
   def &(b: RuntimeLong): RuntimeLong =
     new RuntimeLong(a.lo & b.lo, a.hi & b.hi)
 
-  @inline
   def ^(b: RuntimeLong): RuntimeLong =
     new RuntimeLong(a.lo ^ b.lo, a.hi ^ b.hi)
 
   // Shifts
 
   /** Shift left */
-  @inline
   def <<(n: Int): RuntimeLong = {
-    /* This should *reasonably* be:
-     *   val n1 = n & 63
-     *   if (n1 < 32)
-     *     new RuntimeLong(lo << n1, if (n1 == 0) hi else (lo >>> 32-n1) | (hi << n1))
-     *   else
-     *     new RuntimeLong(0, lo << n1)
-     *
-     * Replacing n1 by its definition, we have:
-     *   if (n & 63 < 32)
-     *     new RuntimeLong(lo << (n & 63),
-     *         if ((n & 63) == 0) hi else (lo >>> 32-(n & 63)) | (hi << (n & 63)))
-     *   else
-     *     new RuntimeLong(0, lo << (n & 63))
-     *
-     * Since the values on the rhs of shifts are always in arithmetic mod 32,
-     * we can get:
-     *   if (n & 63 < 32)
-     *     new RuntimeLong(lo << n, if ((n & 63) == 0) hi else (lo >>> -n) | (hi << n))
-     *   else
-     *     new RuntimeLong(0, lo << n)
-     *
-     * The condition `n & 63 < 32` is equivalent to
-     *   (n & 63) & 32 == 0
-     *   n & (63 & 32) == 0
-     *   n & 32 == 0
-     *
-     * In the then part, we have `n & 32 == 0` hence `n & 63 == n & 31`:
-     *   new RuntimeLong(lo << n, if ((n & 31) == 0) hi else (lo >>> -n) | (hi << n))
-     *
-     * Consider the following portion:
-     *   if ((n & 31) == 0) hi else (lo >>> -n) | (hi << n)
-     * When (n & 31) == 0, `hi == (hi << n)` and therefore we have
-     *   (if ((n & 31) == 0) 0 else (lo >>> -n)) | (hi << n)
-     *
-     * The left part of the |
-     *   if ((n & 31) == 0) 0 else (lo >>> -n)
-     * has the following branchless version:
-     *   lo >>> 1 >>> (31-n)
-     * Indeed, when `n & 31 == 0, we have
-     *   lo >>> 1 >>> 31 == 0
-     * and when `n & 31 != 0`, we know that ((31-n) & 31) < 31, and hence we have
-     *   lo >>> 1 >>> (31-n) == lo >>> (1+31-n) == lo >>> (32-n) == lo >>> -n
-     *
-     * Was it good? We have traded
-     *   if ((n & 31) == 0) hi else (lo >>> -n) | (hi << n)
-     * for
-     *   (lo >>> 1 >>> (31-n)) | (hi << n)
-     * When (n & 31) != 0, which is the common case, we have traded a test
-     * `if ((n & 31) == 0)` for one additional constant shift `>>> 1`. That's
-     * probably worth it performance-wise. The code is also shorter.
-     *
-     * Summarizing, so far we have
-     *   if (n & 32 == 0)
-     *     new RuntimeLong(lo << n, (lo >>> 1 >>> (31-n)) | (hi << n))
-     *   else
-     *     new RuntimeLong(0, lo << n)
-     *
-     * If we distribute the condition in the lo and hi arguments of the
-     * constructors, we get a version with only one RuntimeLong output, which
-     * avoids reification as records by the optimizer, yielding shorter code.
-     * It is potentially slightly less efficient, except when `n` is constant,
-     * which is often the case anyway.
-     *
-     * Finally we have:
-     */
-    new RuntimeLong(
-        if ((n & 32) == 0) lo << n else 0,
-        if ((n & 32) == 0) (lo >>> 1 >>> (31-n)) | (hi << n) else lo << n)
+    val b = n & 63
+    if (b == 0) {
+      a
+    } else if (b < 32) {
+      new RuntimeLong(a.lo << b, (a.lo >>> (32 - b)) | (a.hi << b))
+    } else if (b == 32) {
+      new RuntimeLong(0, a.lo)
+    } else {
+      new RuntimeLong(0, a.lo << (b - 32))
+    }
   }
 
   /** Logical shift right */
-  @inline
   def >>>(n: Int): RuntimeLong = {
-    // This derives in a similar way as in <<
-    new RuntimeLong(
-        if ((n & 32) == 0) (lo >>> n) | (hi << 1 << (31-n)) else hi >>> n,
-        if ((n & 32) == 0) hi >>> n else 0)
+    val b = n & 63
+    if (b == 0) {
+      a
+    } else if (b < 32) {
+      new RuntimeLong((a.lo >>> b) | (a.hi << (32 - b)), a.hi >>> b)
+    } else if (b == 32) {
+      new RuntimeLong(a.hi, 0)
+    } else {
+      new RuntimeLong((a.hi >>> (b - 32)), 0)
+    }
   }
 
   /** Arithmetic shift right */
-  @inline
   def >>(n: Int): RuntimeLong = {
-    // This derives in a similar way as in <<
-    new RuntimeLong(
-        if ((n & 32) == 0) (lo >>> n) | (hi << 1 << (31-n)) else hi >> n,
-        if ((n & 32) == 0) hi >> n else hi >> 31)
+    val b = n & 63
+    if (b == 0) {
+      a
+    } else if (b < 32) {
+      new RuntimeLong((a.lo >>> b) | (a.hi << (32 - b)), a.hi >> b)
+    } else if (b == 32) {
+      new RuntimeLong(a.hi, a.hi >> 31)
+    } else {
+      new RuntimeLong((a.hi >> (b - 32)), a.hi >> 31)
+    }
   }
 
   // Arithmetic operations
 
-  @inline
   def unary_- : RuntimeLong = { // scalastyle:ignore
-    val lo = this.lo
-    val hi = this.hi
-    new RuntimeLong(inline_lo_unary_-(lo), inline_hi_unary_-(lo, hi))
+    new RuntimeLong(a.lo ^ 0xFFFFFFFF, a.hi ^ 0xFFFFFFFF).inc
   }
 
-  @inline
-  def +(b: RuntimeLong): RuntimeLong = {
-    val alo = a.lo
-    val ahi = a.hi
-    val bhi = b.hi
-    val lo = alo + b.lo
-    new RuntimeLong(lo,
-        if (inlineUnsignedInt_<(lo, alo)) ahi + bhi + 1 else ahi + bhi)
-  }
-
-  @inline
-  def -(b: RuntimeLong): RuntimeLong = {
-    val alo = a.lo
-    val ahi = a.hi
-    val bhi = b.hi
-    val lo = alo - b.lo
-    new RuntimeLong(lo,
-        if (inlineUnsignedInt_>(lo, alo)) ahi - bhi - 1 else ahi - bhi)
-  }
-
-  @inline
-  def *(b: RuntimeLong): RuntimeLong = {
-    /* The following algorithm is based on the decomposition in 32-bit and then
-     * 16-bit subproducts of the unsigned interpretation of operands.
-     *
-     * Since everything is interpreted as unsigned, all values are Natural
-     * numbers and are >= 0, by construction.
-     *
-     * We are looking to compute
-     * a *[64] b = (a * b) % 2^64
-     *
-     * We use the notation * and + for mathematical, non-overflowing
-     * operations, and *[64] and +[64] for overflowing operations. Eventually,
-     * we need to implement everything in terms of *[32] and +[32]. The symbol
-     * ^ is used for exponentiation (not bitwise xor).
-     *
-     * The decomposition in 32-bit components yields:
-     *
-     * a *[64] b
-     *   = ( (2^32*ahi + alo) * (2^32*bhi + blo) ) % 2^64
-     *   = ( 2^64*ahi*bhi + 2^32*(ahi*blo + bhi*alo) + alo*blo ) % 2^64
-     *
-     * With Natural numbers, congruence theory tells us that we can "distribute"
-     * `% n` on + and *, as long as we also keep the outer `% n`. To be more
-     * precise:
-     *   (a + b) % n = (a%n + b) % n = (a + b%n) % n = (a%n + b%n) % n
-     *   (a * b) % n = (a%n * b) % n = (a * b%n) % n = (a%n * b%n) % n
-     *
-     * From the latter, we derive a corollary that we'll implicitly use several
-     * times later:
-     *   (n * x) % n = 0  for any n > 0 and any x
-     *
-     * We can use these equivalences to get rid of parts of our computation:
-     *
-     * ( 2^64*ahi*bhi + 2^32*(ahi*blo + bhi*alo) + alo*blo ) % 2^64
-     *   = ( (2^64*ahi*bhi % 2^64) + 2^32*(ahi*blo + bhi*alo) + alo*blo ) % 2^64
-     *        -------------------
-     *             = 0
-     *   = ( 2^32*(ahi*blo + bhi*alo) + alo*blo ) % 2^64
-     *
-     * Observe that we can rewrite any quantity x as
-     * x = n*(x/n) + x%n
-     * where n is > 0 and / denotes the floor division.
-     *
-     * We can rewrite the product ahi*blo as
-     *
-     * ahi*blo
-     *   = 2^32*(ahi*blo / 2^32) + (ahi*blo % 2^32)
-     *   = 2^32*(ahi*blo / 2^32) + (ahi *[32] blo)
-     *
-     * Similarly,
-     *
-     * bhi*alo = 2^32*(alo*bhi / 2^32) + (alo *[32] bhi)
-     *
-     * Taking back our complete computation:
-     *
-     * a *[64] b
-     *   = ( 2^32*(ahi*blo + bhi*alo) + alo*blo ) % 2^64
-     *   = ( 2^64*(ahi*blo / 2^32) + 2^32*(ahi *[32] blo)
-     *        + 2^64*(alo*bhi / 2^32) + 2^32*(alo *[32] bhi)
-     *        + alo*blo ) % 2^64
-     *
-     * where distributing % 2^64 allows to get rid of the most awful parts:
-     *
-     *   = ( 2^32*(ahi *[32] blo) + 2^32*(alo *[32] bhi) + alo*blo) % 2^64
-     *
-     * Now we focus on the `alo*blo` part. We decompose it in 16-bit components.
-     *
-     * alo * blo
-     *   = 2^32*a1*b1 + 2^16*a1*b0 + 2^16*a0*b1 + a0*b0
-     *
-     * Because a1, a0, b1 and b0 are all <= 2^16-1, their pair-wise products
-     * are all <= (2^16-1)^2 = 2^32 - 2*2^16 + 1 = 0xfffe0001 < 2^32. This
-     * means that, for example,
-     *   a1*b0 = (a1*b0) % 2^32 = a1 *[32] b0
-     * with the same applying to other subproducts.
-     *
-     * Let
-     *   a1b1 = a1 *[32] b1
-     *   a1b0 = a1 *[32] b0
-     *   a0b1 = a0 *[32] b1
-     *   a0b0 = a0 *[32] b0
-     *
-     * Each of those is <= 0xfffe0001.
-     *
-     * We now have:
-     *
-     * alo * blo
-     *   = 2^32*a1b1 + 2^16*a1b0 + 2^16*a0b1 + a0b0
-     *
-     * We can decompose it using / and % as follows:
-     * alo * blo
-     *   = 2^32*((alo * blo) / 2^32) + ((alo * blo) % 2^32)
-     *
-     * Let
-     *   aloblo = (alo * blo) % 2^32
-     *   carry_from_lo_* = (alo * blo) / 2^32
-     *
-     * Then
-     * alo * blo = 2^32 * carry_from_lo_* + aloblo
-     *
-     * aloblo = (alo * blo) % 2^32
-     *   = (2^32*a1b1 + 2^16*a1b0 + 2^16*a0b1 + a0b0) % 2^32
-     *   = (2^16*a1b0 + 2^16*a0b1 + a0b0) % 2^32
-     *   = (((2^16*a1b0 % 2^32 + 2^16*a0b1 % 2^32) % 2^32) + a0b0 % 2^32) % 2^32
-     *   = (2^16*a1b0 % 2^32) +[32] (2^16*a0b1 % 2^32) +[32] (a0b0 % 2^32)
-     *   = (a1b0 <<[32] 16) +[32] (a0b1 <<[32] 16) +[32] a0b0
-     *
-     * carry_from_lo_* is more difficult.
-     *
-     * carry_from_lo_* = (alo * blo) / 2^32
-     *   = (2^32*a1b1 + 2^16*a1b0 + 2^16*a0b1 + a0b0) / 2^32
-     *   = a1b1 + (2^16*a1b0 + 2^16*a0b1 + a0b0) / 2^32
-     *   = a1b1 + (2^16*a1b0 + 2^16*a0b1 + (2^16*(a0b0 / 2^16) + (a0b0 % 2^16))) / 2^32
-     *   = a1b1 + (2^16*(a1b0 + a0b1 + (a0b0 / 2^16)) + (a0 % 2^16)) / 2^32
-     *             ----------------------------------
-     *                  multiple of 2^16
-     *   = a1b1 + ( (2^16*(a1b0 + a0b1 + (a0b0 / 2^16))) / 2^16 + (a0 % 2^16) / 2^16 ) / 2^16
-     *                                                             ---------
-     *                                                               < 2^16
-     *   = a1b1 + (a1b0 + a0b1 + (a0b0 / 2^16)) / 2^16
-     *   = a1b1 + (a1b0 + (a0b1 + (a0b0 >>>[32] 16))) / 2^16
-     *                     ----    ---------------
-     *               <= 0xfffe0001    <= 0xffff
-     *                     ------------------------
-     *                       <= 0xffff0000, hence the + does not overflow
-     *   = a1b1 + (a1b0 + (a0b1 +[32] (a0b0 >>>[32] 16))) / 2^16
-     *
-     * Let
-     *   c1part = a0b1 +[32] (a0b0 >>>[32] 16)
-     *
-     * carry_from_lo_*
-     *   = a1b1 + (a1b0 + c1part) / 2^16
-     *   = a1b1 + (a1b0 + (2^16*(c1part / 2^16) + (c1part % 2^16))) / 2^16
-     *   = a1b1 + (2^16*(c1part / 2^16) + (a1b0 + (c1part % 2^16))) / 2^16
-     *   = a1b1 + (2^16*(c1part / 2^16) + (a1b0 + (c1part &[32] 0xffff))) / 2^16
-     *                                     ----    -------------------
-     *                               <= 0xfffe0001     <= 0xffff
-     *                                     ----------------------------
-     *                              <= 0xffff0000, hence the + does not overflow
-     *   = a1b1 + (2^16*(c1part / 2^16) + (a1b0 +[32] (c1part &[32] 0xffff))) / 2^16
-     *             --------------------
-     *               multiple of 2^16
-     *   = a1b1 + ( 2^16*(c1part / 2^16) / 2^16 + (a1b0 +[32] (c1part &[32] 0xffff)) / 2^16 )
-     *   = a1b1 + (c1part / 2^16) + (a1b0 +[32] (c1part &[32] 0xffff)) / 2^16
-     *             ------            --------------------------------
-     *             < 2^32                      < 2^32
-     *   = a1b1 + (c1part >>>[32] 16) + ((a1b0 +[32] (c1part &[32] 0xffff)) >>>[32] 16)
-     *
-     * Recap so far:
-     *
-     * a *[64] b
-     *   = ( 2^32*(ahi *[32] blo) + 2^32*(alo *[32] bhi) + alo*blo ) % 2^64
-     * alo*blo
-     *   = 2^32*carry_from_lo_* + aloblo
-     * aloblo
-     *   = (a1b0 <<[32] 16) +[32] (a0b1 <<[32] 16) +[32] a0b0
-     * carry_from_lo_*
-     *   = a1b1 + (c1part >>>[32] 16) + ((a1b0 +[32] (c1part &[32] 0xffff)) >>>[32] 16)
-     *
-     * Substituting,
-     *
-     * a *[64] b
-     *   = ( 2^32*(ahi *[32] blo) + 2^32*(alo *[32] bhi) + 2^32*carry_from_lo_* + aloblo ) % 2^64
-     *   = ( 2^32*((ahi *[32] blo) + (alo *[32] bhi) + carry_from_lo_*) + aloblo ) % 2^64
-     *   = ( 2^32*((ahi *[32] blo) + (alo *[32] bhi) + carry_from_lo_*) % 2^64 + aloblo ) % 2^64
-     *       Using (n * x) % (n * m) = (n * (x % m)) with n = m = 2^32 (see proof below)
-     *   = ( 2^32*(((ahi *[32] blo) + (alo *[32] bhi) + carry_from_lo_*) % 2^32) + aloblo ) % 2^64
-     *   = ( 2^32*((ahi *[32] blo) +[32] (alo *[32] bhi) +[32] (carry_from_lo_* % 2^32)) + aloblo ) % 2^64
-     *
-     * Lemma: (n * x) % (n * m) = n * (x % m)
-     * (n * x) % (n * m)
-     *   = (n * x) - ((n * x) / (n * m))*(n * m)   using a % b = a - (a / b)*b
-     *   = (n * x) - (x / m)*(n * m)
-     *   = n * (x - (x / m)*m)
-     *   = n * (x % m)              using again a % b = a - (a / b)*b
-     *
-     * Since aloblo < 2^32 and the inner sum is also < 2^32:
-     *
-     * lo = aloblo
-     *   = (a1b0 <<[32] 16) +[32] (a0b1 <<[32] 16) +[32] a0b0
-     *   = ((a1b0 +[32] a0a1) <<[32] 16) +[32] a0b0
-     *
-     * hi = (ahi *[32] blo) +[32] (alo *[32] bhi) +[32] (carry_from_lo_* % 2^32)
-     *   = (ahi *[32] blo) +[32] (alo *[32] bhi) +[32]
-     *        (a1b1 + (c1part >>>[32] 16) + ((a1b0 +[32] (c1part &[32] 0xffff)) >>>[32] 16)) % 2^32
-     *   = (ahi *[32] blo) +[32] (alo *[32] bhi) +[32]
-     *        a1b1 +[32] (c1part >>>[32] 16) +[32] ((a1b0 +[32] (c1part &[32] 0xffff)) >>>[32] 16)
-     */
-
-    val alo = a.lo
-    val blo = b.lo
-
-    /* Note that the optimizer normalizes constants in * to be on the
-     * left-hand-side (when it cannot do constant-folding to begin with).
-     * Therefore, `b` is never constant in practice.
-     */
-
-    val a0 = alo & 0xffff
-    val a1 = alo >>> 16
-    val b0 = blo & 0xffff
-    val b1 = blo >>> 16
-
-    val a0b0 = a0 * b0
-    val a1b0 = a1 * b0 // collapses to 0 when a is constant and 0 <= a <= 0xffff
-    val a0b1 = a0 * b1 // (*)
-
-    /* (*) Since b is never constant in practice, the only case where a0b1
-     * would be constant 0 is if b's lo part is constant but not its hi part.
-     * That's not a likely scenario, though (not seen at all in our test suite).
-     */
-
-    /* lo = a.lo * b.lo, but we compute the above 3 subproducts for hi
-     * anyway, we reuse them to compute lo too, trading a * for 2 +'s and 1 <<.
-     */
-    val lo = a0b0 + ((a1b0 + a0b1) << 16)
-
-    // hi = a.lo*b.hi + a.hi*b.lo + carry_from_lo_*
-    val c1part = (a0b0 >>> 16) + a0b1
-    val hi = {
-      alo*b.hi + a.hi*blo + a1 * b1 + (c1part >>> 16) +
-      (((c1part & 0xffff) + a1b0) >>> 16) // collapses to 0 when a1b0 = 0
+  private def inc: RuntimeLong = {
+    var lo = a.lo + 1
+    var hi = a.hi
+    if (lo == 0) {
+      hi = hi + 1
     }
-
     new RuntimeLong(lo, hi)
+  }
+
+  def +(b: RuntimeLong): RuntimeLong = {
+    if (a.hi == (a.lo >> 31) && b.hi == (b.lo >> 31)) {
+      fromNumber(a.lo.toDouble + b.lo.toDouble)
+    } else if (Math.abs(a.hi) < MaxNormal && Math.abs(b.hi) < MaxNormal) {
+      fromNumber(a.toNumber + b.toNumber)
+    } else {
+      val a_lolo = a.lo & 0xFFFF
+      val a_lohi = a.lo >>> 16
+      val a_hilo = a.hi & 0xFFFF
+      val a_hihi = a.hi >>> 16
+      val b_lolo = b.lo & 0xFFFF
+      val b_lohi = b.lo >>> 16
+      val b_hilo = b.hi & 0xFFFF
+      val b_hihi = b.hi >>> 16
+
+      val lolo = a_lolo + b_lolo
+      val lohi = a_lohi + b_lohi + (lolo >> 16)
+      val hilo = a_hilo + b_hilo + (lohi >> 16)
+      val hihi = a_hihi + b_hihi + (hilo >> 16)
+      new RuntimeLong((lolo & 0xFFFF) | ((lohi & 0xFFFF) << 16),
+          (hilo & 0xFFFF) | ((hihi & 0xFFFF) << 16))
+    }
+  }
+
+  def -(b: RuntimeLong): RuntimeLong = {
+    if (a.hi == (a.lo >> 31) && b.hi == (b.lo >> 31)) {
+      fromNumber(a.lo.toDouble - b.lo.toDouble)
+    } else {
+      val a_lolo = a.lo & 0xFFFF
+      val a_lohi = a.lo >>> 16
+      val a_hilo = a.hi & 0xFFFF
+      val a_hihi = a.hi >>> 16
+      val b_lolo = b.lo & 0xFFFF
+      val b_lohi = b.lo >>> 16
+      val b_hilo = b.hi & 0xFFFF
+      val b_hihi = b.hi >>> 16
+
+      val lolo = a_lolo - b_lolo
+      val lohi = a_lohi - b_lohi + (lolo >> 16)
+      val hilo = a_hilo - b_hilo + (lohi >> 16)
+      val hihi = a_hihi - b_hihi + (hilo >> 16)
+      new RuntimeLong((lolo & 0xFFFF) | ((lohi & 0xFFFF) << 16),
+          (hilo & 0xFFFF) | ((hihi & 0xFFFF) << 16))
+    }
+  }
+
+  def *(b0: RuntimeLong): RuntimeLong = {
+    import js.DynamicImplicits._
+
+    var a = this
+    var b = b0
+    val positive = a.isNegative == b.isNegative
+    if (a.isNegative) {
+        a = -a
+    }
+    if (b.isNegative) {
+        b = -b
+    }
+    val a_lolo: js.Dynamic = a.lo & 0xFFFF
+    val a_lohi: js.Dynamic = a.lo >>> 16
+    val a_hilo: js.Dynamic = a.hi & 0xFFFF
+    val a_hihi: js.Dynamic = a.hi >>> 16
+    val b_lolo: js.Dynamic = b.lo & 0xFFFF
+    val b_lohi: js.Dynamic = b.lo >>> 16
+    val b_hilo: js.Dynamic = b.hi & 0xFFFF
+    val b_hihi: js.Dynamic = b.hi >>> 16
+
+    var lolo: js.Dynamic = 0.0
+    var lohi: js.Dynamic = 0.0
+    var hilo: js.Dynamic = 0.0
+    var hihi: js.Dynamic = 0.0
+    lolo = (a_lolo * b_lolo) | 0
+    lohi = lolo >>> 16
+    lohi = ((lohi & 0xFFFF) + a_lohi * b_lolo) | 0
+    hilo = (hilo + (lohi >>> 16)) | 0
+    lohi = ((lohi & 0xFFFF) + a_lolo * b_lohi) | 0
+    hilo = (hilo + (lohi >>> 16)) | 0
+    hihi = hilo >>> 16
+    hilo = ((hilo & 0xFFFF) + a_hilo * b_lolo) | 0
+    hihi = (hihi + (hilo >>> 16)) | 0
+    hilo = ((hilo & 0xFFFF) + a_lohi * b_lohi) | 0
+    hihi = (hihi + (hilo >>> 16)) | 0
+    hilo = ((hilo & 0xFFFF) + a_lolo * b_hilo) | 0
+    hihi = (hihi + (hilo >>> 16)) | 0
+    hihi = (hihi + a_hihi * b_lolo + a_hilo * b_lohi + a_lohi * b_hilo + a_lolo * b_hihi) | 0
+    val result = new RuntimeLong(
+        ((lolo & 0xFFFF) | (lohi << 16)).asInstanceOf[Int],
+        ((hilo & 0xFFFF) | (hihi << 16)).asInstanceOf[Int])
+    if (positive) result else -result
   }
 
   @inline
@@ -534,6 +386,8 @@ object RuntimeLong {
 
   private final val TwoPow32 = 4294967296.0
   private final val TwoPow63 = 9223372036854775808.0
+
+  private final val MaxNormal = 1 << 18
 
   /** The magical mask that allows to test whether an unsigned long is a safe
    *  double.
@@ -593,70 +447,17 @@ object RuntimeLong {
     }
   }
 
-  @inline
   def fromInt(value: Int): RuntimeLong =
-    new RuntimeLong(value, value >> 31)
+    if (value >= 0) new RuntimeLong(value, 0)
+    else new RuntimeLong(value, -1)
 
-  @inline
-  def fromDouble(value: Double): RuntimeLong = {
-    val lo = fromDoubleImpl(value)
-    new RuntimeLong(lo, hiReturn)
-  }
+  def fromDouble(value: Double): RuntimeLong = fromNumber(value)
 
-  private def fromDoubleImpl(value: Double): Int = {
-    /* When value is NaN, the conditions of the 3 `if`s are false, and we end
-     * up returning (NaN | 0, (NaN / TwoPow32) | 0), which is correctly (0, 0).
-     */
-
-    if (value < -TwoPow63) {
-      hiReturn = 0x80000000
-      0
-    } else if (value >= TwoPow63) {
-      hiReturn = 0x7fffffff
-      0xffffffff
+  private def fromNumber(value: Double): RuntimeLong = {
+    if (value >= 0) {
+      new RuntimeLong(rawToInt(value), rawToInt(value / TwoPow32))
     } else {
-      val rawLo = rawToInt(value)
-      val rawHi = rawToInt(value / TwoPow32)
-
-      /* Magic!
-       *
-       * When value < 0, this should *reasonably* be:
-       *   val absValue = -value
-       *   val absLo = rawToInt(absValue)
-       *   val absHi = rawToInt(absValue / TwoPow32)
-       *   val lo = -absLo
-       *   hiReturn = if (absLo != 0) ~absHi else -absHi
-       *   return lo
-       *
-       * Using the fact that rawToInt(-x) == -rawToInt(x), we can rewrite
-       * absLo and absHi without absValue as:
-       *   val absLo = -rawToInt(value)
-       *             = -rawLo
-       *   val absHi = -rawToInt(value / TwoPow32)
-       *             = -rawHi
-       *
-       * Now, we can replace absLo in the definition of lo and get:
-       *   val lo = -(-rawLo)
-       *          = rawLo
-       *
-       * The `hiReturn` definition can be rewritten as
-       *   hiReturn = if (lo != 0) -absHi - 1 else -absHi
-       *            = if (rawLo != 0) -(-rawHi) - 1 else -(-rawHi)
-       *            = if (rawLo != 0) rawHi - 1 else rawHi
-       *
-       * Now that we do not need absValue, absLo nor absHi anymore, we end
-       * end up with:
-       *   hiReturn = if (rawLo != 0) rawHi - 1 else rawHi
-       *   return rawLo
-       *
-       * When value >= 0, the definitions are simply
-       *   hiReturn = rawToInt(value / TwoPow32) = rawHi
-       *   lo = rawToInt(value) = rawLo
-       *
-       * Combining the negative and positive cases, we get:
-       */
-      hiReturn = if (value < 0 && rawLo != 0) rawHi - 1 else rawHi
-      rawLo
+      -(new RuntimeLong(rawToInt(-value), rawToInt(-value / TwoPow32)))
     }
   }
 
