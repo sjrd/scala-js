@@ -51,22 +51,49 @@ final class RuntimeLong(val lo: Int, val hi: Int)
 
   // String operations
 
-  @inline override def toString(): String = {
-    /*val result = js.Array[String]()
-    var n = this
-    val positive = n.isPositive()
-    if (!positive)
-      n = -n
-    val radix = new RuntimeLong(10, 0)
-    do {
-      val dr = divRem(n, radix)
-      result.push(js.Dynamic.global.String.fromCharCode(48 + dr._2.lo).asInstanceOf[String])
-      n = dr._1
-    } while (n.lo != 0 || n.hi != 0)
-    val res = result.asInstanceOf[js.Dynamic].reverse().join("").asInstanceOf[String]
-    if (positive) res
-    else "-" + res*/
-    RuntimeLong.toString(lo, hi)
+  override def toString(): String = {
+    val radix = 10
+
+    if (this.isZero) {
+      return "0"
+    }
+
+    if (this.isNegative) {
+      if (this.equals(KotlinLong.MinValue)) {
+        // We need to change the Long value before it can be negated, so we remove
+        // the bottom-most digit in this base and then recurse to do the rest.
+        var radixLong = fromNumber(radix)
+        var div = this / radixLong
+        var rem = (div * radixLong) - this
+        return div.toString() + rem.toInt.toString()
+      } else {
+        return "-" + (-this).toString()
+      }
+    }
+
+    // Do several (6) digits each time through the loop, so as to
+    // minimize the calls to the very expensive emulated div.
+    var radixToPower = fromNumber(Math.pow(radix, 6))
+
+    var rem = this
+    var result = ""
+    while (true) {
+      var remDiv = rem / radixToPower
+      var intval = (rem - (remDiv * radixToPower)).toInt
+      var digits = intval.toString()
+
+      rem = remDiv
+      if (rem.isZero) {
+        return digits + result
+      } else {
+        while (digits.length < 6) {
+          digits = "0" + digits
+        }
+        result = "" + digits + result
+      }
+    }
+
+    throw new AssertionError("unreachable")
   }
 
   // Conversions
@@ -97,6 +124,9 @@ final class RuntimeLong(val lo: Int, val hi: Int)
   @inline def doubleValue(): Double = toDouble
 
   // Comparisons and java.lang.Comparable interface
+
+  private def isZero: Boolean =
+    hi == 0 && lo == 0
 
   private def isPositive: Boolean =
     (a.hi & 0x80000000) == 0
@@ -361,18 +391,90 @@ final class RuntimeLong(val lo: Int, val hi: Int)
     if (positive) result else -result
   }
 
-  @inline
-  def /(b: RuntimeLong): RuntimeLong =
-    RuntimeLong.divide(a, b)
+  def /(other: RuntimeLong): RuntimeLong = {
+    if (other.isZero) {
+      throw new ArithmeticException("/ by zero")
+    } else if (this.isZero) {
+      return KotlinLong.Zero
+    }
+
+    if (this.equals(KotlinLong.MinValue)) {
+      if (other.equals(KotlinLong.One) || other.equals(KotlinLong.NegOne)) {
+        return KotlinLong.MinValue // recall that -MIN_VALUE == MIN_VALUE
+      } else if (other.equals(KotlinLong.MinValue)) {
+        return KotlinLong.One
+      } else {
+        // At this point, we have |other| >= 2, so |this/other| < |MIN_VALUE|.
+        var halfThis = this >> 1
+        var approx = (halfThis / other) << 1
+        if (approx.equals(KotlinLong.Zero)) {
+          return (if (other.isNegative) KotlinLong.One else KotlinLong.NegOne)
+        } else {
+          var rem = this - (other * approx)
+          var result = approx + (rem / other)
+          return result
+        }
+      }
+    } else if (other.equals(KotlinLong.MinValue)) {
+      return KotlinLong.Zero
+    }
+
+    if (this.isNegative) {
+      if (other.isNegative) {
+        return (-this) / (-other)
+      } else {
+        return -((-this) / other)
+      }
+    } else if (other.isNegative) {
+      return -(this / -other)
+    }
+
+    // Repeat the following until the remainder is less than other:  find a
+    // floating-point that approximates remainder / other *from below*, add this
+    // into the result, and subtract it from the remainder.  It is critical that
+    // the approximate value is less than or equal to the real value so that the
+    // remainder never becomes negative.
+    var res = KotlinLong.Zero
+    var rem = this
+    while (rem >= other) {
+      // Approximate the result of division. This may be a little greater or
+      // smaller than the actual value.
+      var approx = Math.max(1, Math.floor(rem.toNumber / other.toNumber))
+
+      // We will tweak the approximate result by changing it in the 48-th digit or
+      // the smallest non-fractional digit, whichever is larger.
+      var log2 = Math.ceil(Math.log(approx) / js.Math.LN2);
+      var delta = if (log2 <= 48) 1 else Math.pow(2, log2 - 48)
+
+      // Decrease the approximation until it is smaller than the remainder.  Note
+      // that if it is too large, the product overflows and is negative.
+      var approxRes = fromNumber(approx)
+      var approxRem = approxRes * other
+      while (approxRem.isNegative || (approxRem > rem)) {
+        approx -= delta
+        approxRes = fromNumber(approx)
+        approxRem = approxRes * other
+      }
+
+      // We know the answer can't be zero... and actually, zero would cause
+      // infinite recursion since we would make no progress.
+      if (approxRes.isZero) {
+        approxRes = KotlinLong.One
+      }
+
+      res = res + approxRes
+      rem = rem - approxRem
+    }
+    res
+  }
 
   /** `java.lang.Long.divideUnsigned(a, b)` */
   @inline
   def divideUnsigned(b: RuntimeLong): RuntimeLong =
     RuntimeLong.divideUnsigned(a, b)
 
-  @inline
   def %(b: RuntimeLong): RuntimeLong =
-    RuntimeLong.remainder(a, b)
+    a - ((a / b) * b)
 
   /** `java.lang.Long.remainderUnsigned(a, b)` */
   @inline
@@ -401,6 +503,13 @@ object RuntimeLong {
 
   /** The hi part of a (lo, hi) return value. */
   private[this] var hiReturn: Int = _
+
+  private object KotlinLong {
+    val Zero = new RuntimeLong(0, 0)
+    val One = new RuntimeLong(1, 0)
+    val NegOne = new RuntimeLong(-1, -1)
+    val MinValue = new RuntimeLong(0, 0x80000000)
+  }
 
   private def toString(lo: Int, hi: Int): String = {
     if (isInt32(lo, hi)) {
