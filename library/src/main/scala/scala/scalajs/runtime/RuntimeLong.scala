@@ -128,11 +128,22 @@ final class RuntimeLong(val lo: Int, val hi: Int)
   private def isZero: Boolean =
     hi == 0 && lo == 0
 
+  private def isMinValue: Boolean =
+    hi == 0x80000000 && lo == 0
+
   private def isPositive: Boolean =
     (a.hi & 0x80000000) == 0
 
   private def isNegative: Boolean =
     (a.hi & 0x80000000) != 0
+
+  /**
+   * Return the number of leading zeros of a long value.
+   */
+  private def numberOfLeadingZeros: Int = {
+    if (hi == 0) Integer.numberOfLeadingZeros(lo) + 32
+    else Integer.numberOfLeadingZeros(hi)
+  }
 
   def compareTo(b: RuntimeLong): Int = {
     /*var r = a.hi - b.hi
@@ -391,81 +402,8 @@ final class RuntimeLong(val lo: Int, val hi: Int)
     if (positive) result else -result
   }
 
-  def /(other: RuntimeLong): RuntimeLong = {
-    if (other.isZero) {
-      throw new ArithmeticException("/ by zero")
-    } else if (this.isZero) {
-      return KotlinLong.Zero
-    }
-
-    if (this.equals(KotlinLong.MinValue)) {
-      if (other.equals(KotlinLong.One) || other.equals(KotlinLong.NegOne)) {
-        return KotlinLong.MinValue // recall that -MIN_VALUE == MIN_VALUE
-      } else if (other.equals(KotlinLong.MinValue)) {
-        return KotlinLong.One
-      } else {
-        // At this point, we have |other| >= 2, so |this/other| < |MIN_VALUE|.
-        var halfThis = this >> 1
-        var approx = (halfThis / other) << 1
-        if (approx.equals(KotlinLong.Zero)) {
-          return (if (other.isNegative) KotlinLong.One else KotlinLong.NegOne)
-        } else {
-          var rem = this - (other * approx)
-          var result = approx + (rem / other)
-          return result
-        }
-      }
-    } else if (other.equals(KotlinLong.MinValue)) {
-      return KotlinLong.Zero
-    }
-
-    if (this.isNegative) {
-      if (other.isNegative) {
-        return (-this) / (-other)
-      } else {
-        return -((-this) / other)
-      }
-    } else if (other.isNegative) {
-      return -(this / -other)
-    }
-
-    // Repeat the following until the remainder is less than other:  find a
-    // floating-point that approximates remainder / other *from below*, add this
-    // into the result, and subtract it from the remainder.  It is critical that
-    // the approximate value is less than or equal to the real value so that the
-    // remainder never becomes negative.
-    var res = KotlinLong.Zero
-    var rem = this
-    while (rem >= other) {
-      // Approximate the result of division. This may be a little greater or
-      // smaller than the actual value.
-      var approx = Math.max(1, Math.floor(rem.toNumber / other.toNumber))
-
-      // We will tweak the approximate result by changing it in the 48-th digit or
-      // the smallest non-fractional digit, whichever is larger.
-      var log2 = Math.ceil(Math.log(approx) / js.Math.LN2);
-      var delta = if (log2 <= 48) 1 else Math.pow(2, log2 - 48)
-
-      // Decrease the approximation until it is smaller than the remainder.  Note
-      // that if it is too large, the product overflows and is negative.
-      var approxRes = fromNumber(approx)
-      var approxRem = approxRes * other
-      while (approxRem.isNegative || (approxRem > rem)) {
-        approx -= delta
-        approxRes = fromNumber(approx)
-        approxRem = approxRes * other
-      }
-
-      // We know the answer can't be zero... and actually, zero would cause
-      // infinite recursion since we would make no progress.
-      if (approxRes.isZero) {
-        approxRes = KotlinLong.One
-      }
-
-      res = res + approxRes
-      rem = rem - approxRem
-    }
-    res
+  def /(b: RuntimeLong): RuntimeLong = {
+    divMod(a, b, computeRemainder = false)
   }
 
   /** `java.lang.Long.divideUnsigned(a, b)` */
@@ -473,8 +411,10 @@ final class RuntimeLong(val lo: Int, val hi: Int)
   def divideUnsigned(b: RuntimeLong): RuntimeLong =
     RuntimeLong.divideUnsigned(a, b)
 
-  def %(b: RuntimeLong): RuntimeLong =
-    a - ((a / b) * b)
+  def %(b: RuntimeLong): RuntimeLong = {
+    divMod(a, b, computeRemainder = true)
+    RuntimeLong.rem
+  }
 
   /** `java.lang.Long.remainderUnsigned(a, b)` */
   @inline
@@ -503,6 +443,8 @@ object RuntimeLong {
 
   /** The hi part of a (lo, hi) return value. */
   private[this] var hiReturn: Int = _
+
+  private var rem: RuntimeLong = _
 
   private object KotlinLong {
     val Zero = new RuntimeLong(0, 0)
@@ -851,6 +793,230 @@ object RuntimeLong {
       val remStr = remLo.toString // remHi is always 0
       quot.toString + "000000000".jsSubstring(remStr.length) + remStr
     }
+  }
+
+  private def divMod(a0: RuntimeLong, b0: RuntimeLong,
+      computeRemainder: Boolean): RuntimeLong = {
+    var a = a0
+    var b = b0
+
+    if (b.isZero) {
+      throw new ArithmeticException("divide by zero");
+    }
+    if (a.isZero) {
+      if (computeRemainder) {
+        rem = new RuntimeLong(0, 0) // zero
+      }
+      return new RuntimeLong(0, 0) // zero
+    }
+
+    // MIN_VALUE / MIN_VALUE = 1, anything other a / MIN_VALUE is 0
+    if (b.isMinValue) {
+      return divModByMinValue(a, computeRemainder)
+    }
+
+    // Normalize b to abs(b), keeping track of the parity in 'negative'.
+    // We can do this because we have already ensured that b != MIN_VALUE.
+    var negative = false
+    if (b.isNegative) {
+      b = -b
+      negative = !negative
+    }
+
+    // If b == 2^n, bpower will be n, otherwise it will be -1
+    val bpower = powerOfTwo(b)
+
+    // True if the original value of a is negative
+    var aIsNegative = false
+    // True if the original value of a is Long.MIN_VALUE
+    var aIsMinValue = false
+
+    /*
+     * Normalize a to a positive value, keeping track of the sign change in
+     * 'negative' (which tracks the sign of both a and b and is used to
+     * determine the sign of the quotient) and 'aIsNegative' (which is used to
+     * determine the sign of the remainder).
+     *
+     * For all values of a except MIN_VALUE, we can just negate a and modify
+     * negative and aIsNegative appropriately. When a == MIN_VALUE, negation is
+     * not possible without overflowing 64 bits, so instead of computing
+     * abs(MIN_VALUE) / abs(b) we compute (abs(MIN_VALUE) - 1) / abs(b). The
+     * only circumstance under which these quotients differ is when b is a power
+     * of two, which will divide abs(MIN_VALUE) == 2^64 exactly. In this case,
+     * we can get the proper result by shifting MIN_VALUE in unsigned fashion.
+     *
+     * We make a single copy of a before the first operation that needs to
+     * modify its value.
+     */
+    if (a.isMinValue) {
+      aIsMinValue = true
+      aIsNegative = true
+      // If b is not a power of two, treat -a as MAX_VALUE (instead of the
+      // actual value (MAX_VALUE + 1)).
+      if (bpower == -1) {
+        a = new RuntimeLong(0xffffffff, 0x7fffffff)
+        negative = !negative
+      } else {
+        // Signed shift of MIN_VALUE produces the right answer
+        var c = a >> bpower
+        if (negative) {
+          c = -c
+        }
+        if (computeRemainder) {
+          rem = new RuntimeLong(0, 0) // zero
+        }
+        return c
+      }
+    } else if (a.isNegative) {
+      aIsNegative = true
+      a = -a
+      negative = !negative
+    }
+
+    // Now both a and b are non-negative
+
+    // If b is a power of two, just shift
+    if (bpower != -1) {
+      return divModByShift(a, bpower, negative, aIsNegative, computeRemainder)
+    }
+
+    // if a < b, the quotient is 0 and the remainder is a
+    if (a < b) {
+      if (computeRemainder) {
+        if (aIsNegative) {
+          rem = -a
+        } else {
+          rem = a
+        }
+      }
+      return new RuntimeLong(0, 0) // zero
+    }
+
+    // Generate the quotient using bit-at-a-time long division
+    divModHelper(a, b, negative, aIsNegative,
+        aIsMinValue, computeRemainder)
+  }
+
+  /**
+   * Return the exact log base 2 of a, or -1 if a is not a power of two:
+   *
+   * <pre>
+   * if (x == 2^n) {
+   *   return n;
+   * } else {
+   *   return -1;
+   * }
+   * </pre>
+   */
+  private def powerOfTwo(a: RuntimeLong): Int = {
+    val lo = a.lo
+    if ((lo & (lo - 1)) != 0) {
+      -1
+    } else {
+      val hi = a.hi
+      if ((hi & (hi - 1)) != 0) {
+        -1
+      } else {
+        if (hi == 0 && lo != 0)
+          Integer.numberOfTrailingZeros(lo)
+        else if (lo == 0 && hi != 0)
+          Integer.numberOfTrailingZeros(hi) + 32
+        else
+          -1
+      }
+    }
+  }
+
+  private def divModByMinValue(a: RuntimeLong,
+      computeRemainder: Boolean): RuntimeLong = {
+    // MIN_VALUE / MIN_VALUE == 1, remainder = 0
+    // (a != MIN_VALUE) / MIN_VALUE == 0, remainder == a
+    if (a.isMinValue) {
+      if (computeRemainder) {
+        rem = new RuntimeLong(0, 0) // zero
+      }
+      new RuntimeLong(1, 0)
+    } else {
+      if (computeRemainder) {
+        rem = a
+      }
+      new RuntimeLong(0, 0) // zero
+    }
+  }
+
+  private def divModByShift(a: RuntimeLong, bpower: Int, negative: Boolean,
+      aIsNegative: Boolean, computeRemainder: Boolean): RuntimeLong = {
+    var c = a >> bpower
+    if (negative) {
+      c = -c
+    }
+
+    if (computeRemainder) {
+      val a2 = maskRight(a, bpower)
+      if (aIsNegative) {
+        rem = -a2
+      } else {
+        rem = a2
+      }
+    }
+
+    c
+  }
+
+  /**
+   * a & ((1L << bits) - 1)
+   */
+  private def maskRight(a: RuntimeLong, bits: Int): RuntimeLong = {
+    if (bits <= 32)
+      new RuntimeLong(a.lo & ((1 << bits) - 1), 0)
+    else
+      new RuntimeLong(a.lo, a.hi & ((1 << (bits - 32)) - 1))
+  }
+
+  private def divModHelper(a0: RuntimeLong, b: RuntimeLong,
+      negative: Boolean, aIsNegative: Boolean, aIsMinValue: Boolean,
+      computeRemainder: Boolean): RuntimeLong = {
+    var a = a0
+
+    // Align the leading one bits of a and b by shifting b left
+    var shift = b.numberOfLeadingZeros - a.numberOfLeadingZeros
+    var bshift = b << shift
+
+    var quotient = new RuntimeLong(0, 0)
+    var break = false
+    while (!break && shift >= 0) {
+      if (a >= bshift) {
+        a -= bshift
+        //setBit(quotient, shift);
+        quotient |= (new RuntimeLong(1, 0) << shift)
+        if (a.isZero) {
+          break = true
+        } else {
+          bshift >>>= 1
+          shift -= 1
+        }
+      } else {
+        bshift >>>= 1
+        shift -= 1
+      }
+    }
+
+    if (negative) {
+      quotient = -quotient
+    }
+
+    if (computeRemainder) {
+      if (aIsNegative) {
+        rem = -a
+        if (aIsMinValue) {
+          rem = rem - new RuntimeLong(1, 0)
+        }
+      } else {
+        rem = a
+      }
+    }
+
+    quotient
   }
 
   @inline
