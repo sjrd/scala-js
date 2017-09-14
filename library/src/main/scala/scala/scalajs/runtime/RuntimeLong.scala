@@ -52,48 +52,38 @@ final class RuntimeLong(val lo: Int, val hi: Int)
   // String operations
 
   override def toString(): String = {
-    val radix = 10
-
-    if (this.isZero) {
+    if (isZero)
       return "0"
-    }
+    if (isMinValue)
+      return "-9223372036854775808"
+    if (isNegative)
+      return "-" + (-a).toString()
 
-    if (this.isNegative) {
-      if (this.equals(KotlinLong.MinValue)) {
-        // We need to change the Long value before it can be negated, so we remove
-        // the bottom-most digit in this base and then recurse to do the rest.
-        var radixLong = fromNumber(radix)
-        var div = this / radixLong
-        var rem = (div * radixLong) - this
-        return div.toString() + rem.toInt.toString()
-      } else {
-        return "-" + (-this).toString()
-      }
-    }
+    var rem = a
+    var res = ""
 
-    // Do several (6) digits each time through the loop, so as to
-    // minimize the calls to the very expensive emulated div.
-    var radixToPower = fromNumber(Math.pow(radix, 6))
+    while (!rem.isZero) {
+      // Do several digits each time through the loop, so as to
+      // minimize the calls to the very expensive emulated div.
+      val tenPowerZeroes = 9
+      val tenPower = 1000000000
+      val tenPowerLong = fromInt(tenPower)
 
-    var rem = this
-    var result = ""
-    while (true) {
-      var remDiv = rem / radixToPower
-      var intval = (rem - (remDiv * radixToPower)).toInt
-      var digits = intval.toString()
+      rem = divMod(rem, tenPowerLong, true)
+      var digits = "" + RuntimeLong.rem.toInt
 
-      rem = remDiv
-      if (rem.isZero) {
-        return digits + result
-      } else {
-        while (digits.length < 6) {
+      if (!rem.isZero) {
+        var zeroesNeeded = tenPowerZeroes - digits.length()
+        while (zeroesNeeded > 0) {
           digits = "0" + digits
+          zeroesNeeded -= 1
         }
-        result = "" + digits + result
       }
+
+      res = digits + res
     }
 
-    throw new AssertionError("unreachable")
+    res
   }
 
   // Conversions
