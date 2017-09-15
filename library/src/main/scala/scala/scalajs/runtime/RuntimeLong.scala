@@ -347,18 +347,9 @@ final class RuntimeLong(val lo: Int, val hi: Int)
     }
   }
 
-  def *(b0: RuntimeLong): RuntimeLong = {
+  def *(b: RuntimeLong): RuntimeLong = {
     import js.DynamicImplicits._
 
-    var a = this
-    var b = b0
-    val positive = a.isNegative == b.isNegative
-    if (a.isNegative) {
-        a = -a
-    }
-    if (b.isNegative) {
-        b = -b
-    }
     val a_lolo: js.Dynamic = a.lo & 0xFFFF
     val a_lohi: js.Dynamic = a.lo >>> 16
     val a_hilo: js.Dynamic = a.hi & 0xFFFF
@@ -386,10 +377,9 @@ final class RuntimeLong(val lo: Int, val hi: Int)
     hilo = ((hilo & 0xFFFF) + a_lolo * b_hilo) | 0
     hihi = (hihi + (hilo >>> 16)) | 0
     hihi = (hihi + a_hihi * b_lolo + a_hilo * b_lohi + a_lohi * b_hilo + a_lolo * b_hihi) | 0
-    val result = new RuntimeLong(
+    new RuntimeLong(
         ((lolo & 0xFFFF) | (lohi << 16)).asInstanceOf[Int],
         ((hilo & 0xFFFF) | (hihi << 16)).asInstanceOf[Int])
-    if (positive) result else -result
   }
 
   def /(b: RuntimeLong): RuntimeLong = {
