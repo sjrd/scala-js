@@ -302,49 +302,39 @@ final class RuntimeLong(val lo: Int, val hi: Int)
   }
 
   def +(b: RuntimeLong): RuntimeLong = {
-    if (a.hi == (a.lo >> 31) && b.hi == (b.lo >> 31)) {
-      fromNumber(a.lo.toDouble + b.lo.toDouble)
-    } else if (Math.abs(a.hi) < MaxNormal && Math.abs(b.hi) < MaxNormal) {
-      fromNumber(a.toNumber + b.toNumber)
-    } else {
-      val a_lolo = a.lo & 0xFFFF
-      val a_lohi = a.lo >>> 16
-      val a_hilo = a.hi & 0xFFFF
-      val a_hihi = a.hi >>> 16
-      val b_lolo = b.lo & 0xFFFF
-      val b_lohi = b.lo >>> 16
-      val b_hilo = b.hi & 0xFFFF
-      val b_hihi = b.hi >>> 16
+    val a_lolo = a.lo & 0xFFFF
+    val a_lohi = a.lo >>> 16
+    val a_hilo = a.hi & 0xFFFF
+    val a_hihi = a.hi >>> 16
+    val b_lolo = b.lo & 0xFFFF
+    val b_lohi = b.lo >>> 16
+    val b_hilo = b.hi & 0xFFFF
+    val b_hihi = b.hi >>> 16
 
-      val lolo = a_lolo + b_lolo
-      val lohi = a_lohi + b_lohi + (lolo >> 16)
-      val hilo = a_hilo + b_hilo + (lohi >> 16)
-      val hihi = a_hihi + b_hihi + (hilo >> 16)
-      new RuntimeLong((lolo & 0xFFFF) | ((lohi & 0xFFFF) << 16),
-          (hilo & 0xFFFF) | ((hihi & 0xFFFF) << 16))
-    }
+    val lolo = a_lolo + b_lolo
+    val lohi = a_lohi + b_lohi + (lolo >> 16)
+    val hilo = a_hilo + b_hilo + (lohi >> 16)
+    val hihi = a_hihi + b_hihi + (hilo >> 16)
+    new RuntimeLong((lolo & 0xFFFF) | ((lohi & 0xFFFF) << 16),
+        (hilo & 0xFFFF) | ((hihi & 0xFFFF) << 16))
   }
 
   def -(b: RuntimeLong): RuntimeLong = {
-    if (a.hi == (a.lo >> 31) && b.hi == (b.lo >> 31)) {
-      fromNumber(a.lo.toDouble - b.lo.toDouble)
-    } else {
-      val a_lolo = a.lo & 0xFFFF
-      val a_lohi = a.lo >>> 16
-      val a_hilo = a.hi & 0xFFFF
-      val a_hihi = a.hi >>> 16
-      val b_lolo = b.lo & 0xFFFF
-      val b_lohi = b.lo >>> 16
-      val b_hilo = b.hi & 0xFFFF
-      val b_hihi = b.hi >>> 16
+    val a_lolo = a.lo & 0xFFFF
+    val a_lohi = a.lo >>> 16
+    val a_hilo = a.hi & 0xFFFF
+    val a_hihi = a.hi >>> 16
+    val b_lolo = b.lo & 0xFFFF
+    val b_lohi = b.lo >>> 16
+    val b_hilo = b.hi & 0xFFFF
+    val b_hihi = b.hi >>> 16
 
-      val lolo = a_lolo - b_lolo
-      val lohi = a_lohi - b_lohi + (lolo >> 16)
-      val hilo = a_hilo - b_hilo + (lohi >> 16)
-      val hihi = a_hihi - b_hihi + (hilo >> 16)
-      new RuntimeLong((lolo & 0xFFFF) | ((lohi & 0xFFFF) << 16),
-          (hilo & 0xFFFF) | ((hihi & 0xFFFF) << 16))
-    }
+    val lolo = a_lolo - b_lolo
+    val lohi = a_lohi - b_lohi + (lolo >> 16)
+    val hilo = a_hilo - b_hilo + (lohi >> 16)
+    val hihi = a_hihi - b_hihi + (hilo >> 16)
+    new RuntimeLong((lolo & 0xFFFF) | ((lohi & 0xFFFF) << 16),
+        (hilo & 0xFFFF) | ((hihi & 0xFFFF) << 16))
   }
 
   def *(b: RuntimeLong): RuntimeLong = {
