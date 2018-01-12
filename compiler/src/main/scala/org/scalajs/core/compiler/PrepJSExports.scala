@@ -7,6 +7,8 @@ package org.scalajs.core.compiler
 
 import scala.collection.mutable
 
+import scala.tools.nsc.plugins
+
 import org.scalajs.core.ir.Trees.isValidIdentifier
 
 /**
@@ -14,7 +16,11 @@ import org.scalajs.core.ir.Trees.isValidIdentifier
  *
  *  Helpers for transformation of @JSExport annotations
  */
-trait PrepJSExports { this: PrepJSInterop =>
+trait PrepJSExports { this: plugins.PluginComponent =>
+
+  val jsAddons: JSGlobalAddons {
+    val global: PrepJSExports.this.global.type
+  }
 
   import global._
   import jsAddons._
@@ -22,6 +28,8 @@ trait PrepJSExports { this: PrepJSInterop =>
   import jsDefinitions._
 
   import scala.reflect.internal.Flags
+
+  protected def isJSAny(sym: Symbol): Boolean
 
   case class ExportInfo(jsName: String,
       destination: ExportDestination)(val pos: Position)
@@ -223,7 +231,7 @@ trait PrepJSExports { this: PrepJSInterop =>
 
       // Enforce proper setter signature
       if (jsInterop.isJSSetter(sym))
-        checkSetterSignature(sym, annot.pos, exported = true)
+        jsInterop.checkSetterSignature(sym, annot.pos, exported = true)
 
       // Enforce no __ in name
       if (name.contains("__")) {

@@ -89,6 +89,12 @@ trait JSGlobalAddons extends JSDefinitions
     }
   }
 
+  /** Tests whether the symbol has `private` in any form, either `private`,
+   *  `private[this]` or `private[Enclosing]`.
+   */
+  def isPrivateMaybeWithin(sym: Symbol): Boolean =
+    sym.isPrivate || (sym.hasAccessBoundary && !sym.isProtected)
+
   /** global javascript interop related helpers */
   object jsInterop {
     import scala.reflect.NameTransformer
@@ -206,6 +212,34 @@ trait JSGlobalAddons extends JSDefinitions
     /** has this symbol to be translated into a JS setter (both directions)? */
     def isJSSetter(sym: Symbol): Boolean =
       nme.isSetterName(sym.name) && sym.isMethod && !sym.isConstructor
+
+    /** Checks that a setter has the right signature.
+     *
+     *  Reports error messages otherwise.
+     */
+    def checkSetterSignature(sym: Symbol, pos: Position,
+        exported: Boolean): Unit = {
+      val typeStr = if (exported) "Exported" else "Raw JS"
+
+      // Forbid setters with non-unit return type
+      if (sym.tpe.resultType.typeSymbol != UnitClass) {
+        reporter.error(pos, s"$typeStr setters must return Unit")
+      }
+
+      // Forbid setters with more than one argument
+      sym.tpe.paramss match {
+        case List(List(arg)) =>
+          // Arg list is OK. Do additional checks.
+          if (isScalaRepeatedParamType(arg.tpe))
+            reporter.error(pos, s"$typeStr setters may not have repeated params")
+
+          if (arg.hasFlag(reflect.internal.Flags.DEFAULTPARAM))
+            reporter.error(pos, s"$typeStr setters may not have default params")
+
+        case _ =>
+          reporter.error(pos, s"$typeStr setters must have exactly one argument")
+      }
+    }
 
     /** Is this field symbol a static field at the IR level? */
     def isFieldStatic(sym: Symbol): Boolean = {

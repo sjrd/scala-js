@@ -833,7 +833,7 @@ abstract class PrepJSInterop extends plugins.PluginComponent
       }
 
       if (jsInterop.isJSSetter(sym))
-        checkSetterSignature(sym, tree.pos, exported = false)
+        jsInterop.checkSetterSignature(sym, tree.pos, exported = false)
 
       if (jsInterop.isJSBracketAccess(sym)) {
         if (enclosingOwner is OwnerKind.JSNonNative) {
@@ -1114,35 +1114,8 @@ abstract class PrepJSInterop extends plugins.PluginComponent
 
   }
 
-  def isJSAny(sym: Symbol): Boolean =
+  protected def isJSAny(sym: Symbol): Boolean =
     sym.tpe.typeSymbol isSubClass JSAnyClass
-
-  /** Checks that a setter has the right signature.
-   *
-   *  Reports error messages otherwise.
-   */
-  def checkSetterSignature(sym: Symbol, pos: Position, exported: Boolean): Unit = {
-    val typeStr = if (exported) "Exported" else "Raw JS"
-
-    // Forbid setters with non-unit return type
-    if (sym.tpe.resultType.typeSymbol != UnitClass) {
-      reporter.error(pos, s"$typeStr setters must return Unit")
-    }
-
-    // Forbid setters with more than one argument
-    sym.tpe.paramss match {
-      case List(List(arg)) =>
-        // Arg list is OK. Do additional checks.
-        if (isScalaRepeatedParamType(arg.tpe))
-          reporter.error(pos, s"$typeStr setters may not have repeated params")
-
-        if (arg.hasFlag(reflect.internal.Flags.DEFAULTPARAM))
-          reporter.error(pos, s"$typeStr setters may not have default params")
-
-      case _ =>
-        reporter.error(pos, s"$typeStr setters must have exactly one argument")
-    }
-  }
 
   private def isJSAny(implDef: ImplDef): Boolean = isJSAny(implDef.symbol)
 
@@ -1151,12 +1124,6 @@ abstract class PrepJSInterop extends plugins.PluginComponent
 
   private def isScalaEnum(implDef: ImplDef) =
     implDef.symbol.tpe.typeSymbol isSubClass ScalaEnumClass
-
-  /** Tests whether the symbol has `private` in any form, either `private`,
-   *  `private[this]` or `private[Enclosing]`.
-   */
-  def isPrivateMaybeWithin(sym: Symbol): Boolean =
-    sym.isPrivate || (sym.hasAccessBoundary && !sym.isProtected)
 
   /** Checks that the optional argument to `@JSGlobal` on [[sym]] is a literal.
    *

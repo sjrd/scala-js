@@ -13,7 +13,9 @@ import nsc.transform.{InfoTransform, TypingTransformers}
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
 
-/** Makes the references to inner JS class values explicit.
+/** Makes the references to inner JS class values explicit, and prepare exports.
+ *
+ *  == Make the references to inner JS class values explicit ==
  *
  *  Roughly, for every inner JS class of the form:
  *  {{{
@@ -45,10 +47,14 @@ import scala.collection.mutable
  *  It seems the easiest way to do that is to run the entire `transform` "in
  *  the future", with `exitingPhase(ExplicitInnerJS)`. This design is similar
  *  to how `explicitouter` works.
+ *
+ *  == Prepare exports ==
+ *
+ *  TODO
  */
 abstract class ExplicitInnerJS
     extends plugins.PluginComponent with InfoTransform with TypingTransformers
-    with CompatComponent {
+    with CompatComponent with PrepJSExports {
 
   val jsAddons: JSGlobalAddons {
     val global: ExplicitInnerJS.this.global.type
@@ -80,6 +86,9 @@ abstract class ExplicitInnerJS
   private lazy val traitValsHoldTheirGetterSymbol =
     !scala.util.Properties.versionNumberString.startsWith("2.11.")
 
+  protected def isJSAny(sym: Symbol): Boolean =
+    sym.hasAnnotation(RawJSTypeAnnot)
+
   protected def newTransformer(unit: CompilationUnit): Transformer =
     new ExplicitInnerJSTransformer(unit)
 
@@ -96,9 +105,10 @@ abstract class ExplicitInnerJS
    */
   def transformInfo(sym: Symbol, tp: Type): Type = tp match {
     case ClassInfoType(parents, decls, clazz) if !clazz.isJava =>
+      // Create fields for inner class values
       val innerJSClasses = decls.filter(isInnerJSClass)
-      if (innerJSClasses.isEmpty) {
-        tp
+      val decls1 = if (innerJSClasses.isEmpty) {
+        decls
       } else {
         val clazzIsJSClass = clazz.hasAnnotation(RawJSTypeAnnot)
 
@@ -136,8 +146,19 @@ abstract class ExplicitInnerJS
             decls1.enter(field)
           }
         }
-        ClassInfoType(parents, decls1, clazz)
+        decls1
       }
+
+      // Prepare member exports
+      val decls2 = if (clazz.hasAnnotation(RawJSTypeAnnot)) {
+        // JS types never have member exports
+        decls1
+      } else {
+
+      }
+
+      if (decls1 eq decls) tp
+      else ClassInfoType(parents, decls1, clazz)
 
     case PolyType(tparams, restp) =>
       val restp1 = transformInfo(sym, restp)
