@@ -32,6 +32,84 @@ trait GenJSExports extends SubComponent { self: GenJSCode =>
 
   trait JSExportsPhase { this: JSCodePhase =>
 
+    final class MembersExportInfo(
+        val exports: Map[String, List[ExportInfoAlternative]])
+
+    final class ExportInfoAlternative(val isProp: Boolean, val sym: Symbol,
+        val pos: Position)
+
+    private val emptyMembersExportInfo = new MembersExportInfo(Map.empty)
+
+    private val ownClassMembersExportInfoCache =
+      mutable.Map.empty[Symbol, MembersExportInfo]
+
+    private val allClassMembersExportInfoCache =
+      mutable.Map.empty[Symbol, MembersExportInfo]
+
+    def clearClassMembersExportInfoCache(): Unit = {
+      ownClassMembersExportInfoCache.clear()
+      allClassMembersExportInfoCache.clear()
+    }
+
+    def getOwnClassMembersExportInfo(cls: Symbol): MembersExportInfo = {
+      ownClassMembersExportInfoCache.getOrElseUpdate(cls, {
+        if (cls == ObjectClass) {
+          // Hard-coded export for Object.toString()
+          val toStringAlt =
+            new ExportInfoAlternative(false, Object_toString, NoPosition)
+          new MembersExportInfo(Map("toString" -> List(toStringAlt)))
+        } else {
+          computeClassMembersExportInfo(cls)
+        }
+      })
+    }
+
+    private def computeClassMembersExportInfo(cls: Symbol): MembersExportInfo = {
+      val clsExportAllAnnot = cls.getAnnotation(JSExportAllAnnotation)
+
+      def getAllExportAnnots(sym: Symbol): List[Annotation] = {
+        val base = sym.annotations.filter(_.symbol == JSExportAnnotation)
+        if (clsExportAllAnnot.isEmpty || !sym.isPublic)
+          base
+        else
+          clsExportAllAnnot.get :: base
+      }
+
+      val allAlternatives: List[(String, ExportInfoAlternative)] = (for {
+        sym <- cls.info.decls
+        if sym.isMethod && !sym.isConstructor && !sym.isBridge
+        annot <- getAllExportAnnots(sym)
+      } yield {
+        val name = annot.stringArg(0).getOrElse(jsInterop.defaultJSNameOf(sym))
+        val isProp = jsInterop.isJSProperty(sym)
+        name -> new ExportInfoAlternative(isProp, sym, sym.pos)
+      }).toList
+
+      if (allAlternatives.isEmpty) {
+        // Common case
+        emptyMembersExportInfo
+      } else {
+        new MembersExportInfo(allAlternatives.groupBy(_._1).map {
+          case (name, alts) => (name, alts.map(_._2))
+        }.toMap)
+      }
+    }
+
+    def getAllClassMembersExportInfo(cls: Symbol): MembersExportInfo = {
+      allClassMembersExportInfoCache.getOrElseUpdate(cls, {
+        val own = getOwnClassMembersExportInfo(cls)
+        val exports = cls.baseClasses.foldLeft(own.exports) { (prev, baseClass) =>
+          val inherited = getAllClassMembersExportInfo(baseClass)
+          inherited.exports.foldLeft(prev) { (prev, item) =>
+            val (name, alts) = item
+            val prevAlts = prev.getOrElse(name, Nil)
+            prev.updated(name, prevAlts ::: alts)
+          }
+        }
+        new MembersExportInfo(exports)
+      })
+    }
+
     /** Generates exported methods and properties for a class.
      *
      *  @param classSym symbol of the class we export for

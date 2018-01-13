@@ -8,6 +8,22 @@ package helloworld
 import scala.scalajs.js
 import js.annotation._
 
+class A {
+  @JSExport("a") def foo(x: Int): String = x.toString
+}
+
+class B extends A {
+  @JSExport("a") def bar(x: Int): Int = x + 1
+}
+
+class Confl {
+  @JSExport
+  def rtType(x: String) = x
+
+  @JSExport
+  def rtType(x: List[String]) = x
+}
+
 object HelloWorld {
   def main(args: Array[String]): Unit = {
     import js.DynamicImplicits.truthValue
