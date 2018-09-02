@@ -5742,8 +5742,10 @@ abstract class GenJSCode extends plugins.PluginComponent
   /** Tests whether the given type symbol represents a JavaScript type,
    *  i.e., whether it extends scala.scalajs.js.Any.
    */
-  def isJSType(sym: Symbol): Boolean =
-    sym.hasAnnotation(JSTypeAnnot)
+  def isJSType(sym: Symbol): Boolean = {
+    (sym == UnionClass) ||
+    (!foreignIsImplClass(sym) && enteringErasure(sym.isNonBottomSubClass(JSAnyClass)))
+  }
 
   /** Tests whether the given class is a non-native JS class. */
   def isNonNativeJSClass(sym: Symbol): Boolean =

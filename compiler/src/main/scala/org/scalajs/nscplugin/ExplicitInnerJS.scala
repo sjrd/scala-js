@@ -91,9 +91,16 @@ abstract class ExplicitInnerJS
   protected def newTransformer(unit: CompilationUnit): Transformer =
     new ExplicitInnerJSTransformer(unit)
 
+  /** Is the given class a JS type?
+   *
+   *  This method must only be called for symbols for which `isClass` is true.
+   */
+  private def isJSType(cls: Symbol): Boolean =
+    beforeOwnPhase(cls.isNonBottomSubClass(JSAnyClass))
+
   /** Is the given clazz an inner JS class? */
   private def isInnerJSClass(clazz: Symbol): Boolean = {
-    clazz.hasAnnotation(JSTypeAnnot) &&
+    clazz.isClass && isJSType(clazz) &&
     !clazz.isPackageClass && !clazz.outerClass.isStaticOwner &&
     !clazz.isLocalToBlock && !clazz.isModuleClass && !clazz.isTrait
   }
@@ -108,7 +115,7 @@ abstract class ExplicitInnerJS
       if (innerJSClasses.isEmpty) {
         tp
       } else {
-        val clazzIsJSClass = clazz.hasAnnotation(JSTypeAnnot)
+        val clazzIsJSClass = isJSType(clazz)
 
         val decls1 = decls.cloneScope
         for (innerJSClass <- innerJSClasses) {

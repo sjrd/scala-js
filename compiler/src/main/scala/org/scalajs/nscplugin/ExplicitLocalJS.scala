@@ -164,7 +164,7 @@ abstract class ExplicitLocalJS
 
   /** Is the given clazz an inner JS class or object? */
   private def isInnerJSClassOrObject(clazz: Symbol): Boolean = {
-    clazz.hasAnnotation(JSTypeAnnot) &&
+    clazz.isNonBottomSubClass(JSAnyClass) &&
     !clazz.isPackageClass && !clazz.outerClass.isStaticOwner &&
     !clazz.isLocalToBlock && !clazz.isTrait
   }
@@ -175,7 +175,7 @@ abstract class ExplicitLocalJS
       clazz.isAnonymousClass && AllJSFunctionClasses.exists(clazz.isSubClass(_))
 
     clazz.isLocalToBlock &&
-    !clazz.isTrait && clazz.hasAnnotation(JSTypeAnnot) &&
+    !clazz.isTrait && clazz.isNonBottomSubClass(JSAnyClass) &&
     !isJSLambda
   }
 
