@@ -1,10 +1,14 @@
-package org.scalajs.linker.backend.wasm
+package org.scalajs.linker.backend.webassembly
 
 import org.scalajs.io._
 import org.scalajs.logging._
 
 import org.scalajs.linker._
 import org.scalajs.linker.standard._
+
+import org.scalajs.linker.backend.webassembly.wasm.{Definitions => wasmdef}
+import org.scalajs.linker.backend.webassembly.wasm.{Expressions => wasmexpr}
+import org.scalajs.linker.backend.webassembly.wasm.{Types => wasmtpe}
 
 final class Emitter(config: CommonPhaseConfig) {
 
@@ -13,6 +17,11 @@ final class Emitter(config: CommonPhaseConfig) {
 
   def emitAll(unit: LinkingUnit, builder: WasmModuleBuilder,
       logger: Logger): Unit = {
+    val mainFunDef = wasmdef.FunDef("main", Nil, wasmtpe.i32) { locals =>
+      wasmexpr.I32Const(151189)
+    }
+
+    builder.funs += mainFunDef
   }
 
 }

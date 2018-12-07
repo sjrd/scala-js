@@ -18,9 +18,10 @@ private[backend] object LinkerBackendImplPlatform {
   import LinkerBackendImpl.Config
 
   def createLinkerBackend(config: Config): LinkerBackendImpl = {
-    if (config.closureCompiler)
+    new webassembly.WasmLinkerBackend(config)
+    /*if (config.closureCompiler)
       new ClosureLinkerBackend(config)
     else
-      new BasicLinkerBackend(config)
+      new BasicLinkerBackend(config)*/
   }
 }

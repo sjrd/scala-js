@@ -10,7 +10,7 @@
  * additional information regarding copyright ownership.
  */
 
-package org.scalajs.linker.backend.wasm
+package org.scalajs.linker.backend.webassembly
 
 import org.scalajs.logging.Logger
 
