@@ -150,6 +150,25 @@ private[closure] class ClosureAstTransformer(relativizeBaseURI: Option[URI]) {
             transformOptToEmpty(parentClass)(transformExpr(_)),
             membersBlock)
 
+      case ImportNamespace(binding, from) =>
+        val importStarNode = {
+          setNodePosition(Node.newString(Token.IMPORT_STAR, binding.name),
+              binding.pos.orElse(pos))
+        }
+        val fromNode = transformExpr(from)
+        new Node(Token.IMPORT, new Node(Token.EMPTY), importStarNode, fromNode)
+
+      case Export(bindings) =>
+        val exportSpecsNode = new Node(Token.EXPORT_SPECS)
+        for ((ident, exportName) <- bindings) {
+          val identPos = ident.pos.orElse(pos)
+          val identNode = transformName(ident)
+          val exportNameNode = Node.newString(Token.NAME, exportName.name)
+          exportSpecsNode.addChildToBack(setNodePosition(
+              new Node(Token.EXPORT_SPEC, identNode, exportNameNode), identPos))
+        }
+        new Node(Token.EXPORT, setNodePosition(exportSpecsNode, pos))
+
       case _ =>
         // We just assume it is an expression
         new Node(Token.EXPR_RESULT, transformExpr(tree))

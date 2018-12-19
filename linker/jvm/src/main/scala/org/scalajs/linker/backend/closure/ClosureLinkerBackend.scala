@@ -47,9 +47,6 @@ final class ClosureLinkerBackend(config: LinkerBackendImpl.Config)
       s"Cannot use features $esFeatures with the Closure Compiler " +
       "because they allow to use BigInts")
 
-  require(moduleKind != ModuleKind.ESModule,
-      s"Cannot use module kind $moduleKind with the Closure Compiler")
-
   private[this] val emitter = {
     new Emitter(config.commonConfig)
       .withOptimizeBracketSelects(false)
@@ -74,7 +71,8 @@ final class ClosureLinkerBackend(config: LinkerBackendImpl.Config)
     // Build Closure IR
     val (topLevelVarDeclarations, globalRefs, module) = {
       logger.time("Emitter (create Closure trees)") {
-        val builder = new ClosureModuleBuilder(config.relativizeSourceMapBase)
+        val builder = new ClosureModuleBuilder(
+            moduleKind == ModuleKind.ESModule, config.relativizeSourceMapBase)
         val (topLevelVarDeclarations, globalRefs) =
           emitter.emitForClosure(unit, builder, logger)
         (topLevelVarDeclarations, globalRefs, builder.result())
@@ -213,6 +211,9 @@ final class ClosureLinkerBackend(config: LinkerBackendImpl.Config)
     options.setWarningLevel(DiagnosticGroups.CHECK_REGEXP, CheckLevel.OFF)
     options.setWarningLevel(DiagnosticGroups.CHECK_TYPES, CheckLevel.OFF)
     options.setWarningLevel(DiagnosticGroups.CHECK_USELESS_CODE, CheckLevel.OFF)
+
+    options.setModuleResolutionMode(deps.ModuleLoader.ResolutionMode.NODE)
+    options.setWarningLevel(DiagnosticGroups.MODULE_LOAD, CheckLevel.WARNING)
 
     if (config.sourceMap && output.sourceMap.isDefined) {
       options.setSourceMapDetailLevel(SourceMap.DetailLevel.ALL)

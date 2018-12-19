@@ -26,8 +26,9 @@ import scala.collection.mutable
 
 import java.net.URI
 
-private[closure] class ClosureModuleBuilder(
-    relativizeBaseURI: Option[URI] = None) extends JSBuilder {
+private[closure] class ClosureModuleBuilder(isModule: Boolean,
+    relativizeBaseURI: Option[URI] = None)
+    extends JSBuilder {
 
   private val transformer = new ClosureAstTransformer(relativizeBaseURI)
   private val treeBuf = mutable.ListBuffer.empty[Node]
@@ -59,11 +60,22 @@ private[closure] class ClosureModuleBuilder(
   }
 
   private def flushTrees(): Unit = {
+    import transformer.setNodePosition
+
     if (treeBuf.nonEmpty) {
-      val root = transformer.setNodePosition(IR.script(treeBuf: _*), NoPosition)
+      val script = setNodePosition(new Node(Token.SCRIPT), NoPosition)
+      if (isModule) {
+        val moduleBody = setNodePosition(new Node(Token.MODULE_BODY), NoPosition)
+        for (tree <- treeBuf)
+          moduleBody.addChildToBack(tree)
+        script.addChildToBack(moduleBody)
+      } else {
+        for (tree <- treeBuf)
+          script.addChildToBack(tree)
+      }
       treeBuf.clear()
 
-      val ast = new ClosureModuleBuilder.ScalaJSSourceAst(root)
+      val ast = new ClosureModuleBuilder.ScalaJSSourceAst(script)
       module.add(new CompilerInput(ast, ast.getInputId(), false))
     }
   }
