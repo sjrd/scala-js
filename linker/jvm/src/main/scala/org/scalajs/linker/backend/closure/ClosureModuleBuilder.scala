@@ -15,6 +15,7 @@ package org.scalajs.linker.backend.closure
 import org.scalajs.ir
 import ir.Position.NoPosition
 
+import org.scalajs.linker.backend.javascript.{Trees => js}
 import org.scalajs.linker.backend.javascript.Trees.Tree
 import org.scalajs.linker.backend.javascript.JSBuilder
 
@@ -32,8 +33,17 @@ private[closure] class ClosureModuleBuilder(
   private val treeBuf = mutable.ListBuffer.empty[Node]
   private val module = new JSModule("Scala.js")
 
-  def addJSTree(tree: Tree): Unit =
-    treeBuf += transformer.transformStat(tree)(NoPosition)
+  def addJSTree(tree: Tree): Unit = {
+    tree match {
+      case js.Block(stats) =>
+        for (stat <- transformer.transformBlockStats(stats)(NoPosition))
+          treeBuf += stat
+      case js.Skip() =>
+        // ignore
+      case _ =>
+        treeBuf += transformer.transformStat(tree)(NoPosition)
+    }
+  }
 
   def addStatement(originalLocation: URI, code: String): Unit = {
     flushTrees()
