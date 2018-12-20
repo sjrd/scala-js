@@ -68,10 +68,14 @@ final class ClosureLinkerBackend(config: LinkerBackendImpl.Config)
   def emit(unit: LinkingUnit, output: LinkerOutput, logger: Logger): Unit = {
     verifyUnit(unit)
 
+    val options = closureOptions(output)
+    val compiler = closureCompiler(logger)
+    compiler.initOptions(options)
+
     // Build Closure IR
     val (topLevelVarDeclarations, globalRefs, module) = {
       logger.time("Emitter (create Closure trees)") {
-        val builder = new ClosureModuleBuilder(
+        val builder = new ClosureModuleBuilder(compiler,
             moduleKind == ModuleKind.ESModule, config.relativizeSourceMapBase)
         val (topLevelVarDeclarations, globalRefs) =
           emitter.emitForClosure(unit, builder, logger)
@@ -84,8 +88,6 @@ final class ClosureLinkerBackend(config: LinkerBackendImpl.Config)
         ClosureSource.fromCode("ScalaJSExterns.js", ClosureLinkerBackend.ScalaJSExterns),
         ClosureSource.fromCode("ScalaJSGlobalRefs.js", makeExternsForGlobalRefs(globalRefs)),
         ClosureSource.fromCode("ScalaJSExportExterns.js", makeExternsForExports(topLevelVarDeclarations, unit)))
-    val options = closureOptions(output)
-    val compiler = closureCompiler(logger)
 
     val result = logger.time("Closure: Compiler pass") {
       compiler.compileModules(

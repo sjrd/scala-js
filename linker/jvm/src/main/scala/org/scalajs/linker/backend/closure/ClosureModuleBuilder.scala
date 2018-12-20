@@ -26,8 +26,8 @@ import scala.collection.mutable
 
 import java.net.URI
 
-private[closure] class ClosureModuleBuilder(isModule: Boolean,
-    relativizeBaseURI: Option[URI] = None)
+private[closure] class ClosureModuleBuilder(compiler: Compiler,
+    isModule: Boolean, relativizeBaseURI: Option[URI] = None)
     extends JSBuilder {
 
   private val transformer = new ClosureAstTransformer(relativizeBaseURI)
@@ -47,9 +47,36 @@ private[closure] class ClosureModuleBuilder(isModule: Boolean,
   }
 
   def addStatement(originalLocation: URI, code: String): Unit = {
-    flushTrees()
+    /* Parse the code and turn it into a list of Nodes that we can add to our
+     * treeBuf. This is particularly important for ES modules, since the parsed
+     * code must be part of the MODULE_BODY node for proper scoping.
+     */
     val path = URIUtil.sourceURIToString(relativizeBaseURI, originalLocation)
-    module.add(new CompilerInput(SourceFile.fromCode(path, code)))
+    val sourceFile = SourceFile.fromCode(path, code)
+    val ast = new JsAst(sourceFile)
+    val root = ast.getAstRoot(compiler)
+    assert(root.isScript(), root.getToken)
+
+    val parseResult = root.getProp(Node.PARSE_RESULTS).asInstanceOf[JsAst.ParseResult]
+    if (parseResult != null && !parseResult.errors.isEmpty()) {
+      // Ouch, the code could not be parsed. This should not happen.
+      val msg = new java.lang.StringBuilder(
+          "There was a parse error while parsing code generated internally " +
+          "by the Scala.js linker. This is a bug. The error was")
+      parseResult.errors.forEach(new java.util.function.Consumer[JsAst.RhinoError] {
+        def accept(error: JsAst.RhinoError): Unit = {
+          msg.append(
+              s"\n${error.sourceName}:${error.line}:${error.lineOffset}: ${error.message}")
+        }
+      })
+      throw new AssertionError(msg.toString())
+    }
+
+    var child = root.removeFirstChild()
+    while (child != null) {
+      treeBuf += child
+      child = root.removeFirstChild()
+    }
   }
 
   def complete(): Unit = flushTrees()
