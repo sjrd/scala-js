@@ -152,93 +152,43 @@ private[emitter] object CoreJSLib {
             })
 
             // scalastyle:off line.size.limit
-            /* Originally inspired by the Typed Array polyfills written by
-             * Joshua Bell:
-             * https://github.com/inexorabletash/polyfill/blob/a682f42c1092280bb01907c245979fb07219513d/typedarray.js#L150-L255
-             * Then simplified quite a lot because
-             * 1) we do not need to produce the actual bit string that serves
-             *    as storage of the floats, and
-             * 2) we are only interested in the float32 case.
+            /* Polyfill by Stephen Hicks published on MDN at
+             * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/fround$revision/1435726#Polyfill
              */
             // scalastyle:on line.size.limit
-            val isNegative = varRef("isNegative")
-            val av = varRef("av")
-            val absResult = varRef("absResult")
-            val e0 = varRef("e0")
-            val twoPowE0 = varRef("twoPowE0")
-            val n1 = varRef("n1")
-            val w1 = varRef("w1")
-            val d1 = varRef("d1")
-            val f0 = varRef("f0")
-            val n2 = varRef("n2")
-            val w2 = varRef("w2")
-            val d2 = varRef("d2")
-
             def callMathFun(fun: String, args: Tree*): Tree =
               Apply(genIdentBracketSelect(MathRef, fun), args.toList)
 
-            def roundAndThen(n: VarRef, w: VarRef, d: VarRef)(
-                rest: Tree => Tree): Tree = {
-              Block(
-                  const(w, callMathFun("floor", n)),
-                  const(d, n - w),
-                  rest {
-                    If(d < double(0.5), w,
-                        If(d > double(0.5), w + 1,
-                            If((w % 2) !== 0, w + 1, w)))
-                  }
-              )
-            }
-
-            val Inf = double(Double.PositiveInfinity)
-            val NegInf = double(Double.NegativeInfinity)
-            val subnormalThreshold = double(1.1754943508222875e-38)
             val ln2 = double(0.6931471805599453)
-            val twoPowMantissaBits = int(8388608)
-            val FloatMinPosValue = double(Float.MinPositiveValue)
+            val twoPowMantissaBits = 0x800000
 
+            val sign = varRef("sign")
+            val exp = varRef("exp")
+            val powexp = varRef("powexp")
+            val leading = varRef("leading")
+            val mantissa = varRef("mantissa")
             val noTypedArrayPolyfill = Function(arrow = false, paramList(v), {
               Block(
-                  If((v !== v) || (v === 0) || (v === Inf) || (v === NegInf), {
-                    Return(v)
-                  }, Skip()),
-                  const(isNegative, v < 0),
-                  const(av, If(isNegative, -v, v)),
-                  genEmptyMutableLet(absResult.ident),
-                  If(av >= subnormalThreshold, {
-                    Block(
-                        const(e0, callMathFun("floor", callMathFun("log", av) / ln2)),
-                        If(e0 > 127, { // bias
-                          absResult := Inf
-                        }, {
-                          Block(
-                              const(twoPowE0, callMathFun("pow", 2, e0)),
-                              const(n1, twoPowMantissaBits * (av / twoPowE0)),
-                              roundAndThen(n1, w1, d1) { rounded =>
-                                const(f0, rounded)
-                              },
-                              If((f0 / twoPowMantissaBits) < 2, {
-                                absResult := twoPowE0 * (int(1) + ((f0-twoPowMantissaBits) / twoPowMantissaBits))
-                              }, {
-                                If(e0 > 126, {
-                                  absResult := Inf
-                                }, {
-                                  // 1.1920928955078125e-7 is (1 + ((1-twoPowMantissaBits) / twoPowMantissaBits))
-                                  absResult := (int(2) * twoPowE0) * double(1.1920928955078125e-7)
-                                })
-                              })
-                          )
-                        })
-                    )
+                  // Convert the input to a `number`
+                  v := +v,
+                  // Return early for +0, -0 and NaN
+                  If(!v, Return(v), Skip()),
+                  // Compute sign and normalize input to being positive
+                  const(sign, If(v < 0, -1, 1)),
+                  If(sign < 0, v := -v, Skip()),
+                  // Compute the exponent (8 bits, signed)
+                  const(exp, callMathFun("floor", callMathFun("log", v) / ln2)),
+                  const(powexp, callMathFun("pow", 2,
+                      If(exp < -126, -126, If(exp > 127, 127, exp)))),
+                  // Handle subnormals: leading digit is zero if exponent bits are all zero
+                  const(leading, If(exp < -127, 0, 1)),
+                  // Compute 23 bits of mantissa, inverted to round toward zero
+                  const(mantissa, callMathFun("round", (leading - v / powexp) * twoPowMantissaBits)),
+                  If(mantissa <= -twoPowMantissaBits, {
+                    Return(sign / 0) // === sign * Infinity
                   }, {
-                    Block(
-                        const(n2, av / FloatMinPosValue),
-                        roundAndThen(n2, w2, d2) { rounded =>
-                          absResult := FloatMinPosValue * rounded
-                        }
-                    )
-                  }),
-                  Return(If(isNegative, -absResult, absResult))
+                    Return(sign * powexp * (leading - mantissa / twoPowMantissaBits))
+                  })
               )
             })
 
