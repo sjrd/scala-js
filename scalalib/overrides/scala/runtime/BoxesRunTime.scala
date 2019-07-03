@@ -112,29 +112,4 @@ object BoxesRunTime {
         else xn.equals(yc)
     }
   }
-
-  @inline
-  def hashFromLong(n: java.lang.Long): Int =
-    Statics.longHash(n.asInstanceOf[Long])
-
-  @inline
-  def hashFromDouble(n: java.lang.Double): Int =
-    Statics.doubleHash(n.asInstanceOf[Double])
-
-  @inline
-  def hashFromFloat(n: java.lang.Float): Int =
-    Statics.floatHash(n.asInstanceOf[Float])
-
-  @inline // called only by ScalaRunTime.hash()
-  def hashFromNumber(n: java.lang.Number): Int = {
-    (n: Any) match {
-      case n: Double => Statics.doubleHash(n)
-      case n: Long   => Statics.longHash(n)
-      case n         => n.hashCode()
-    }
-  }
-
-  @inline
-  def hashFromObject(a: Object): Int =
-    Statics.anyHash(a)
 }

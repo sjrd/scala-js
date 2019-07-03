@@ -14,7 +14,7 @@ version := scalaJSVersion
 
 val versionSettings = Seq(
   version := scalaJSVersion,
-  scalaVersion := "2.11.12"
+  scalaVersion := "2.13.0"
 )
 
 val baseSettings = versionSettings ++ Seq(

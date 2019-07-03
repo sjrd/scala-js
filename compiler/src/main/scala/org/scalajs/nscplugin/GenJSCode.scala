@@ -139,7 +139,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
     // Per method body
     private val currentMethodSym = new ScopedVar[Symbol]
     private val thisLocalVarIdent = new ScopedVar[Option[js.Ident]]
-    private val fakeTailJumpParamRepl = new ScopedVar[(Symbol, Symbol)]
     private val enclosingLabelDefParams = new ScopedVar[Map[Symbol, List[Symbol]]]
     private val isModuleInitialized = new ScopedVar[VarBox[Boolean]]
     private val countsOfReturnsToMatchCase = new ScopedVar[mutable.Map[Symbol, Int]]
@@ -189,7 +188,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           generatedSAMWrapperCount := new VarBox(0),
           currentMethodSym := null,
           thisLocalVarIdent := null,
-          fakeTailJumpParamRepl := null,
           enclosingLabelDefParams := null,
           isModuleInitialized := null,
           countsOfReturnsToMatchCase := null,
@@ -233,7 +231,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
     override def run(): Unit = {
       scalaPrimitives.init()
-      initializeCoreBTypesCompat()
+      genBCode.bTypes.initialize()
       jsPrimitives.init()
       super.run()
     }
@@ -256,7 +254,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
      *  * Non-native JS class       -> `genNonNativeJSClass()`
      *  * Other JS type (<: js.Any) -> `genJSClassData()`
      *  * Interface                 -> `genInterface()`
-     *  * Implementation class      -> `genImplClass()`
      *  * Normal class              -> `genClass()`
      */
     override def apply(cunit: CompilationUnit): Unit = {
@@ -286,22 +283,12 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
          * Since for all these, we don't know how they inter-depend, we just
          * store them in a map at this point.
          */
-        val (lazyAnons, fullClassDefs0) = allClassDefs.partition { cd =>
+        val (lazyAnons, fullClassDefs) = allClassDefs.partition { cd =>
           val sym = cd.symbol
           (sym.isAnonymousClass && isJSType(sym)) || sym.isAnonymousFunction
         }
 
         lazilyGeneratedAnonClasses ++= lazyAnons.map(cd => cd.symbol -> cd)
-
-        /* Under Scala 2.11 with -Xexperimental, anonymous JS function classes
-         * can be referred to in private method signatures, which means they
-         * must exist at the IR level, as `AbstractJSType`s.
-         */
-        val fullClassDefs = if (isScala211WithXexperimental) {
-          lazyAnons.filter(cd => isJSFunctionDef(cd.symbol)) ::: fullClassDefs0
-        } else {
-          fullClassDefs0
-        }
 
         /* Finally, we emit true code for the remaining class defs. */
         for (cd <- fullClassDefs) {
@@ -312,7 +299,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           val isPrimitive =
             isPrimitiveValueClass(sym) || (sym == ArrayClass)
 
-          if (!isPrimitive && !isJSImplClass(sym)) {
+          if (!isPrimitive) {
             withScopedVars(
                 currentClassSym          := sym,
                 unexpectedMutatedFields  := mutable.Set.empty,
@@ -328,8 +315,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
                   }
                 } else if (sym.isTraitOrInterface) {
                   genInterface(cd)
-                } else if (isImplClass(sym)) {
-                  genImplClass(cd)
                 } else {
                   genClass(cd)
                 }
@@ -379,7 +364,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       val sym = cd.symbol
       implicit val pos = sym.pos
 
-      assert(!sym.isTraitOrInterface && !isImplClass(sym),
+      assert(!sym.isTraitOrInterface,
           "genClass() must be called only for normal classes: "+sym)
       assert(sym.superClass != NoSymbol, sym)
 
@@ -866,43 +851,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
       js.ClassDef(classIdent, ClassKind.Interface, None, None, interfaces, None,
           None, hashedMemberDefs, Nil)(OptimizerHints.empty)
-    }
-
-    // Generate an implementation class of a trait -----------------------------
-
-    /** Gen the IR ClassDef for an implementation class (of a trait).
-     */
-    def genImplClass(cd: ClassDef): js.ClassDef = {
-      val ClassDef(mods, name, _, impl) = cd
-      val sym = cd.symbol
-      implicit val pos = sym.pos
-
-      def gen(tree: Tree): List[js.MethodDef] = {
-        tree match {
-          case EmptyTree => Nil
-          case Template(_, _, body) => body.flatMap(gen)
-
-          case dd: DefDef =>
-            assert(!dd.symbol.isDeferred,
-                s"Found an abstract method in an impl class at $pos: ${dd.symbol.fullName}")
-            val m = genMethod(dd)
-            m.toList
-
-          case _ => abort("Illegal tree in gen of genImplClass(): " + tree)
-        }
-      }
-      val generatedMethods = gen(impl)
-
-      val classIdent = encodeClassFullNameIdent(sym)
-      val objectClassIdent = encodeClassFullNameIdent(ObjectClass)
-
-      // Hashed definitions of the impl class
-      val hashedMemberDefs =
-        Hashers.hashMemberDefs(generatedMethods)
-
-      js.ClassDef(classIdent, ClassKind.Class, None,
-          Some(objectClassIdent), Nil, None, None,
-          hashedMemberDefs, Nil)(OptimizerHints.empty)
     }
 
     private lazy val jsTypeInterfacesBlacklist: Set[Symbol] =
@@ -1523,12 +1471,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
      *  * Primitives, since they are never actually called (with exceptions)
      *  * Abstract methods
      *  * Constructors of hijacked classes
-     *  * Methods with the {{{@JavaDefaultMethod}}} annotation mixed in classes.
      *
      *  Constructors are emitted by generating their body as a statement.
-     *
-     *  Interface methods with the {{{@JavaDefaultMethod}}} annotation produce
-     *  default methods forwarding to the trait impl class method.
      *
      *  Other (normal) methods are emitted with `genMethodDef()`.
      */
@@ -1540,7 +1484,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       withScopedVars(
           currentMethodSym := sym,
           thisLocalVarIdent := None,
-          fakeTailJumpParamRepl := (NoSymbol, NoSymbol),
           enclosingLabelDefParams := Map.empty,
           isModuleInitialized := new VarBox(false),
           countsOfReturnsToMatchCase := mutable.Map.empty,
@@ -1564,48 +1507,20 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
         if (scalaPrimitives.isPrimitive(sym)) {
           None
-        } else if (isAbstractMethod(dd)) {
-          val body = if (scalaUsesImplClasses &&
-              sym.hasAnnotation(JavaDefaultMethodAnnotation)) {
-            /* For an interface method with @JavaDefaultMethod, make it a
-             * default method calling the impl class method.
-             */
-            val implClassSym = sym.owner.implClass
-            val implMethodSym = implClassSym.info.member(sym.name).suchThat { s =>
-              s.isMethod &&
-              s.tpe.params.size == sym.tpe.params.size + 1 &&
-              s.tpe.params.head.tpe =:= sym.owner.toTypeConstructor &&
-              s.tpe.params.tail.zip(sym.tpe.params).forall {
-                case (sParam, symParam) =>
-                  sParam.tpe =:= symParam.tpe
-              }
-            }
-            Some(genTraitImplApply(implMethodSym,
-                js.This()(currentClassType) :: jsParams.map(_.ref)))
-          } else {
-            None
-          }
+        } else if (rhs == EmptyTree) {
+          // Abstract method
           Some(js.MethodDef(js.MemberFlags.empty, methodName,
-              jsParams, toIRType(sym.tpe.resultType), body)(
+              jsParams, toIRType(sym.tpe.resultType), None)(
               OptimizerHints.empty, None))
         } else if (isJSNativeCtorDefaultParam(sym)) {
           None
         } else if (sym.isClassConstructor && isHijackedClass(sym.owner)) {
-          None
-        } else if (scalaUsesImplClasses && !isImplClass(sym.owner) &&
-            sym.hasAnnotation(JavaDefaultMethodAnnotation)) {
-          // Do not emit trait impl forwarders with @JavaDefaultMethod
           None
         } else {
           withScopedVars(
               mutableLocalVars := mutable.Set.empty,
               mutatedLocalVars := mutable.Set.empty
           ) {
-            def isTraitImplForwarder = dd.rhs match {
-              case app: Apply => foreignIsImplClass(app.symbol.owner)
-              case _          => false
-            }
-
             val shouldMarkInline = {
               sym.hasAnnotation(InlineAnnotationClass) ||
               sym.name.startsWith(nme.ANON_FUN_NAME) ||
@@ -1614,7 +1529,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
             val shouldMarkNoinline = {
               sym.hasAnnotation(NoinlineAnnotationClass) &&
-              !isTraitImplForwarder &&
               !ignoreNoinlineAnnotation(sym)
             }
 
@@ -1640,13 +1554,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
               } else {
                 val resultIRType = toIRType(sym.tpe.resultType)
                 val namespace = {
-                  if (isImplClass(sym.owner)) {
-                    if (sym.isPrivate) js.MemberNamespace.PrivateStatic
-                    else js.MemberNamespace.PublicStatic
-                  } else {
-                    if (sym.isPrivate) js.MemberNamespace.Private
-                    else js.MemberNamespace.Public
-                  }
+                  if (sym.isPrivate) js.MemberNamespace.Private
+                  else js.MemberNamespace.Public
                 }
                 genMethodDef(namespace, methodName, params, resultIRType, rhs,
                     optimizerHints)
@@ -1675,19 +1584,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           }
         }
       }
-    }
-
-    def isAbstractMethod(dd: DefDef): Boolean = {
-      /* When scalac uses impl classes, we cannot trust `rhs` to be
-       * `EmptyTree` for deferred methods (probably due to an internal bug
-       * of scalac), as can be seen in run/t6443.scala.
-       * However, when it does not use impl class anymore, we have to use
-       * `rhs == EmptyTree` as predicate, just like the JVM back-end does.
-       */
-      if (scalaUsesImplClasses)
-        dd.symbol.isDeferred || dd.symbol.owner.isInterface
-      else
-        dd.rhs == EmptyTree
     }
 
     private val adHocInlineMethods = Set(
@@ -1799,64 +1695,44 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
                 else            genExpr(rhs)))
           }
 
-          initialThis match {
-            case Ident(_) =>
-              /* This case happens in trait implementation classes, until
-               * Scala 2.11. In the method, all usages of `this` have been
-               * replaced by the method's formal parameter `$this`. However,
-               * there is still a declaration of the pseudo local variable
-               * `_$this`, which is used in the param list of the label. We
-               * need to remember it now, so that when we build the JS version
-               * of the formal params for the label, we can redirect the
-               * assignment to `$this` instead of the otherwise unused
-               * `_$this`.
-               */
-              withScopedVars(
-                fakeTailJumpParamRepl := (thisDef.symbol, initialThis.symbol)
-              ) {
-                genInnerBody()
-              }
+          val thisSym = thisDef.symbol
+          if (thisSym.isMutable)
+            mutableLocalVars += thisSym
 
-            case _ =>
-              val thisSym = thisDef.symbol
-              if (thisSym.isMutable)
-                mutableLocalVars += thisSym
+          val thisLocalIdent = encodeLocalSym(thisSym)
+          val thisLocalType = currentClassType
 
-              val thisLocalIdent = encodeLocalSym(thisSym)
-              val thisLocalType = currentClassType
-
-              val genRhs = {
-                /* #3267 In default methods, scalac will type its _$this
-                 * pseudo-variable as the *self-type* of the enclosing class,
-                 * instead of the enclosing class type itself. However, it then
-                 * considers *usages* of _$this as if its type were the
-                 * enclosing class type. The latter makes sense, since it is
-                 * compiled as `this` in the bytecode, which necessarily needs
-                 * to be the enclosing class type. Only the declared type of
-                 * _$this is wrong.
-                 *
-                 * In our case, since we generate an actual local variable for
-                 * _$this, we must make sure to type it correctly, as the
-                 * enclosing class type. However, this means the rhs of the
-                 * ValDef does not match, which is why we have to adapt it
-                 * here.
-                 */
-                forceAdapt(genExpr(initialThis), thisLocalType)
-              }
-
-              val thisLocalVarDef = js.VarDef(thisLocalIdent,
-                  thisLocalType, thisSym.isMutable, genRhs)
-
-              val innerBody = {
-                withScopedVars(
-                  thisLocalVarIdent := Some(thisLocalIdent)
-                ) {
-                  genInnerBody()
-                }
-              }
-
-              js.Block(thisLocalVarDef, innerBody)
+          val genRhs = {
+            /* #3267 In default methods, scalac will type its _$this
+              * pseudo-variable as the *self-type* of the enclosing class,
+              * instead of the enclosing class type itself. However, it then
+              * considers *usages* of _$this as if its type were the
+              * enclosing class type. The latter makes sense, since it is
+              * compiled as `this` in the bytecode, which necessarily needs
+              * to be the enclosing class type. Only the declared type of
+              * _$this is wrong.
+              *
+              * In our case, since we generate an actual local variable for
+              * _$this, we must make sure to type it correctly, as the
+              * enclosing class type. However, this means the rhs of the
+              * ValDef does not match, which is why we have to adapt it
+              * here.
+              */
+            forceAdapt(genExpr(initialThis), thisLocalType)
           }
+
+          val thisLocalVarDef = js.VarDef(thisLocalIdent,
+              thisLocalType, thisSym.isMutable, genRhs)
+
+          val innerBody = {
+            withScopedVars(
+              thisLocalVarIdent := Some(thisLocalIdent)
+            ) {
+              genInnerBody()
+            }
+          }
+
+          js.Block(thisLocalVarDef, innerBody)
 
         case _ =>
           if (bodyIsStat) genStat(tree)
@@ -1872,18 +1748,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       if (!isNonNativeJSClass(currentClassSym) ||
           isJSFunctionDef(currentClassSym)) {
         val flags = js.MemberFlags.empty.withNamespace(namespace)
-        val body = {
-          if (isImplClass(currentClassSym)) {
-            val thisParam = jsParams.head
-            withScopedVars(
-                thisLocalVarIdent := Some(thisParam.name)
-            ) {
-              genBody()
-            }
-          } else {
-            genBody()
-          }
-        }
+        val body = genBody()
         js.MethodDef(flags, methodName, jsParams, resultIRType, Some(body))(
             optimizerHints, None)
       } else {
@@ -2223,7 +2088,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         case mtch: Match =>
           genMatch(mtch, isStat)
 
-        /** Anonymous function (in 2.12, or with -Ydelambdafy:method in 2.11) */
+        /** Anonymous function */
         case fun: Function =>
           genAnonFunction(fun)
 
@@ -2250,13 +2115,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         js.This()(currentClassType)
       } { thisLocalIdent =>
         // .copy() to get the correct position
-        val tpe = {
-          if (isImplClass(currentClassSym))
-            encodeClassType(traitOfImplClass(currentClassSym))
-          else
-            currentClassType
-        }
-        js.VarRef(thisLocalIdent.copy())(tpe)
+        js.VarRef(thisLocalIdent.copy())(currentClassType)
       }
     }
 
@@ -2345,9 +2204,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
          * plugins (see for example #1148).
          */
         case LabelDef(labelName, labelParams, rhs) =>
-          val labelParamSyms = labelParams.map(_.symbol) map {
-            s => if (s == fakeTailJumpParamRepl._1) fakeTailJumpParamRepl._2 else s
-          }
+          val labelParamSyms = labelParams.map(_.symbol)
 
           withScopedVars(
             enclosingLabelDefParams :=
@@ -2877,8 +2734,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           genPrimitiveJSCall(tree, isStat)
         else
           genApplyJSClassMethod(genExpr(receiver), sym, genActualArgs(sym, args))
-      } else if (foreignIsImplClass(sym.owner)) {
-        genTraitImplApply(sym, args map genExpr)
       } else {
         genApplyMethodMaybeStatically(genExpr(receiver), sym,
             genActualArgs(sym, args))
@@ -2915,19 +2770,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         else toIRType(method.tpe.resultType)
       js.ApplyStatically(flags, receiver, encodeClassRef(method.owner),
           methodIdent, arguments)(resultType)
-    }
-
-    def genTraitImplApply(method: Symbol, arguments: List[js.Tree])(
-        implicit pos: Position): js.Tree = {
-      if (method.isMixinConstructor && isJSImplClass(method.owner)) {
-        /* Do not emit a call to the $init$ method of JS traits.
-         * This exception is necessary because @JSOptional fields cause the
-         * creation of a $init$ method, which we must not call.
-         */
-        js.Skip()
-      } else {
-        genApplyStatic(method, arguments)
-      }
     }
 
     def genApplyJSClassMethod(receiver: js.Tree, method: Symbol,
@@ -3920,7 +3762,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
     /** See comment in `genEqEqPrimitive()` about `mustUseAnyComparator`. */
     private lazy val shouldPreserveEqEqBugWithJLFloatDouble = {
       val v = scala.util.Properties.versionNumberString
-      v.startsWith("2.11.") || v == "2.12.1"
+      v == "2.12.1"
     }
 
     /** Gen JS code for a call to Any.== */
@@ -5387,8 +5229,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
     /** Generate JS code for an anonymous function
      *
-     *  Anonymous functions survive until the backend in 2.11 under
-     *  -Ydelambdafy:method (for Scala function types) and in 2.12 for any
+     *  Anonymous functions survive until the backend for any
      *  LambdaMetaFactory-capable type.
      *
      *  When they do, their body is always of the form
@@ -5453,9 +5294,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             mutable = false, rest = false)(p.pos)
       }
 
-      val isInImplClass = isImplClass(target.owner)
-
-      val (allFormalCaptures, body, allActualCaptures) = if (!isInImplClass) {
+      val (allFormalCaptures, body, allActualCaptures) = {
         val thisActualCapture = genExpr(receiver)
         val thisFormalCapture = js.ParamDef(
             freshLocalIdent("this")(receiver.pos),
@@ -5472,10 +5311,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
         (thisFormalCapture :: formalCaptures,
             body, thisActualCapture :: actualCaptures)
-      } else {
-        val body = genTraitImplApply(target, allArgs)
-
-        (formalCaptures, body, actualCaptures)
       }
 
       val (patchedFormalArgs, patchedBody) = {
@@ -5502,7 +5337,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
          * We have to synthesize a class like LambdaMetaFactory would do on
          * the JVM.
          */
-        val sam = originalFunction.attachments.get[SAMFunctionCompat].getOrElse {
+        val sam = originalFunction.attachments.get[SAMFunction].getOrElse {
           abort(s"Cannot find the SAMFunction attachment on $originalFunction at $pos")
         }
 
@@ -5512,7 +5347,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       }
     }
 
-    private def synthesizeSAMWrapper(funSym: Symbol, samInfo: SAMFunctionCompat)(
+    private def synthesizeSAMWrapper(funSym: Symbol, samInfo: SAMFunction)(
         implicit pos: Position): String = {
       val intfName = encodeClassFullName(funSym)
 
@@ -5900,15 +5735,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
     }
   }
 
-  private lazy val isScala211WithXexperimental = {
-    scala.util.Properties.versionNumberString.startsWith("2.11.") &&
-    settings.Xexperimental.value
-  }
-
   private lazy val hasNewCollections = {
     val v = scala.util.Properties.versionNumberString
-    !v.startsWith("2.10.") &&
-    !v.startsWith("2.11.") &&
     !v.startsWith("2.12.")
   }
 
@@ -5934,13 +5762,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
   /** Tests whether the given class is a JS native class. */
   private def isJSNativeClass(sym: Symbol): Boolean =
     sym.hasAnnotation(JSNativeAnnotation)
-
-  /** Tests whether the given class is the impl class of a JS trait. */
-  private def isJSImplClass(sym: Symbol): Boolean =
-    isImplClass(sym) && isJSType(traitOfImplClass(sym))
-
-  private def traitOfImplClass(sym: Symbol): Symbol =
-    sym.owner.info.decl(sym.name.dropRight(nme.IMPL_CLASS_SUFFIX.length))
 
   /** Tests whether the given member is exposed, i.e., whether it was
    *  originally a public or protected member of a non-native JS class.
@@ -6061,7 +5882,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
     JavaScriptExceptionClass isSubClass tpe.typeSymbol
 
   def isStaticModule(sym: Symbol): Boolean =
-    sym.isModuleClass && !isImplClass(sym) && !sym.isLifted
+    sym.isModuleClass && !sym.isLifted
 
   sealed abstract class MaybeGlobalScope
 

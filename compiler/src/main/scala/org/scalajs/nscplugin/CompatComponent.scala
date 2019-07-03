@@ -25,117 +25,27 @@ import scala.tools.nsc._
  *  @author Sébastien Doeraene
  */
 trait CompatComponent {
-  import CompatComponent.{infiniteLoop, noImplClasses}
+  import CompatComponent.infiniteLoop
 
   val global: Global
 
   import global._
 
-  implicit final class SymbolCompat(self: Symbol) {
-    def originalOwner: Symbol =
-      global.originalOwner.getOrElse(self, self.rawowner)
-
-    def implClass: Symbol = NoSymbol
-
-    def isTraitOrInterface: Boolean = self.isTrait || self.isInterface
-  }
-
-  implicit final class GlobalCompat(
-      self: CompatComponent.this.global.type) {
-
-    object originalOwner {
-      def getOrElse(sym: Symbol, orElse: => Symbol): Symbol = infiniteLoop()
-    }
-  }
-
-  private implicit final class FlagsCompat(self: Flags.type) {
-    def IMPLCLASS: Long = infiniteLoop()
-  }
-
-  lazy val scalaUsesImplClasses: Boolean =
-    definitions.SeqClass.implClass != NoSymbol // a trait we know has an impl class
-
-  def isImplClass(sym: Symbol): Boolean =
-    scalaUsesImplClasses && sym.hasFlag(Flags.IMPLCLASS)
-
-  implicit final class StdTermNamesCompat(self: global.nme.type) {
-    def IMPL_CLASS_SUFFIX: String = noImplClasses()
-
-    def isImplClassName(name: Name): Boolean = false
-  }
-
-  implicit final class StdTypeNamesCompat(self: global.tpnme.type) {
-    def IMPL_CLASS_SUFFIX: String = noImplClasses()
-
-    def interfaceName(implname: Name): TypeName = noImplClasses()
-  }
-
-  // SAMFunction was introduced in 2.12 for LMF-capable SAM types
-
-  object SAMFunctionAttachCompatDef {
-    case class SAMFunction(samTp: Type, sam: Symbol, synthCls: Symbol)
-        extends PlainAttachment
-  }
-
-  object SAMFunctionAttachCompat {
-    import SAMFunctionAttachCompatDef._
-
-    object Inner {
-      import global._
-
-      type SAMFunctionAlias = SAMFunction
-      val SAMFunctionAlias = SAMFunction
-    }
-  }
-
-  type SAMFunctionCompat = SAMFunctionAttachCompat.Inner.SAMFunctionAlias
-  lazy val SAMFunctionCompat = SAMFunctionAttachCompat.Inner.SAMFunctionAlias
-
-  implicit final class SAMFunctionCompatOps(self: SAMFunctionCompat) {
-    // Introduced in 2.12.5 to synthesize bridges in LMF classes
-    def synthCls: Symbol = NoSymbol
-  }
-
-  /* global.genBCode.bTypes.initializeCoreBTypes()
+  /* global.genBCode.bTypes.initialize()
    *
-   * This one has a very particular history:
-   * - in 2.11.{0-1}, genBCode does not have a bTypes member
-   * - In 2.11.{2-5}, there is genBCode.bTypes, but it has no
-   *   initializeCoreBTypes (it was actually typo'ed as intializeCoreBTypes!)
-   * - In 2.11.6+, including 2.12, we finally have
-   *   genBCode.bTypes.initializeCoreBTypes
-   * - Since 2.12, it is mandatory to call that method from GenJSCode.run()
+   * It used to be called initializeCoreBTypes() until 2.12.3.
    */
 
-  object LowPrioGenBCodeCompat {
-    object genBCode {
-      object bTypes {
-        def initializeCoreBTypes(): Unit = ()
-      }
-    }
-  }
+  implicit final class BTypesCompat(private val self: genBCode.bTypes.type) {
+    def initialize(): Unit =
+      self.initializeCoreBTypes()
 
-  def initializeCoreBTypesCompat(): Unit = {
-    import LowPrioGenBCodeCompat.genBCode._
-
-    {
-      import genBCode._
-
-      import LowPrioGenBCodeCompat.genBCode.bTypes._
-
-      {
-        import bTypes._
-
-        initializeCoreBTypes()
-      }
-    }
+    def initializeCoreBTypes(): Unit =
+      infiniteLoop()
   }
 }
 
 object CompatComponent {
   private def infiniteLoop(): Nothing =
     throw new AssertionError("Infinite loop in Compat")
-
-  private def noImplClasses(): Nothing =
-    throw new AssertionError("No impl classes in this version")
 }

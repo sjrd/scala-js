@@ -95,11 +95,11 @@ abstract class DirectTest {
   def compileString(sourceCode: String): Boolean =
     compileString(defaultGlobal)(sourceCode)
 
-  // Cannot reuse global, otherwise compiler crashes with Scala >= 2.11.5
-  // on following tests:
-  // - org.scalajs.nscplugin.test.JSExportTest
-  // - org.scalajs.nscplugin.test.JSDynamicLiteralTest
-  // Filed as #1443
+  /* Cannot reuse global, otherwise the compiler crashes on the following tests:
+   * - org.scalajs.nscplugin.test.JSExportTest
+   * - org.scalajs.nscplugin.test.JSDynamicLiteralTest
+   * This was filed as #1443 which was closed as won't fix
+   */
   def defaultGlobal: Global = newScalaJSCompiler()
 
   def testOutputPath: String = {

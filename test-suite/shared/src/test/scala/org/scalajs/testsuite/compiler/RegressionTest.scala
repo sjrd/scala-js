@@ -171,11 +171,8 @@ class RegressionTest {
 
     assumeFalse("Affected by https://github.com/scala/bug/issues/10551",
         Platform.executingInJVM && {
-          scalaVersion.startsWith("2.10.") ||
-          scalaVersion.startsWith("2.11.") ||
-          scalaVersion == "2.12.0" || scalaVersion == "2.12.1" ||
-          scalaVersion == "2.12.2" || scalaVersion == "2.12.3" ||
-          scalaVersion == "2.12.4"
+          scalaVersion == "2.12.1" || scalaVersion == "2.12.2" ||
+          scalaVersion == "2.12.3" || scalaVersion == "2.12.4"
         })
 
     assertEquals("org.scalajs.testsuite.compiler.RegressionTest$Bug218Foo",
@@ -497,13 +494,7 @@ class RegressionTest {
      */
     def getNull(): Any = null
     val x = getNull().asInstanceOf[Unit]: Any
-
-    if (Platform.scalaVersion.startsWith("2.11.")) {
-      assertNull(x.asInstanceOf[AnyRef])
-    } else {
-      // As of Scala 2.12.0-M5, null.asInstanceOf[Unit] (correctly) returns ()
-      assertEquals((), x)
-    }
+    assertEquals((), x)
   }
 
   @Test def lambda_parameter_with_a_dash_issue_1790(): Unit = {
@@ -539,10 +530,8 @@ class RegressionTest {
     assertEquals((Nil, 10), result)
   }
 
-  private val hasEqEqJLFloatDoubleBug: Boolean = {
-    val v = Platform.scalaVersion
-    v.startsWith("2.11.") || v == "2.12.1"
-  }
+  private val hasEqEqJLFloatDoubleBug: Boolean =
+    Platform.scalaVersion == "2.12.1"
 
   def assertTrueUnlessEqEqJLFloatDoubleBug(actual: Boolean): Unit = {
     if (hasEqEqJLFloatDoubleBug)

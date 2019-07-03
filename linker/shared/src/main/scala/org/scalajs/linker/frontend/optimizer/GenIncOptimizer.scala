@@ -625,17 +625,7 @@ abstract class GenIncOptimizer private[optimizer] (config: CommonPhaseConfig) {
         case Block(stats)                   => stats.forall(isElidableStat)
         case Assign(Select(This(), _), rhs) => isTriviallySideEffectFree(rhs)
 
-        // Mixin constructor, 2.11
-        case ApplyStatic(flags, ClassRef(cls), methodName, List(This()))
-            if !flags.isPrivate =>
-          val container =
-            CollOps.forceGet(staticLikes, cls)(MemberNamespace.PublicStatic.ordinal)
-          container.methods(methodName.name).originalDef.body.exists {
-            case Skip() => true
-            case _      => false
-          }
-
-        // Mixin constructor, 2.12+
+        // Mixin constructor
         case ApplyStatically(flags, This(), ClassRef(cls), methodName, Nil)
             if !flags.isPrivate && !classes.contains(cls) =>
           // Since cls is not in classes, it must be a default method call.

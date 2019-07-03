@@ -176,11 +176,6 @@ def Tasks = [
         'set jsEnv in $testSuite := new org.scalajs.jsenv.nodejs.NodeJSEnv(org.scalajs.jsenv.nodejs.NodeJSEnv.Config().withArgs(List("--harmony-bigint")))' \
         ++$scala $testSuite/test \
         $testSuite/clean &&
-    sbtretry 'set scalacOptions in $testSuite += "-Xexperimental"' \
-        ++$scala $testSuite/test &&
-    sbtretry 'set scalacOptions in $testSuite += "-Xexperimental"' \
-        'set scalaJSStage in Global := FullOptStage' \
-        ++$scala $testSuite/test &&
     sbtretry 'set scalaJSLinkerConfig in $testSuite ~= (_.withModuleKind(ModuleKind.CommonJSModule))' \
         ++$scala $testSuite/test &&
     sbtretry 'set scalaJSLinkerConfig in $testSuite ~= (_.withModuleKind(ModuleKind.CommonJSModule))' \
@@ -362,21 +357,15 @@ def Tasks = [
         sbtPlugin/compile:doc
   ''',
 
-  "partestc": '''
-    setJavaVersion $java
-    npm install &&
-    sbt ++$scala partest/compile
-  ''',
-
   "sbtplugin-test": '''
     setJavaVersion 1.8
     SBT_VER_OVERRIDE=$sbt_version_override
     # Publish Scala.js artifacts locally
     # Then go into standalone project and test
     npm install &&
-    sbt ++2.11.12 compiler/publishLocal library/publishLocal \
-                  testInterface/publishLocal testBridge/publishLocal \
-                  jUnitPlugin/publishLocal jUnitRuntime/publishLocal &&
+    sbt ++2.13.0 compiler/publishLocal library/publishLocal \
+                 testInterface/publishLocal testBridge/publishLocal \
+                 jUnitPlugin/publishLocal jUnitRuntime/publishLocal &&
     sbt ++$toolsscala ${SBT_VER_OVERRIDE:+^^$SBT_VER_OVERRIDE} \
         ir/publishLocal logging/publishLocal \
         linker/publishLocal jsEnvs/publishLocal \
@@ -420,18 +409,8 @@ def allJavaVersions = otherJavaVersions.clone()
 allJavaVersions << mainJavaVersion
 
 def mainScalaVersion = "2.12.8"
-def mainScalaVersions = ["2.11.12", "2.12.8", "2.13.0"]
+def mainScalaVersions = ["2.12.8", "2.13.0"]
 def otherScalaVersions = [
-  "2.11.0",
-  "2.11.1",
-  "2.11.2",
-  "2.11.4",
-  "2.11.5",
-  "2.11.6",
-  "2.11.7",
-  "2.11.8",
-  "2.11.11",
-  "2.11.12",
   "2.12.1",
   "2.12.2",
   "2.12.3",
@@ -460,7 +439,6 @@ allJavaVersions.each { javaVersion ->
   quickMatrix.add([task: "tools", scala: "2.10.7", java: javaVersion])
   quickMatrix.add([task: "tools", scala: "2.11.12", java: javaVersion])
 }
-quickMatrix.add([task: "partestc", scala: "2.11.0", java: mainJavaVersion])
 quickMatrix.add([task: "sbtplugin-test", toolsscala: "2.10.7", sbt_version_override: "0.13.17", java: mainJavaVersion])
 quickMatrix.add([task: "sbtplugin-test", toolsscala: "2.12.8", sbt_version_override: "", java: mainJavaVersion])
 
@@ -478,10 +456,7 @@ mainScalaVersions.each { scalaVersion ->
   fullMatrix.add([task: "partest-fullopt", scala: scalaVersion, java: mainJavaVersion])
 }
 otherScalaVersions.each { scalaVersion ->
-  // Partest does not compile on Scala 2.11.4 (see #1215).
-  if (scalaVersion != "2.11.4") {
-    fullMatrix.add([task: "partest-fastopt", scala: scalaVersion, java: mainJavaVersion])
-  }
+  fullMatrix.add([task: "partest-fastopt", scala: scalaVersion, java: mainJavaVersion])
 }
 
 def Matrices = [

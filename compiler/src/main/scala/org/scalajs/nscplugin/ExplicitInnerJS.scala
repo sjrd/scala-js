@@ -81,13 +81,6 @@ abstract class ExplicitInnerJS[G <: Global with Singleton](val global: G)
   /** This class does not change linearization. */
   override protected def changesBaseClasses: Boolean = false
 
-  /** Whether vals in traits are represented by their getter.
-   *  This is true in 2.12+, since the addition of the `fields` phase.
-   *  @see https://github.com/scala/scala/pull/5141
-   */
-  private lazy val traitValsHoldTheirGetterSymbol =
-    !scala.util.Properties.versionNumberString.startsWith("2.11.")
-
   protected def newTransformer(unit: CompilationUnit): Transformer =
     new ExplicitInnerJSTransformer(unit)
 
@@ -134,7 +127,7 @@ abstract class ExplicitInnerJS[G <: Global with Singleton](val global: G)
           addAnnotsIfInJSClass(accessor)
           decls1.enter(accessor)
 
-          if (!clazz.isTrait || !traitValsHoldTheirGetterSymbol) {
+          if (!clazz.isTrait) {
             val fieldName = accessorName.append(nme.LOCAL_SUFFIX_STRING)
             val fieldFlags =
               Flags.SYNTHETIC | Flags.ARTIFACT | Flags.PrivateLocal
@@ -191,7 +184,7 @@ abstract class ExplicitInnerJS[G <: Global with Singleton](val global: G)
                       List(clazzValue, superClassCtor))
                 }
 
-                if (!currentOwner.isTrait || !traitValsHoldTheirGetterSymbol) {
+                if (!currentOwner.isTrait) {
                   val jsclassField = jsclassAccessor.accessed
                   assert(jsclassField != NoSymbol, jsclassAccessor.fullName)
                   newDecls += localTyper.typedValDef(ValDef(jsclassField, rhs))

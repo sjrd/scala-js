@@ -246,8 +246,6 @@ abstract class Enumeration (initial: Int) extends Serializable {
     def + (value: Value) = new ValueSet(nnIds + (value.id - bottomId))
     def - (value: Value) = new ValueSet(nnIds - (value.id - bottomId))
     def iterator = nnIds.iterator map (id => thisenum.apply(bottomId + id))
-    // This is only defined in 2.11. We change its implementation so it also
-    // compiles on 2.10.
     def keysIteratorFrom(start: Value) = from(start).keySet.toIterator
       //nnIds keysIteratorFrom start.id  map (id => thisenum.apply(bottomId + id))
     override def stringPrefix = thisenum + ".ValueSet"

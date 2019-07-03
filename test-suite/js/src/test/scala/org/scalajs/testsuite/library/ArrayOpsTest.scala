@@ -114,8 +114,6 @@ class ArrayOpsTest {
 
   @Test def sizeCompare(): Unit = {
     assumeFalse("sizeCompare was added in 2.13",
-        scalaVersion.startsWith("2.10.") ||
-        scalaVersion.startsWith("2.11.") ||
         scalaVersion.startsWith("2.12."))
 
     import FallbackImplicits._
@@ -136,8 +134,6 @@ class ArrayOpsTest {
 
   @Test def sizeIs(): Unit = {
     assumeFalse("sizeIs was added in 2.13",
-        scalaVersion.startsWith("2.10.") ||
-        scalaVersion.startsWith("2.11.") ||
         scalaVersion.startsWith("2.12."))
 
     import FallbackImplicits._
@@ -151,8 +147,6 @@ class ArrayOpsTest {
 
   @Test def lengthIs(): Unit = {
     assumeFalse("lengthIs was added in 2.13",
-        scalaVersion.startsWith("2.10.") ||
-        scalaVersion.startsWith("2.11.") ||
         scalaVersion.startsWith("2.12."))
 
     import FallbackImplicits._
@@ -305,8 +299,6 @@ class ArrayOpsTest {
 
   @Test def partitionMap(): Unit = {
     assumeFalse("partitionMap was added in 2.13",
-        scalaVersion.startsWith("2.10.") ||
-        scalaVersion.startsWith("2.11.") ||
         scalaVersion.startsWith("2.12."))
 
     import FallbackImplicits._
@@ -668,11 +660,8 @@ class ArrayOpsTest {
   @Test def startsWith(): Unit = {
     val array = js.Array(1, 5, 7, 2, 54, 2, 78, 0, 3)
 
-    val supportsNegativeStart = {
-      !scalaVersion.startsWith("2.10.") &&
-      !scalaVersion.startsWith("2.11.") &&
+    val supportsNegativeStart =
       !scalaVersion.startsWith("2.12.")
-    }
 
     // js.Array
 
@@ -920,8 +909,6 @@ class ArrayOpsTest {
     array.trimStart(4)
 
     assumeFalse("the safe behavior was introduced in 2.13",
-        scalaVersion.startsWith("2.10.") ||
-        scalaVersion.startsWith("2.11.") ||
         scalaVersion.startsWith("2.12."))
     assertJSArrayEquals(js.Array(42, 53, 5, 54, 23, 44, 78), array)
     array.trimStart(-3)
@@ -935,8 +922,6 @@ class ArrayOpsTest {
     array.trimEnd(4)
 
     assumeFalse("the safe behavior was introduced in 2.13",
-        scalaVersion.startsWith("2.10.") ||
-        scalaVersion.startsWith("2.11.") ||
         scalaVersion.startsWith("2.12."))
     assertJSArrayEquals(js.Array(33, 11, 2, 3, 42, 53, 5), array)
     array.trimEnd(-3)

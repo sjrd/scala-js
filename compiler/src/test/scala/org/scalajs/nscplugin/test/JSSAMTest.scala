@@ -28,31 +28,7 @@ class JSSAMTest extends DirectTest with TestHelpers {
     """
 
   @Test
-  def noSAMAsJSTypeGeneric: Unit = {
-
-    """
-    @js.native
-    trait Foo extends js.Object {
-      def foo(x: Int): Int
-    }
-
-    trait Bar extends js.Object {
-      def bar(x: Int): Int
-    }
-
-    class A {
-      val foo: Foo = x => x + 1
-      val Bar: Bar = x => x + 1
-    }
-    """.fails()
-
-  }
-
-  @Test
-  def noSAMAsJSType212: Unit = {
-
-    val version = scala.util.Properties.versionNumberString
-    assumeTrue(!version.startsWith("2.11."))
+  def noSAMAsJSType: Unit = {
 
     """
     @js.native

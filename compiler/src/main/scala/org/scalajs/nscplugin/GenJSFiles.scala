@@ -52,7 +52,7 @@ trait GenJSFiles[G <: Global with Singleton] extends SubComponent {
     val dir = pathParts.init.foldLeft(baseDir)(_.subdirectoryNamed(_))
 
     var filename = pathParts.last
-    if (sym.isModuleClass && !isImplClass(sym))
+    if (sym.isModuleClass)
       filename = filename + nme.MODULE_SUFFIX_STRING
 
     dir fileNamed (filename + suffix)

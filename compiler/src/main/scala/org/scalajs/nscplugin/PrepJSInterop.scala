@@ -978,14 +978,12 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
             /* Check that the right-hand-side is `js.undefined`.
              *
-             * On 2.12+, fields are created later than this phase, and getters
-             * still hold the right-hand-side that we need to check (we
-             * identify this case with `sym.accessed == NoSymbol`).
-             * On 2.11 and before, however, the getter has already been
-             * rewritten to read the field, so we must not check it.
-             * In either case, setters must not be checked.
+             * Fields are created later than this phase, so at this point
+             * getters still hold the right-hand-side that we need to check.
+             *
+             * However, setters must not be checked.
              */
-            if (!sym.isAccessor || (sym.isGetter && sym.accessed == NoSymbol)) {
+            if (!sym.isSetter) {
               // Check that the tree's body is `js.undefined`
               tree.rhs match {
                 case sel: Select if sel.symbol == JSPackage_undefined =>
