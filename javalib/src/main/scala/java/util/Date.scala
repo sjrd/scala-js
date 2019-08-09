@@ -12,6 +12,8 @@
 
 package java.util
 
+import java.lang.Cloneable
+
 import scalajs.js
 
 class Date private (private val date: js.Date) extends Object
