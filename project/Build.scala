@@ -1075,6 +1075,8 @@ object Build {
        */
       scalacOptions += "-Yno-predef",
 
+      //cleanIRSettings,
+
       headerSources in Compile ~= { srcs =>
         srcs.filter { src =>
           val path = src.getPath.replace('\\', '/')
