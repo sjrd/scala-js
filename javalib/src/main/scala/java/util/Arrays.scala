@@ -22,6 +22,16 @@ import ScalaOps._
 
 object Arrays {
 
+  /** Safe upcasting of an array, following run-time covariance. */
+  @inline private def arrayUpcast[A](a: Array[_ <: A]): Array[A] =
+    a.asInstanceOf[Array[A]]
+
+  @inline private def componentTypeOf[A](clazz: Class[_ <: Array[A]]): Class[_ <: A] =
+    clazz.getComponentType().asInstanceOf[Class[_ <: A]]
+
+  @inline private def componentTypeOf[A](a: Array[A]): Class[_ <: A] =
+    componentTypeOf(a.getClass())
+
   /** A custom typeclass for the operations we need in `Arrays` to implement
    *  the algorithms generically.
    */
@@ -36,6 +46,17 @@ object Arrays {
     @inline def lte(x: A, y: A): Boolean = compare(x, y) <= 0
     @inline def gt(x: A, y: A): Boolean = compare(x, y) > 0
     @inline def gte(x: A, y: A): Boolean = compare(x, y) >= 0
+  }
+
+  @inline
+  private final class SpecificAnyRefArrayOps[A <: AnyRef] extends ArrayOps[A] {
+    @inline def length(a: Array[A]): Int = a.length
+    @inline def get(a: Array[A], i: Int): A = a(i)
+    @inline def set(a: Array[A], i: Int, v: A): Unit = a(i) = v
+    @inline def create(length: Int): Array[A] =
+      throw new UnsupportedOperationException("SpecificAnyRefArrayOps.create()")
+    @inline def compare(x: A, y: A): Int =
+      throw new UnsupportedOperationException("SpecificAnyRefArrayOps.compare()")
   }
 
   @inline
@@ -616,14 +637,14 @@ object Arrays {
   }
 
   @noinline def copyOf[T <: AnyRef](original: Array[T], newLength: Int): Array[T] = {
-    implicit val tagT = ClassTag[T](original.getClass.getComponentType)
-    copyOfImpl(original, newLength)
+    copyOfImpl(original, newLength)(new SpecificAnyRefArrayOps[T],
+        new ClassArrayOps(componentTypeOf(original)))
   }
 
   @noinline def copyOf[T <: AnyRef, U <: AnyRef](original: Array[U], newLength: Int,
       newType: Class[_ <: Array[T]]): Array[T] = {
-    implicit val tag = ClassTag[T](newType.getComponentType)
-    copyOfImpl(original, newLength)
+    copyOfImpl(original, newLength)(new SpecificAnyRefArrayOps[U],
+        new ClassArrayOps(componentTypeOf(newType)))
   }
 
   @noinline def copyOf(original: Array[Byte], newLength: Int): Array[Byte] =
@@ -651,10 +672,11 @@ object Arrays {
     copyOfImpl(original, newLength)
 
   @inline
-  private def copyOfImpl[U, T: ClassTag](original: Array[U], newLength: Int): Array[T] = {
+  private def copyOfImpl[U, T](original: Array[U], newLength: Int)(
+      implicit uops: ArrayOps[U], tops: ArrayOps[_ <: T]): Array[T] = {
     checkArrayLength(newLength)
-    val copyLength = Math.min(newLength, original.length)
-    val ret = new Array[T](newLength)
+    val copyLength = Math.min(newLength, uops.length(original))
+    val ret = arrayUpcast[T](tops.create(newLength))
     System.arraycopy(original, 0, ret, 0, copyLength)
     ret
   }
