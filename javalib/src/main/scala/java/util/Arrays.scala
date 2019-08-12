@@ -446,18 +446,19 @@ object Arrays {
     equalsImpl(a, b)
 
   @inline
-  private def equalsImpl[T](a: Array[T], b: Array[T]): Boolean = {
+  private def equalsImpl[T](a: Array[T], b: Array[T])(
+      implicit ops: ArrayOps[T]): Boolean = {
     // scalastyle:off return
     if (a eq b)
       return true
     if (a == null || b == null)
       return false
-    val len = a.length
-    if (b.length != len)
+    val len = ops.length(a)
+    if (ops.length(b) != len)
       return false
     var i = 0
     while (i != len) {
-      if (a(i) != b(i))
+      if (!ops.get(a, i).equals(ops.get(b, i)))
         return false
       i += 1
     }
