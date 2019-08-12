@@ -12,6 +12,8 @@
 
 package java.util
 
+import java.lang.{reflect => jlr}
+
 import scala.scalajs.js
 
 import scala.annotation.tailrec
@@ -42,10 +44,13 @@ object Arrays {
     def create(length: Int): Array[A]
     def compare(x: A, y: A): Int
 
+    @inline def createFrom(template: Array[A], length: Int): Array[A] =
+      create(length) // most subclasses have a correct `create(length)`
+
     @inline def lt(x: A, y: A): Boolean = compare(x, y) < 0
-    @inline def lte(x: A, y: A): Boolean = compare(x, y) <= 0
+    @inline def lteq(x: A, y: A): Boolean = compare(x, y) <= 0
     @inline def gt(x: A, y: A): Boolean = compare(x, y) > 0
-    @inline def gte(x: A, y: A): Boolean = compare(x, y) >= 0
+    @inline def gteq(x: A, y: A): Boolean = compare(x, y) >= 0
   }
 
   @inline
@@ -57,6 +62,10 @@ object Arrays {
       throw new UnsupportedOperationException("SpecificAnyRefArrayOps.create()")
     @inline def compare(x: A, y: A): Int =
       throw new UnsupportedOperationException("SpecificAnyRefArrayOps.compare()")
+
+    @inline
+    override def createFrom(template: Array[A], length: Int): Array[A] =
+      jlr.Array.newInstance(componentTypeOf(template), length).asInstanceOf[Array[A]]
   }
 
   @inline
@@ -69,6 +78,10 @@ object Arrays {
     @inline def create(length: Int): Array[A] =
       throw new UnsupportedOperationException("ComparatorArrayOps.create()")
     @inline def compare(x: A, y: A): Int = comparator.compare(x, y)
+
+    @inline
+    override def createFrom(template: Array[A], length: Int): Array[A] =
+      jlr.Array.newInstance(componentTypeOf(template), length).asInstanceOf[Array[A]]
   }
 
   @inline
@@ -77,7 +90,7 @@ object Arrays {
     @inline def get(a: Array[A], i: Int): A = a(i)
     @inline def set(a: Array[A], i: Int, v: A): Unit = a(i) = v
     @inline def create(length: Int): Array[A] =
-      java.lang.reflect.Array.newInstance(clazz, length).asInstanceOf[Array[A]]
+      jlr.Array.newInstance(clazz, length).asInstanceOf[Array[A]]
     @inline def compare(x: A, y: A): Int =
       throw new UnsupportedOperationException("ClassArrayOps.compare()")
   }
@@ -214,65 +227,48 @@ object Arrays {
     sortRangeImpl[Double](a, fromIndex, toIndex)
 
   @noinline def sort(a: Array[AnyRef]): Unit =
-    sortAnyRefImpl(a)
+    sortImpl(a)
 
   @noinline def sort(a: Array[AnyRef], fromIndex: Int, toIndex: Int): Unit =
-    sortRangeAnyRefImpl(a, fromIndex, toIndex)
+    sortRangeImpl(a, fromIndex, toIndex)
 
-  @noinline def sort[T <: AnyRef](array: Array[T], comparator: Comparator[_ >: T]): Unit = {
-    implicit val ord = toOrdering(comparator).asInstanceOf[Ordering[AnyRef]]
-    sortAnyRefImpl(array.asInstanceOf[Array[AnyRef]])
-  }
+  @noinline def sort[T <: AnyRef](array: Array[T], comparator: Comparator[_ >: T]): Unit =
+    sortImpl(array)(new ComparatorArrayOps(comparator))
 
   @noinline def sort[T <: AnyRef](array: Array[T], fromIndex: Int, toIndex: Int,
       comparator: Comparator[_ >: T]): Unit = {
-    implicit val ord = toOrdering(comparator).asInstanceOf[Ordering[AnyRef]]
-    sortRangeAnyRefImpl(array.asInstanceOf[Array[AnyRef]], fromIndex, toIndex)
+    sortRangeImpl(array, fromIndex, toIndex)(new ComparatorArrayOps(comparator))
   }
 
   @inline
-  private def sortRangeImpl[@specialized T: ClassTag](
-      a: Array[T], fromIndex: Int, toIndex: Int)(
-      implicit ord: Ordering[T], ops: ArrayOps[T]): Unit = {
+  private def sortRangeImpl[T](a: Array[T], fromIndex: Int, toIndex: Int)(
+        implicit ops: ArrayOps[T]): Unit = {
     checkRangeIndices(a, fromIndex, toIndex)
     stableMergeSort[T](a, fromIndex, toIndex)
   }
 
   @inline
-  private def sortRangeAnyRefImpl(a: Array[AnyRef], fromIndex: Int, toIndex: Int)(
-      implicit ord: Ordering[AnyRef]): Unit = {
-    checkRangeIndices(a, fromIndex, toIndex)
-    stableMergeSortAnyRef(a, fromIndex, toIndex)
-  }
-
-  @inline
-  private def sortImpl[@specialized T: ClassTag: Ordering](a: Array[T]): Unit =
-    stableMergeSort[T](a, 0, a.length)
-
-  @inline
-  private def sortAnyRefImpl(a: Array[AnyRef])(implicit ord: Ordering[AnyRef]): Unit =
-    stableMergeSortAnyRef(a, 0, a.length)
+  private def sortImpl[T](a: Array[T])(implicit ops: ArrayOps[T]): Unit =
+    stableMergeSort[T](a, 0, ops.length(a))
 
   private final val inPlaceSortThreshold = 16
 
-  /** Sort array `a` with merge sort and insertion sort,
-   *  using the Ordering on its elements.
-   */
+  /** Sort array `a` with merge sort and insertion sort. */
   @inline
-  private def stableMergeSort[@specialized K: ClassTag](a: Array[K],
-      start: Int, end: Int)(implicit ord: Ordering[K]): Unit = {
+  private def stableMergeSort[T](a: Array[T], start: Int, end: Int)(
+      implicit ops: ArrayOps[T]): Unit = {
     if (end - start > inPlaceSortThreshold)
-      stableSplitMerge(a, new Array[K](a.length), start, end)
+      stableSplitMerge(a, ops.createFrom(a, ops.length(a)), start, end)
     else
       insertionSort(a, start, end)
   }
 
   @noinline
-  private def stableSplitMerge[@specialized K](a: Array[K], temp: Array[K],
-      start: Int, end: Int)(implicit ord: Ordering[K]): Unit = {
+  private def stableSplitMerge[T](a: Array[T], temp: Array[T], start: Int,
+      end: Int)(implicit ops: ArrayOps[T]): Unit = {
     val length = end - start
     if (length > inPlaceSortThreshold) {
-      val middle = start + (length / 2)
+      val middle = start + (length >> 2)
       stableSplitMerge(a, temp, start, middle)
       stableSplitMerge(a, temp, middle, end)
       stableMerge(a, temp, start, middle, end)
@@ -283,141 +279,60 @@ object Arrays {
   }
 
   @inline
-  private def stableMerge[@specialized K](a: Array[K], temp: Array[K],
-      start: Int, middle: Int, end: Int)(implicit ord: Ordering[K]): Unit = {
+  private def stableMerge[T](a: Array[T], temp: Array[T], start: Int,
+      middle: Int, end: Int)(implicit ops: ArrayOps[T]): Unit = {
     var outIndex = start
     var leftInIndex = start
     var rightInIndex = middle
     while (outIndex < end) {
       if (leftInIndex < middle &&
-          (rightInIndex >= end || ord.lteq(a(leftInIndex), a(rightInIndex)))) {
-        temp(outIndex) = a(leftInIndex)
+          (rightInIndex >= end || ops.lteq(ops.get(a, leftInIndex), ops.get(a, rightInIndex)))) {
+        ops.set(temp, outIndex, ops.get(a, leftInIndex))
         leftInIndex += 1
       } else {
-        temp(outIndex) = a(rightInIndex)
+        ops.set(temp, outIndex, ops.get(a, rightInIndex))
         rightInIndex += 1
       }
       outIndex += 1
     }
   }
 
-  // Ordering[T] might be slow especially for boxed primitives, so use binary
+  // ArrayOps[T] might be slow especially for boxed primitives, so use binary
   // search variant of insertion sort
   // Caller must pass end >= start or math will fail.  Also, start >= 0.
   @noinline
-  private final def insertionSort[@specialized T](a: Array[T], start: Int,
-      end: Int)(implicit ord: Ordering[T]): Unit = {
+  private final def insertionSort[T](a: Array[T], start: Int, end: Int)(
+      implicit ops: ArrayOps[T]): Unit = {
     val n = end - start
     if (n >= 2) {
-      if (ord.compare(a(start), a(start + 1)) > 0) {
-        val temp = a(start)
-        a(start) = a(start + 1)
-        a(start + 1) = temp
+      val aStart = ops.get(a, start)
+      val aStartPlusOne = ops.get(a, start + 1)
+      if (ops.gt(aStart, aStartPlusOne)) {
+        ops.set(a, start, aStartPlusOne)
+        ops.set(a, start + 1, aStart)
       }
+
       var m = 2
       while (m < n) {
         // Speed up already-sorted case by checking last element first
-        val next = a(start + m)
-        if (ord.compare(next, a(start + m - 1)) < 0) {
+        val next = ops.get(a, start + m)
+        if (ops.lt(next, ops.get(a, start + m - 1))) {
           var iA = start
           var iB = start + m - 1
           while (iB - iA > 1) {
             val ix = (iA + iB) >>> 1 // Use bit shift to get unsigned div by 2
-            if (ord.compare(next, a(ix)) < 0)
+            if (ops.lt(next, ops.get(a, ix)))
               iB = ix
             else
               iA = ix
           }
-          val ix = iA + (if (ord.compare(next, a(iA)) < 0) 0 else 1)
+          val ix = iA + (if (ops.lt(next, ops.get(a, iA))) 0 else 1)
           var i = start + m
           while (i > ix) {
-            a(i) = a(i - 1)
+            ops.set(a, i, ops.get(a, i - 1))
             i -= 1
           }
-          a(ix) = next
-        }
-        m += 1
-      }
-    }
-  }
-
-  /** Sort array `a` with merge sort and insertion sort,
-   *  using the Ordering on its elements.
-   */
-  @inline
-  private def stableMergeSortAnyRef(a: Array[AnyRef], start: Int, end: Int)(
-      implicit ord: Ordering[AnyRef]): Unit = {
-    if (end - start > inPlaceSortThreshold)
-      stableSplitMergeAnyRef(a, new Array(a.length), start, end)
-    else
-      insertionSortAnyRef(a, start, end)
-  }
-
-  @noinline
-  private def stableSplitMergeAnyRef(a: Array[AnyRef], temp: Array[AnyRef],
-      start: Int, end: Int)(implicit ord: Ordering[AnyRef]): Unit = {
-    val length = end - start
-    if (length > inPlaceSortThreshold) {
-      val middle = start + (length / 2)
-      stableSplitMergeAnyRef(a, temp, start, middle)
-      stableSplitMergeAnyRef(a, temp, middle, end)
-      stableMergeAnyRef(a, temp, start, middle, end)
-      System.arraycopy(temp, start, a, start, length)
-    } else {
-      insertionSortAnyRef(a, start, end)
-    }
-  }
-
-  @inline
-  private def stableMergeAnyRef(a: Array[AnyRef], temp: Array[AnyRef],
-      start: Int, middle: Int, end: Int)(implicit ord: Ordering[AnyRef]): Unit = {
-    var outIndex = start
-    var leftInIndex = start
-    var rightInIndex = middle
-    while (outIndex < end) {
-      if (leftInIndex < middle &&
-          (rightInIndex >= end || ord.lteq(a(leftInIndex), a(rightInIndex)))) {
-        temp(outIndex) = a(leftInIndex)
-        leftInIndex += 1
-      } else {
-        temp(outIndex) = a(rightInIndex)
-        rightInIndex += 1
-      }
-      outIndex += 1
-    }
-  }
-
-  @noinline
-  private final def insertionSortAnyRef(a: Array[AnyRef], start: Int, end: Int)(
-      implicit ord: Ordering[AnyRef]): Unit = {
-    val n = end - start
-    if (n >= 2) {
-      if (ord.compare(a(start), a(start + 1)) > 0) {
-        val temp = a(start)
-        a(start) = a(start + 1)
-        a(start + 1) = temp
-      }
-      var m = 2
-      while (m < n) {
-        // Speed up already-sorted case by checking last element first
-        val next = a(start + m)
-        if (ord.compare(next, a(start + m - 1)) < 0) {
-          var iA = start
-          var iB = start + m - 1
-          while (iB - iA > 1) {
-            val ix = (iA + iB) >>> 1 // Use bit shift to get unsigned div by 2
-            if (ord.compare(next, a(ix)) < 0)
-              iB = ix
-            else
-              iA = ix
-          }
-          val ix = iA + (if (ord.compare(next, a(iA)) < 0) 0 else 1)
-          var i = start + m
-          while (i > ix) {
-            a(i) = a(i - 1)
-            i -= 1
-          }
-          a(ix) = next
+          ops.set(a, ix, next)
         }
         m += 1
       }
