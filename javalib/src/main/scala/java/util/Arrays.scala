@@ -649,61 +649,73 @@ object Arrays {
   }
 
   @noinline def hashCode(a: Array[Long]): Int =
-    hashCodeImpl[Long](a, _.hashCode())
+    hashCodeImpl(a)
 
   @noinline def hashCode(a: Array[Int]): Int =
-    hashCodeImpl[Int](a, _.hashCode())
+    hashCodeImpl(a)
 
   @noinline def hashCode(a: Array[Short]): Int =
-    hashCodeImpl[Short](a, _.hashCode())
+    hashCodeImpl(a)
 
   @noinline def hashCode(a: Array[Char]): Int =
-    hashCodeImpl[Char](a, _.hashCode())
+    hashCodeImpl(a)
 
   @noinline def hashCode(a: Array[Byte]): Int =
-    hashCodeImpl[Byte](a, _.hashCode())
+    hashCodeImpl(a)
 
   @noinline def hashCode(a: Array[Boolean]): Int =
-    hashCodeImpl[Boolean](a, _.hashCode())
+    hashCodeImpl(a)
 
   @noinline def hashCode(a: Array[Float]): Int =
-    hashCodeImpl[Float](a, _.hashCode())
+    hashCodeImpl(a)
 
   @noinline def hashCode(a: Array[Double]): Int =
-    hashCodeImpl[Double](a, _.hashCode())
+    hashCodeImpl(a)
 
   @noinline def hashCode(a: Array[AnyRef]): Int =
-    hashCodeImpl[AnyRef](a, Objects.hashCode(_))
+    hashCodeImpl(a)
 
   @inline
-  private def hashCodeImpl[T](a: Array[T], elementHashCode: T => Int): Int = {
+  private def hashCodeImpl[T](a: Array[T])(implicit ops: ArrayOps[T]): Int = {
     if (a == null) {
       0
     } else {
       var acc = 1
-      for (i <- 0 until a.length)
-        acc = 31 * acc + elementHashCode(a(i))
+      val len = ops.length(a)
+      var i = 0
+      while (i != len) {
+        acc = 31 * acc + Objects.hashCode(ops.get(a, i))
+        i += 1
+      }
       acc
     }
   }
 
   @noinline def deepHashCode(a: Array[AnyRef]): Int = {
-    @inline
-    def getHash(elem: AnyRef): Int = {
-      elem match {
-        case elem: Array[AnyRef]  => deepHashCode(elem)
-        case elem: Array[Long]    => hashCode(elem)
-        case elem: Array[Int]     => hashCode(elem)
-        case elem: Array[Short]   => hashCode(elem)
-        case elem: Array[Char]    => hashCode(elem)
-        case elem: Array[Byte]    => hashCode(elem)
-        case elem: Array[Boolean] => hashCode(elem)
-        case elem: Array[Float]   => hashCode(elem)
-        case elem: Array[Double]  => hashCode(elem)
-        case _                    => Objects.hashCode(elem)
+    def rec(a: Array[AnyRef]): Int = {
+      var acc = 1
+      val len = a.length
+      var i = 0
+      while (i != len) {
+        acc = 31*acc + (a(i) match {
+          case elem: Array[AnyRef]  => rec(elem)
+          case elem: Array[Long]    => hashCode(elem)
+          case elem: Array[Int]     => hashCode(elem)
+          case elem: Array[Short]   => hashCode(elem)
+          case elem: Array[Char]    => hashCode(elem)
+          case elem: Array[Byte]    => hashCode(elem)
+          case elem: Array[Boolean] => hashCode(elem)
+          case elem: Array[Float]   => hashCode(elem)
+          case elem: Array[Double]  => hashCode(elem)
+          case elem                 => Objects.hashCode(elem)
+        })
+        i += 1
       }
+      acc
     }
-    hashCodeImpl(a, getHash)
+
+    if (a == null) 0
+    else rec(a)
   }
 
   @noinline def deepEquals(a1: Array[AnyRef], a2: Array[AnyRef]): Boolean = {
@@ -753,17 +765,17 @@ object Arrays {
     toStringImpl[AnyRef](a)
 
   @inline
-  private def toStringImpl[T](a: Array[T]): String = {
+  private def toStringImpl[T](a: Array[T])(implicit ops: ArrayOps[T]): String = {
     if (a == null) {
       "null"
     } else {
       var result = "["
-      val len = a.length
+      val len = ops.length(a)
       var i = 0
       while (i != len) {
         if (i != 0)
           result += ", "
-        result += a(i)
+        result += ops.get(a, i)
         i += 1
       }
       result + "]"
