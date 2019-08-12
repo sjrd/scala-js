@@ -18,8 +18,6 @@ import scala.scalajs.js
 
 import scala.annotation.tailrec
 
-import scala.reflect.ClassTag
-
 import ScalaOps._
 
 object Arrays {
@@ -580,17 +578,18 @@ object Arrays {
   }
 
   @noinline def copyOfRange[T <: AnyRef](original: Array[T], from: Int, to: Int): Array[T] = {
-    copyOfRangeImpl[T](original, from, to)(ClassTag(original.getClass.getComponentType)).asInstanceOf[Array[T]]
+    copyOfRangeImpl(original, from, to)(new SpecificAnyRefArrayOps[T],
+        new ClassArrayOps(componentTypeOf(original)))
   }
 
-  @noinline def copyOfRange[T <: AnyRef, U <: AnyRef](original: Array[U], from: Int, to: Int,
-      newType: Class[_ <: Array[T]]): Array[T] = {
-    copyOfRangeImpl[AnyRef](original.asInstanceOf[Array[AnyRef]], from, to)(
-        ClassTag(newType.getComponentType)).asInstanceOf[Array[T]]
+  @noinline def copyOfRange[T <: AnyRef, U <: AnyRef](original: Array[U],
+      from: Int, to: Int, newType: Class[_ <: Array[T]]): Array[T] = {
+    copyOfRangeImpl(original, from, to)(new SpecificAnyRefArrayOps[U],
+        new ClassArrayOps(componentTypeOf(newType)))
   }
 
   @noinline def copyOfRange(original: Array[Byte], start: Int, end: Int): Array[Byte] =
-    copyOfRangeImpl[Byte](original, start, end)
+    copyOfRangeImpl(original, start, end)
 
   @noinline def copyOfRange(original: Array[Short], start: Int, end: Int): Array[Short] =
     copyOfRangeImpl(original, start, end)
@@ -614,14 +613,15 @@ object Arrays {
     copyOfRangeImpl(original, start, end)
 
   @inline
-  private def copyOfRangeImpl[T: ClassTag](original: Array[T],
-      start: Int, end: Int): Array[T] = {
+  private def copyOfRangeImpl[T, U](original: Array[U], start: Int, end: Int)(
+      implicit uops: ArrayOps[U], tops: ArrayOps[_ <: T]): Array[T] = {
     if (start > end)
       throw new IllegalArgumentException("" + start + " > " + end)
 
+    val len = uops.length(original)
     val retLength = end - start
-    val copyLength = Math.min(retLength, original.length - start)
-    val ret = new Array[T](retLength)
+    val copyLength = Math.min(retLength, len - start)
+    val ret = arrayUpcast[T](tops.create(retLength))
     System.arraycopy(original, start, ret, 0, copyLength)
     ret
   }
