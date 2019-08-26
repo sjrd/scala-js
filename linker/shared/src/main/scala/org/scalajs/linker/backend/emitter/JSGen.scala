@@ -24,6 +24,8 @@ import ir.{Trees => irt}
 import org.scalajs.linker._
 import org.scalajs.linker.backend.javascript.Trees._
 
+import MyDefinitions._
+
 /** Collection of tree generators that are used accross the board.
  *  This class is fully stateless.
  *
@@ -104,14 +106,27 @@ private[emitter] final class JSGen(val semantics: Semantics,
   }
 
   def genIsInstanceOf(expr: Tree, typeRef: TypeRef)(
+      implicit globalKnowledge: GlobalKnowledge, pos: Position): Tree = {
+    val useInstanceOf = typeRef match {
+      case ClassRef(className) =>
+        className != NumberClass && // the only non-Object super*class* of hijacked classes
+        !globalKnowledge.isInterface(className)
+      case ArrayTypeRef(_, _)  =>
+        false
+    }
+    genIsAsInstanceOf(expr, typeRef, test = true, useInstanceOf)
+  }
+
+  def genIsInstanceOf(expr: Tree, typeRef: TypeRef, isScalaClass: Boolean)(
       implicit pos: Position): Tree =
-    genIsAsInstanceOf(expr, typeRef, test = true)
+    genIsAsInstanceOf(expr, typeRef, test = true, useInstanceOf = isScalaClass)
 
   def genAsInstanceOf(expr: Tree, typeRef: TypeRef)(
       implicit pos: Position): Tree =
-    genIsAsInstanceOf(expr, typeRef, test = false)
+    genIsAsInstanceOf(expr, typeRef, test = false, useInstanceOf = false)
 
-  private def genIsAsInstanceOf(expr: Tree, typeRef: TypeRef, test: Boolean)(
+  private def genIsAsInstanceOf(expr: Tree, typeRef: TypeRef, test: Boolean,
+      useInstanceOf: Boolean)(
       implicit pos: Position): Tree = {
     import Definitions._
     import TreeDSL._
@@ -155,9 +170,14 @@ private[emitter] final class JSGen(val semantics: Semantics,
             }
           }
         } else {
-          Apply(
-              envField(if (test) "is" else "as", className),
-              List(expr))
+          if (useInstanceOf) {
+            assert(test)
+            expr instanceof encodeClassVar(className)
+          } else {
+            Apply(
+                envField(if (test) "is" else "as", className),
+                List(expr))
+          }
         }
 
       case ArrayTypeRef(base, depth) =>

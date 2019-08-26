@@ -446,10 +446,10 @@ private[emitter] object CoreJSLib {
             If(instance === Null(), {
               Return(Apply(instance DOT "getClass__jl_Class", Nil))
             }, {
-              If(genIsInstanceOf(instance, ClassRef(BoxedLongClass)), {
+              If(genIsInstanceOf(instance, ClassRef(BoxedLongClass), isScalaClass = false), {
                 Return(genClassOf(BoxedLongClass))
               }, {
-                If(genIsInstanceOf(instance, ClassRef(BoxedCharacterClass)), {
+                If(genIsInstanceOf(instance, ClassRef(BoxedCharacterClass), isScalaClass = false), {
                   Return(genClassOf(BoxedCharacterClass))
                 }, {
                   If(genIsScalaJSObject(instance), {
@@ -535,7 +535,7 @@ private[emitter] object CoreJSLib {
           val defaultCall: Tree = Return(implementationInObject.getOrElse(normalCall))
 
           val allButNormal = implementingHijackedClasses.foldRight(defaultCall) { (className, next) =>
-            If(genIsInstanceOf(instance, ClassRef(className)),
+            If(genIsInstanceOf(instance, ClassRef(className), isScalaClass = false),
                 Return(genHijackedMethodApply(className)),
                 next)
           }
@@ -962,7 +962,7 @@ private[emitter] object CoreJSLib {
           val fullName = decodeClassName(className)
           val v = varRef("v")
           buf += envFunctionDef(name, paramList(v), {
-            If(genIsInstanceOf(v, ClassRef(className)) || (v === Null()), {
+            If(genIsInstanceOf(v, ClassRef(className), isScalaClass = false) || (v === Null()), {
               Return(v)
             }, {
               genCallHelper("throwClassCastException", v, str(fullName))

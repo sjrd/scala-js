@@ -24,6 +24,8 @@ import org.scalajs.linker.backend.javascript.{Trees => js}
 
 import CheckedBehavior.Unchecked
 
+import MyDefinitions._
+
 /** Emitter for the skeleton of classes. */
 private[emitter] final class ClassEmitter(jsGen: JSGen) {
 
@@ -674,6 +676,25 @@ private[emitter] final class ClassEmitter(jsGen: JSGen) {
     }
   }
 
+  def genFakeClass(tree: LinkedClass): js.Tree = {
+    assert(tree.kind.isClass)
+
+    implicit val pos = tree.pos
+
+    val className = tree.encodedName
+
+    if (esFeatures.useECMAScript2015) {
+      js.ClassDef(Some(encodeClassVar(className).ident), None, Nil)
+    } else {
+      js.Block(
+          js.DocComment("@constructor"),
+          envFieldDef("c", className,
+              js.Function(arrow = false, Nil, js.Skip()),
+              keepFunctionExpression = false)
+      )
+    }
+  }
+
   def genInstanceTests(tree: LinkedClass): js.Tree = {
     import Definitions._
     import TreeDSL._
@@ -707,10 +728,14 @@ private[emitter] final class ClassEmitter(jsGen: JSGen) {
               js.UnaryOp(JSUnaryOp.typeof, obj) === js.StringLiteral("string")
 
             case _ =>
-              var test = {
-                genIsScalaJSObject(obj) &&
-                genIsClassNameInAncestors(className,
-                    obj DOT "$classData" DOT "ancestors")
+              var test = if (tree.kind.isClass) {
+                obj instanceof encodeClassVar(className)
+              } else {
+                !(!(
+                    genIsScalaJSObject(obj) &&
+                    genIsClassNameInAncestors(className,
+                        obj DOT "$classData" DOT "ancestors")
+                ))
               }
 
               def typeOfTest(typeString: String): js.Tree =
@@ -728,7 +753,7 @@ private[emitter] final class ClassEmitter(jsGen: JSGen) {
               if (isAncestorOfBoxedCharacterClass)
                 test = test || (obj instanceof envField("Char"))
 
-              !(!test)
+              test
           }
         })
       }
@@ -1229,34 +1254,8 @@ private[emitter] final class ClassEmitter(jsGen: JSGen) {
 }
 
 private[emitter] object ClassEmitter {
-  // TODO We should compute all of those from the Class Hierarchy
-
-  private val CharSequenceClass = "jl_CharSequence"
-  private val SerializableClass = "Ljava_io_Serializable"
-  private val ComparableClass = "jl_Comparable"
-  private val NumberClass = "jl_Number"
-
-  private val NonObjectAncestorsOfStringClass =
-    Set(CharSequenceClass, ComparableClass, SerializableClass)
-  private val NonObjectAncestorsOfBoxedCharacterClass =
-    Set(ComparableClass, SerializableClass)
-  private val NonObjectAncestorsOfHijackedNumberClasses =
-    Set(NumberClass, ComparableClass, SerializableClass)
-  private val NonObjectAncestorsOfBoxedBooleanClass =
-    Set(ComparableClass, SerializableClass)
-
-  private[emitter] val AncestorsOfHijackedClasses = Set(
-      Definitions.ObjectClass,
-      CharSequenceClass,
-      SerializableClass,
-      ComparableClass,
-      NumberClass
-  )
-
   private val ClassesWhoseDataReferToTheirInstanceTests =
     AncestorsOfHijackedClasses + Definitions.BoxedStringClass
-
-  private final val ThrowableClass = "jl_Throwable"
 
   def shouldExtendJSError(linkedClass: LinkedClass): Boolean = {
     linkedClass.name.name == ThrowableClass &&
