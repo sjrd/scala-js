@@ -1307,10 +1307,14 @@ private[emitter] object CoreJSLib {
                       If(that === genClassOf(BoxedLongClass), {
                         thatFakeInstance := genLongZero()
                       }, {
-                        If(that === genClassOf(BoxedUnitClass), {
-                          thatFakeInstance := Undefined()
+                        If (that === genClassOf(BoxedCharacterClass), {
+                          thatFakeInstance := envField("bC0")
                         }, {
-                          thatFakeInstance := ObjectConstr(List(classData -> that))
+                          If(that === genClassOf(BoxedUnitClass), {
+                            thatFakeInstance := Undefined()
+                          }, {
+                            thatFakeInstance := ObjectConstr(List(classData -> that))
+                          })
                         })
                       })
                     })
@@ -1430,12 +1434,6 @@ private[emitter] object CoreJSLib {
       Apply(envField("ct", className + "__" + ctorName),
           New(encodeClassVar(className), Nil) :: args.toList)
     }
-
-    private def genIsScalaJSObject(obj: VarRef): Tree =
-      !(!(obj && (obj DOT classData)))
-
-    private def genIsScalaJSObjectOrNull(obj: VarRef): Tree =
-      genIsScalaJSObject(obj) || (obj === Null())
 
     private def envFunctionDef(name: String, args: List[ParamDef],
         body: Tree): FunctionDef = {

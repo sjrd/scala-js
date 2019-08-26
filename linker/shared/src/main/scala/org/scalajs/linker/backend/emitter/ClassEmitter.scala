@@ -859,11 +859,6 @@ private[emitter] final class ClassEmitter(jsGen: JSGen) {
     js.Block(createIsArrayOfStat, createAsArrayOfStat)
   }
 
-  private def genIsScalaJSObject(obj: js.Tree)(implicit pos: Position): js.Tree = {
-    import TreeDSL._
-    obj && (obj DOT "$classData")
-  }
-
   private def genIsClassNameInAncestors(className: String, ancestors: js.Tree)(
       implicit pos: Position): js.Tree = {
     import TreeDSL._

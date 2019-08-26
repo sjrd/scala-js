@@ -105,6 +105,17 @@ private[emitter] final class JSGen(val semantics: Semantics,
     envField("t", className + "__" + item.name)
   }
 
+  def genIsScalaJSObject(obj: VarRef)(implicit pos: Position): Tree = {
+    import TreeDSL._
+    (obj instanceof encodeClassVar(Definitions.ObjectClass)) ||
+    (obj instanceof encodeClassVar(ThrowableClass))
+  }
+
+  def genIsScalaJSObjectOrNull(obj: VarRef)(implicit pos: Position): Tree = {
+    import TreeDSL._
+    genIsScalaJSObject(obj) || (obj === Null())
+  }
+
   def genIsInstanceOf(expr: Tree, typeRef: TypeRef)(
       implicit globalKnowledge: GlobalKnowledge, pos: Position): Tree = {
     val useInstanceOf = typeRef match {
