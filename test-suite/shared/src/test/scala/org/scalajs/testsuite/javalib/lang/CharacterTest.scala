@@ -905,6 +905,13 @@ class CharacterTest {
     assertTrue(Character.isUnicodeIdentifierPart('\u3ca0'))
     assertTrue(Character.isUnicodeIdentifierPart('\u5332'))
     assertTrue(Character.isUnicodeIdentifierPart('\u8654'))
+
+    if (!executingInJVM) {
+      assertTrue(Character.isUnicodeIdentifierPart('\u1df7'))
+      assertTrue(Character.isUnicodeIdentifierPart('\u0afa'))
+      assertTrue(Character.isUnicodeIdentifierPart('\uabad'))
+    }
+
     assertFalse(Character.isUnicodeIdentifierPart('\ua8c8'))
     assertFalse(Character.isUnicodeIdentifierPart('\ue3ca'))
     assertFalse(Character.isUnicodeIdentifierPart('\uebee'))
@@ -946,7 +953,6 @@ class CharacterTest {
     assertFalse(Character.isUnicodeIdentifierPart('\uf78a'))
     assertFalse(Character.isUnicodeIdentifierPart('\ueb44'))
     assertFalse(Character.isUnicodeIdentifierPart('\uebd4'))
-    assertFalse(Character.isUnicodeIdentifierPart('\u1df7'))
     assertFalse(Character.isUnicodeIdentifierPart('\u2f10'))
     assertFalse(Character.isUnicodeIdentifierPart('\u1cbf'))
     assertFalse(Character.isUnicodeIdentifierPart('\u2362'))
@@ -975,7 +981,6 @@ class CharacterTest {
     assertFalse(Character.isUnicodeIdentifierPart('\uf678'))
     assertFalse(Character.isUnicodeIdentifierPart('\ue0e4'))
     assertFalse(Character.isUnicodeIdentifierPart('\u233f'))
-    assertFalse(Character.isUnicodeIdentifierPart('\u0afa'))
     assertFalse(Character.isUnicodeIdentifierPart('\u2013'))
     assertFalse(Character.isUnicodeIdentifierPart('\ud7af'))
     assertFalse(Character.isUnicodeIdentifierPart('\ud98e'))
@@ -987,7 +992,6 @@ class CharacterTest {
     assertFalse(Character.isUnicodeIdentifierPart('\u1806'))
     assertFalse(Character.isUnicodeIdentifierPart('\ue07a'))
     assertFalse(Character.isUnicodeIdentifierPart('\u2748'))
-    assertFalse(Character.isUnicodeIdentifierPart('\uabad'))
     assertFalse(Character.isUnicodeIdentifierPart('\uec5c'))
     assertFalse(Character.isUnicodeIdentifierPart('\ue832'))
 
@@ -1494,6 +1498,11 @@ class CharacterTest {
     if (!executingInJVMOnJDK7OrLower)
       assertTrue(Character.isLetter(93997))
 
+    if (!executingInJVM) {
+      assertTrue(Character.isLetter(181693))
+      assertTrue(Character.isLetter(185568))
+    }
+
     // 100 randomly chosen characters that produce false
     assertFalse(Character.isLetter('\uE033'))
     assertFalse(Character.isLetter('\uF45A'))
@@ -1508,8 +1517,6 @@ class CharacterTest {
     assertFalse(Character.isLetter(112424))
     assertFalse(Character.isLetter(119118))
     assertFalse(Character.isLetter(127185))
-    assertFalse(Character.isLetter(181693))
-    assertFalse(Character.isLetter(185568))
     assertFalse(Character.isLetter(191510))
     assertFalse(Character.isLetter(205741))
     assertFalse(Character.isLetter(208447))
@@ -1705,6 +1712,11 @@ class CharacterTest {
     assertTrue(Character.isLetterOrDigit('\uFCDD'))
     assertTrue(Character.isLetterOrDigit('\uFEBD'))
 
+    if (!executingInJVM) {
+      assertTrue(Character.isLetterOrDigit('\u0DEB'))
+      assertTrue(Character.isLetterOrDigit('\uA7B7'))
+    }
+
     // 100 randomly chosen characters that produce false
     assertFalse(Character.isLetterOrDigit('\u02D8'))
     assertFalse(Character.isLetterOrDigit('\u0312'))
@@ -1718,7 +1730,6 @@ class CharacterTest {
     assertFalse(Character.isLetterOrDigit('\u0B56'))
     assertFalse(Character.isLetterOrDigit('\u0B77'))
     assertFalse(Character.isLetterOrDigit('\u0DDA'))
-    assertFalse(Character.isLetterOrDigit('\u0DEB'))
     assertFalse(Character.isLetterOrDigit('\u0E7B'))
     assertFalse(Character.isLetterOrDigit('\u0EBA'))
     assertFalse(Character.isLetterOrDigit('\u0F0B'))
@@ -1752,7 +1763,6 @@ class CharacterTest {
     assertFalse(Character.isLetterOrDigit('\u2EAE'))
     assertFalse(Character.isLetterOrDigit('\u2EB1'))
     assertFalse(Character.isLetterOrDigit('\u32E8'))
-    assertFalse(Character.isLetterOrDigit('\uA7B7'))
     assertFalse(Character.isLetterOrDigit('\uA7C3'))
     assertFalse(Character.isLetterOrDigit('\uA837'))
     assertFalse(Character.isLetterOrDigit('\uA8B4'))
@@ -1812,7 +1822,6 @@ class CharacterTest {
     assertTrue(Character.isSpaceChar('\u0020'))
     assertTrue(Character.isSpaceChar('\u00A0'))
     assertTrue(Character.isSpaceChar('\u1680'))
-    assertTrue(Character.isSpaceChar('\u180E'))
     assertTrue(Character.isSpaceChar('\u2000'))
     assertTrue(Character.isSpaceChar('\u2001'))
     assertTrue(Character.isSpaceChar('\u2002'))
@@ -1828,6 +1837,9 @@ class CharacterTest {
     assertTrue(Character.isSpaceChar('\u202F'))
     assertTrue(Character.isSpaceChar('\u205F'))
     assertTrue(Character.isSpaceChar('\u3000'))
+
+    if (!executingInJVM)
+      assertFalse(Character.isSpaceChar('\u180E'))
 
     // 100 randomly chosen characters that produce false
     assertFalse(Character.isSpaceChar('\u0057'))
@@ -1945,7 +1957,6 @@ class CharacterTest {
     assertTrue(Character.isWhitespace('\u001f'))
     assertTrue(Character.isWhitespace('\u0020'))
     assertTrue(Character.isWhitespace('\u1680'))
-    assertTrue(Character.isWhitespace('\u180e'))
     assertTrue(Character.isWhitespace('\u2000'))
     assertTrue(Character.isWhitespace('\u2001'))
     assertTrue(Character.isWhitespace('\u2002'))
@@ -1961,8 +1972,10 @@ class CharacterTest {
     assertTrue(Character.isWhitespace('\u205f'))
     assertTrue(Character.isWhitespace('\u3000'))
 
-    if (!executingInJVMOnJDK6)
-      assertFalse(Character.isWhitespace('\u200b'))
+    // Used to be whitespace
+    assertFalse(Character.isWhitespace('\u200b'))
+    if (!executingInJVM)
+      assertFalse(Character.isWhitespace('\u180e'))
 
     // 100 randomly chosen characters that produce false
     assertFalse(Character.isWhitespace(2515))
@@ -2421,10 +2434,30 @@ class CharacterTest {
     assertTrue(Character.isDefined('\uFD39'))
     assertTrue(Character.isDefined('\uFF3A'))
 
+    if (!executingInJVM) {
+      assertTrue(Character.isDefined('\u0528'))
+      assertTrue(Character.isDefined('\u052B'))
+      assertTrue(Character.isDefined('\u058D'))
+      assertTrue(Character.isDefined('\u08D4'))
+      assertTrue(Character.isDefined('\u08DB'))
+      assertTrue(Character.isDefined('\u08E1'))
+      assertTrue(Character.isDefined('\u16F7'))
+      assertTrue(Character.isDefined('\u23F7'))
+      assertTrue(Character.isDefined('\u23F8'))
+      assertTrue(Character.isDefined('\u2700'))
+      assertTrue(Character.isDefined('\u2B63'))
+      assertTrue(Character.isDefined('\u2B7F'))
+      assertTrue(Character.isDefined('\u9FE9'))
+      assertTrue(Character.isDefined('\uA7AE'))
+      assertTrue(Character.isDefined('\uAB46'))
+      assertTrue(Character.isDefined('\uAB5B'))
+      assertTrue(Character.isDefined('\uAB70'))
+      assertTrue(Character.isDefined('\uAB95'))
+      assertTrue(Character.isDefined('\uABA7'))
+      assertTrue(Character.isDefined('\u32FF'))
+    }
+
     // 100 randomly chosen characters that produce false
-    assertFalse(Character.isDefined('\u0528'))
-    assertFalse(Character.isDefined('\u052B'))
-    assertFalse(Character.isDefined('\u058D'))
     assertFalse(Character.isDefined('\u05FE'))
     assertFalse(Character.isDefined('\u07BE'))
     assertFalse(Character.isDefined('\u07FB'))
@@ -2434,9 +2467,6 @@ class CharacterTest {
     assertFalse(Character.isDefined('\u0892'))
     assertFalse(Character.isDefined('\u08BE'))
     assertFalse(Character.isDefined('\u08C5'))
-    assertFalse(Character.isDefined('\u08D4'))
-    assertFalse(Character.isDefined('\u08DB'))
-    assertFalse(Character.isDefined('\u08E1'))
     assertFalse(Character.isDefined('\u09B1'))
     assertFalse(Character.isDefined('\u09D0'))
     assertFalse(Character.isDefined('\u09D5'))
@@ -2464,7 +2494,6 @@ class CharacterTest {
     assertFalse(Character.isDefined('\u0FE5'))
     assertFalse(Character.isDefined('\u10C9'))
     assertFalse(Character.isDefined('\u12C6'))
-    assertFalse(Character.isDefined('\u16F7'))
     assertFalse(Character.isDefined('\u16FA'))
     assertFalse(Character.isDefined('\u1739'))
     assertFalse(Character.isDefined('\u173A'))
@@ -2478,12 +2507,7 @@ class CharacterTest {
     assertFalse(Character.isDefined('\u1CC9'))
     assertFalse(Character.isDefined('\u1FF1'))
     assertFalse(Character.isDefined('\u2073'))
-    assertFalse(Character.isDefined('\u23F7'))
-    assertFalse(Character.isDefined('\u23F8'))
     assertFalse(Character.isDefined('\u243F'))
-    assertFalse(Character.isDefined('\u2700'))
-    assertFalse(Character.isDefined('\u2B63'))
-    assertFalse(Character.isDefined('\u2B7F'))
     assertFalse(Character.isDefined('\u2BDC'))
     assertFalse(Character.isDefined('\u2BF5'))
     assertFalse(Character.isDefined('\u2BFE'))
@@ -2492,10 +2516,7 @@ class CharacterTest {
     assertFalse(Character.isDefined('\u2FE9'))
     assertFalse(Character.isDefined('\u2FEE'))
     assertFalse(Character.isDefined('\u31EE'))
-    assertFalse(Character.isDefined('\u32FF'))
-    assertFalse(Character.isDefined('\u9FE9'))
     assertFalse(Character.isDefined('\uA639'))
-    assertFalse(Character.isDefined('\uA7AE'))
     assertFalse(Character.isDefined('\uA7EC'))
     assertFalse(Character.isDefined('\uA7F2'))
     assertFalse(Character.isDefined('\uA8C7'))
@@ -2506,11 +2527,6 @@ class CharacterTest {
     assertFalse(Character.isDefined('\uAAC9'))
     assertFalse(Character.isDefined('\uAAD9'))
     assertFalse(Character.isDefined('\uAAF9'))
-    assertFalse(Character.isDefined('\uAB46'))
-    assertFalse(Character.isDefined('\uAB5B'))
-    assertFalse(Character.isDefined('\uAB70'))
-    assertFalse(Character.isDefined('\uAB95'))
-    assertFalse(Character.isDefined('\uABA7'))
     assertFalse(Character.isDefined('\uD7C9'))
     assertFalse(Character.isDefined('\uFAE1'))
     assertFalse(Character.isDefined('\uFAE9'))
@@ -2854,7 +2870,8 @@ class CharacterTest {
     assertEquals(18, Character.getType(57625))
     assertEquals(18, Character.getType(59186))
     assertEquals(5, Character.getType(64622))
-    assertEquals(0, Character.getType(67177))
+    if (!executingInJVM)
+      assertEquals(5, Character.getType(67177))
     assertEquals(0, Character.getType(73067))
     if (!executingInJVMOnJDK6)
       assertEquals(5, Character.getType(78228))
@@ -2865,10 +2882,12 @@ class CharacterTest {
     assertEquals(0, Character.getType(87255))
     assertEquals(0, Character.getType(88238))
     assertEquals(0, Character.getType(93812))
-    assertEquals(0, Character.getType(95123))
-    assertEquals(0, Character.getType(95326))
-    assertEquals(0, Character.getType(96045))
-    assertEquals(0, Character.getType(100120))
+    if (!executingInJVM) {
+      assertEquals(5, Character.getType(95123))
+      assertEquals(5, Character.getType(95326))
+      assertEquals(5, Character.getType(96045))
+      assertEquals(5, Character.getType(100120))
+    }
     assertEquals(0, Character.getType(103365))
     assertEquals(0, Character.getType(103707))
     assertEquals(0, Character.getType(104477))
@@ -2877,7 +2896,8 @@ class CharacterTest {
     assertEquals(0, Character.getType(115801))
     assertEquals(0, Character.getType(118758))
     assertEquals(1, Character.getType(120024))
-    assertEquals(0, Character.getType(121054))
+    if (!executingInJVM)
+      assertEquals(28, Character.getType(121054))
     assertEquals(0, Character.getType(123903))
     assertEquals(0, Character.getType(126770))
     assertEquals(0, Character.getType(130632))
@@ -2894,11 +2914,13 @@ class CharacterTest {
     assertEquals(5, Character.getType(169103))
     assertEquals(5, Character.getType(171304))
     assertEquals(5, Character.getType(172648))
-    assertEquals(0, Character.getType(178250))
-    assertEquals(0, Character.getType(180704))
-    assertEquals(0, Character.getType(181598))
-    assertEquals(0, Character.getType(186964))
-    assertEquals(0, Character.getType(189826))
+    if (!executingInJVM) {
+      assertEquals(5, Character.getType(178250))
+      assertEquals(5, Character.getType(180704))
+      assertEquals(5, Character.getType(181598))
+      assertEquals(5, Character.getType(186964))
+      assertEquals(5, Character.getType(189826))
+    }
     assertEquals(0, Character.getType(198340))
     assertEquals(0, Character.getType(198519))
     assertEquals(0, Character.getType(198994))
@@ -3392,9 +3414,13 @@ class CharacterTest {
     assertTrue(Character.isJavaLetterOrDigit('\uFDB1'))
     assertTrue(Character.isJavaLetterOrDigit('\uFEE5'))
 
+    if (!executingInJVM) {
+      assertTrue(Character.isJavaLetterOrDigit('\u08B3'))
+      assertTrue(Character.isJavaLetterOrDigit('\uA797'))
+    }
+
     // 50 randomly chosen characters that produce false
     assertFalse(Character.isJavaLetterOrDigit('\u05FD'))
-    assertFalse(Character.isJavaLetterOrDigit('\u08B3'))
     assertFalse(Character.isJavaLetterOrDigit('\u09FE'))
     assertFalse(Character.isJavaLetterOrDigit('\u0AD6'))
     assertFalse(Character.isJavaLetterOrDigit('\u0F3D'))
@@ -3417,7 +3443,6 @@ class CharacterTest {
     assertFalse(Character.isJavaLetterOrDigit('\u2F0F'))
     assertFalse(Character.isJavaLetterOrDigit('\uA4C1'))
     assertFalse(Character.isJavaLetterOrDigit('\uA4C3'))
-    assertFalse(Character.isJavaLetterOrDigit('\uA797'))
     assertFalse(Character.isJavaLetterOrDigit('\uA7C3'))
     assertFalse(Character.isJavaLetterOrDigit('\uDA09'))
     assertFalse(Character.isJavaLetterOrDigit('\uDB3E'))
@@ -3502,6 +3527,9 @@ class CharacterTest {
       assertTrue(Character.isJavaIdentifierStart(78380))
     }
 
+    if (!executingInJVM)
+      assertTrue(Character.isJavaIdentifierStart(185775))
+
     // 50 randomly chosen characters that produce false
     assertFalse(Character.isJavaIdentifierStart('\uE8A1'))
     assertFalse(Character.isJavaIdentifierStart('\uEBB6'))
@@ -3510,7 +3538,6 @@ class CharacterTest {
     assertFalse(Character.isJavaIdentifierStart(1080963))
     assertFalse(Character.isJavaIdentifierStart(1098681))
     assertFalse(Character.isJavaIdentifierStart(1101181))
-    assertFalse(Character.isJavaIdentifierStart(185775))
     assertFalse(Character.isJavaIdentifierStart(200078))
     assertFalse(Character.isJavaIdentifierStart(212082))
     assertFalse(Character.isJavaIdentifierStart(219401))
