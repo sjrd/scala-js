@@ -4924,8 +4924,7 @@ private[optimizer] object OptimizerCore {
     def apply(tree: Tree): PreTransTree = {
       val refinedTpe: RefinedType = tree match {
         case BlockOrAlone(_,
-            _:LoadModule | _:NewArray | _:ArrayValue | _:GetClass |
-            _:ClassOf) =>
+            _:LoadModule | _:NewArray | _:ArrayValue | _:ClassOf) =>
           RefinedType(tree.tpe, isExact = true, isNullable = false)
         case _ =>
           RefinedType(tree.tpe)
