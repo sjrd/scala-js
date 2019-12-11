@@ -16,6 +16,7 @@ import scala.annotation.switch
 
 import scala.scalajs.js
 
+import java.util.JSUtils._
 import java.util.ScalaOps._
 
 final class Pattern private (jsRegExp: js.RegExp, _pattern: String, _flags: Int)
@@ -128,9 +129,11 @@ object Pattern {
       if ((flags & LITERAL) != 0) {
         (quote(regex), flags)
       } else {
-        trySplitHack(regex, flags) orElse
-        tryFlagHack(regex, flags) getOrElse
-        (regex, flags)
+        undefOrGetOrElse(trySplitHack(regex, flags)) { () =>
+          undefOrGetOrElse(tryFlagHack(regex, flags)) { () =>
+            (regex, flags)
+          }
+        }
       }
     }
 
@@ -170,31 +173,32 @@ object Pattern {
    *  It replaces occurrences of \Q<char>\E by quoted(<char>)
    */
   @inline
-  private def trySplitHack(pat: String, flags: Int) = {
+  private def trySplitHack(pat: String, flags: Int): js.UndefOr[(String, Int)] = {
     val m = splitHackPat.exec(pat)
     if (m != null)
-      Some((quote(m(1).get), flags))
+      (quote(m(1).get), flags)
     else
-      None
+      js.undefined
   }
 
   @inline
-  private def tryFlagHack(pat: String, flags0: Int) = {
+  private def tryFlagHack(pat: String, flags0: Int): js.UndefOr[(String, Int)] = {
     val m = flagHackPat.exec(pat)
     if (m != null) {
       val newPat = pat.substring(m(0).get.length) // cut off the flag specifiers
       var flags = flags0
-      for (chars <- m(1)) {
+      undefOrForeach(m(1)) { chars =>
         for (i <- 0 until chars.length())
           flags |= charToFlag(chars.charAt(i))
       }
-      for (chars <- m(2)) {
+      undefOrForeach(m(2)) { chars =>
         for (i <- 0 until chars.length())
           flags &= ~charToFlag(chars.charAt(i))
       }
-      Some((newPat, flags))
-    } else
-      None
+      (newPat, flags)
+    } else {
+      js.undefined
+    }
   }
 
   private def charToFlag(c: Char) = (c: @switch) match {

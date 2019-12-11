@@ -17,6 +17,7 @@ import scala.scalajs.js
 
 import java.lang.{Double => JDouble}
 import java.io._
+import java.util.JSUtils._
 
 final class Formatter(private[this] var dest: Appendable)
     extends Closeable with Flushable {
@@ -42,9 +43,9 @@ final class Formatter(private[this] var dest: Appendable)
   def this() = this(null: Appendable)
 
   @inline
-  private def trapIOExceptions(body: => Unit): Unit = {
+  private def trapIOExceptions(body: js.Function0[Unit]): Unit = {
     try {
-      body
+      body()
     } catch {
       case th: IOException =>
         lastIOException = th
@@ -74,8 +75,8 @@ final class Formatter(private[this] var dest: Appendable)
 
   @noinline
   private def sendToDestSlowPath(ss: js.Array[String]): Unit = {
-    trapIOExceptions {
-      ss.foreach(dest.append(_))
+    trapIOExceptions { () =>
+      forArrayElems(ss)(dest.append(_))
     }
   }
 
@@ -83,7 +84,7 @@ final class Formatter(private[this] var dest: Appendable)
     if (!closed && (dest ne null)) {
       dest match {
         case cl: Closeable =>
-          trapIOExceptions {
+          trapIOExceptions { () =>
             cl.close()
           }
         case _ =>
@@ -97,7 +98,7 @@ final class Formatter(private[this] var dest: Appendable)
     if (dest ne null) {
       dest match {
         case fl: Flushable =>
-          trapIOExceptions {
+          trapIOExceptions { () =>
             fl.flush()
           }
         case _ =>
@@ -232,7 +233,7 @@ final class Formatter(private[this] var dest: Appendable)
 
   private def parsePositiveIntSilent(capture: js.UndefOr[String],
       default: Int): Int = {
-    capture.fold {
+    undefOrFold(capture) { () =>
       default
     } { s =>
       val x = js.Dynamic.global.parseInt(s, 10).asInstanceOf[Double]
@@ -262,7 +263,7 @@ final class Formatter(private[this] var dest: Appendable)
       if (precision >= 0) precision
       else 6
 
-    @inline def efgCommon(notation: (Double, Int, Boolean) => String): Unit = {
+    @inline def efgCommon(notation: js.Function3[Double, Int, Boolean, String]): Unit = {
       arg match {
         case arg: Double =>
           if (JDouble.isNaN(arg) || JDouble.isInfinite(arg)) {

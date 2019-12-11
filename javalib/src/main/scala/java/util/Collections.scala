@@ -19,6 +19,8 @@ import scala.language.implicitConversions
 
 import scala.annotation.tailrec
 
+import scala.scalajs.js
+
 import ScalaOps._
 
 object Collections {
@@ -89,13 +91,15 @@ object Collections {
     binarySearchImpl(list, (elem: T) => c.compare(elem, key))
 
   @inline
-  private def binarySearchImpl[E](list: List[E], compareToKey: E => Int): Int = {
+  private def binarySearchImpl[E](list: List[E],
+      compareToKey: js.Function1[E, Int]): Int = {
+
     def notFound(insertionPoint: Int): Int = {
       -insertionPoint - 1
     }
 
     @tailrec
-    def binarySearch(lo: Int, hi: Int, get: Int => E): Int = {
+    def binarySearch(lo: Int, hi: Int, get: js.Function1[Int, E]): Int = {
       if (lo < hi) {
         val mid = lo + (hi - lo) / 2
         val cmp = compareToKey(get(mid))
@@ -273,14 +277,14 @@ object Collections {
     min(coll, naturalComparator[T])
 
   def min[T](coll: Collection[_ <: T], comp: Comparator[_ >: T]): T =
-    coll.scalaOps.reduceLeft((a, b) => if (comp.compare(a, b) <= 0) a else b)
+    coll.scalaOps.reduceLeft[T]((a, b) => if (comp.compare(a, b) <= 0) a else b)
 
   // Differs from original type definition, original: [T <: jl.Comparable[_ >: T]]
   def max[T <: AnyRef with jl.Comparable[T]](coll: Collection[_ <: T]): T =
     max(coll, naturalComparator[T])
 
   def max[T](coll: Collection[_ <: T], comp: Comparator[_ >: T]): T =
-    coll.scalaOps.reduceLeft((a, b) => if (comp.compare(a, b) >= 0) a else b)
+    coll.scalaOps.reduceLeft[T]((a, b) => if (comp.compare(a, b) >= 0) a else b)
 
   def rotate(list: List[_], distance: Int): Unit =
     rotateImpl(list, distance)

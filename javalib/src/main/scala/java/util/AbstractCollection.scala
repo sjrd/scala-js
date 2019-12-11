@@ -14,6 +14,8 @@ package java.util
 
 import scala.annotation.tailrec
 
+import scala.scalajs.js
+
 import ScalaOps._
 
 import java.lang.{reflect => jlr}
@@ -78,7 +80,7 @@ abstract class AbstractCollection[E] protected () extends Collection[E] {
   def clear(): Unit =
     removeWhere(_ => true)
 
-  private def removeWhere(p: Any => Boolean): Boolean = {
+  private def removeWhere(p: js.Function1[Any, Boolean]): Boolean = {
     val iter = iterator()
     var changed = false
     while (iter.hasNext) {

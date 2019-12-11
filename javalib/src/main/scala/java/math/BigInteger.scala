@@ -43,6 +43,8 @@ package java.math
 
 import scala.annotation.tailrec
 
+import scala.scalajs.js
+
 import java.util.Random
 import java.util.ScalaOps._
 
@@ -74,7 +76,12 @@ object BigInteger {
     new BigInteger(1, 4), new BigInteger(1, 5), new BigInteger(1, 6),
     new BigInteger(1, 7), new BigInteger(1, 8), new BigInteger(1, 9), TEN)
 
-  private final val TWO_POWS = Array.tabulate[BigInteger](32)(i => BigInteger.valueOf(1L << i))
+  private final val TWO_POWS = {
+    val result = new Array[BigInteger](32)
+    for (i <- 0 until 32)
+      result(i) = BigInteger.valueOf(1L << i)
+    result
+  }
 
   /** The first non zero digit is either -1 if sign is zero, otherwise it is >= 0.
    *
@@ -117,12 +124,6 @@ object BigInteger {
       throw new NullPointerException
     else
       reference
-  }
-
-  @inline
-  private def checkCriticalArgument(expression: Boolean, errorMessage: => String): Unit = {
-    if (!expression)
-      throw new IllegalArgumentException(errorMessage)
   }
 
   @inline
@@ -211,7 +212,8 @@ class BigInteger extends Number with Comparable[BigInteger] {
 
   def this(numBits: Int, rnd: Random) = {
     this()
-    checkCriticalArgument(numBits >= 0, "numBits must be non-negative")
+    if (numBits < 0)
+      throw new IllegalArgumentException("numBits must be non-negative")
     if (numBits == 0) {
       sign = 0
       numberLength = 1
@@ -715,7 +717,7 @@ class BigInteger extends Number with Comparable[BigInteger] {
 
     @inline
     @tailrec
-    def loopBytes(tempDigit: Int => Unit): Unit = {
+    def loopBytes(tempDigit: js.Function1[Int, Unit]): Unit = {
       if (bytesLen > firstByteNumber) {
         tempDigit(digitIndex)
         loopBytes(tempDigit)

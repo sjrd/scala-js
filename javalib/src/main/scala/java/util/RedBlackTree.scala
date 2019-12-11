@@ -606,7 +606,7 @@ private[util] object RedBlackTree {
 
   /** Returns `null.asInstanceOf[C]` if `node eq null`, otherwise `f(node)`. */
   @inline
-  private def nullableNodeFlatMap[A, B, C](node: Node[A, B])(f: Node[A, B] => C): C =
+  private def nullableNodeFlatMap[A, B, C](node: Node[A, B])(f: js.Function1[Node[A, B], C]): C =
     if (node eq null) null.asInstanceOf[C]
     else f(node)
 

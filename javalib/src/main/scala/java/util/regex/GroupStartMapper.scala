@@ -15,6 +15,7 @@ package java.util.regex
 import scala.annotation.{tailrec, switch}
 
 import java.util.HashMap
+import java.util.JSUtils._
 
 import scala.scalajs.js
 
@@ -158,7 +159,7 @@ private[regex] object GroupStartMapper {
     final def propagateFromEnd(matchResult: js.RegExp.ExecResult,
         groupStartMap: js.Array[Int], end: Int): Int = {
 
-      val start = matchResult(newGroup).fold(-1)(matched => end - matched.length)
+      val start = undefOrFold(matchResult(newGroup))(() => -1)(matched => end - matched.length)
       propagate(matchResult, groupStartMap, start, end)
       start
     }
@@ -171,7 +172,7 @@ private[regex] object GroupStartMapper {
     final def propagateFromStart(matchResult: js.RegExp.ExecResult,
         groupStartMap: js.Array[Int], start: Int): Int = {
 
-      val end = matchResult(newGroup).fold(-1)(matched => start + matched.length)
+      val end = undefOrFold(matchResult(newGroup))(() => -1)(matched => start + matched.length)
       propagate(matchResult, groupStartMap, start, end)
       end
     }

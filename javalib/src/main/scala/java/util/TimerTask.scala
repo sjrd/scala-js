@@ -12,7 +12,8 @@
 
 package java.util
 
-import scala.scalajs.js.timers._
+import scala.scalajs.js
+import scala.scalajs.js.timers.RawTimers._
 import scala.scalajs.js.timers.SetTimeoutHandle
 
 abstract class TimerTask {
@@ -40,9 +41,9 @@ abstract class TimerTask {
 
   def scheduledExecutionTime(): Long = lastScheduled
 
-  private[util] def timeout(delay: Long)(body: => Unit): Unit = {
+  private[util] def timeout(delay: Long)(body: js.Function0[Unit]): Unit = {
     if (!canceled) {
-      handle = setTimeout(delay.toDouble)(body)
+      handle = setTimeout(body, delay.toDouble)
     }
   }
 

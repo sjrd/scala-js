@@ -13,6 +13,7 @@
 package java.util
 
 import java.lang.Cloneable
+import java.util.JSUtils._
 
 import scala.scalajs.js
 
@@ -116,23 +117,36 @@ class ArrayDeque[E] private (private var inner: js.Array[E])
   }
 
   def removeFirstOccurrence(o: Any): Boolean = {
-    val index = inner.indexWhere(Objects.equals(_, o))
-    if (index >= 0) {
-      inner.remove(index)
-      status += 1
-      true
-    } else
-      false
+    // scalastyle:off return
+    val inner = this.inner // local copy
+    val len = inner.length
+    var i = 0
+    while (i != len) {
+      if (Objects.equals(inner(i), o)) {
+        inner.remove(i)
+        status += 1
+        return true
+      }
+      i += 1
+    }
+    false
+    // scalastyle:on return
   }
 
   def removeLastOccurrence(o: Any): Boolean = {
-    val index = inner.lastIndexWhere(Objects.equals(_, o))
-    if (index >= 0) {
-      inner.remove(index)
-      status += 1
-      true
-    } else
-      false
+    // scalastyle:off return
+    val inner = this.inner // local copy
+    var i = inner.length - 1
+    while (i >= 0) {
+      if (Objects.equals(inner(i), o)) {
+        inner.remove(i)
+        status += 1
+        return true
+      }
+      i -= 1
+    }
+    false
+    // scalastyle:on return
   }
 
   override def add(e: E): Boolean = {
@@ -156,7 +170,7 @@ class ArrayDeque[E] private (private var inner: js.Array[E])
 
   def size(): Int = inner.size
 
-  private def failFastIterator(startIndex: Int, nex: (Int) => Int) = {
+  private def failFastIterator(startIndex: Int, nex: js.Function1[Int, Int]) = {
     new Iterator[E] {
       private def checkStatus() =
         if (self.status != actualStatus)
@@ -195,7 +209,8 @@ class ArrayDeque[E] private (private var inner: js.Array[E])
   def descendingIterator(): Iterator[E] =
     failFastIterator(inner.size, x => (x - 1))
 
-  override def contains(o: Any): Boolean = inner.exists(Objects.equals(_, o))
+  override def contains(o: Any): Boolean =
+    arrayExists(inner)(Objects.equals(_, o))
 
   override def remove(o: Any): Boolean = removeFirstOccurrence(o)
 

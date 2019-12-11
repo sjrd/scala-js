@@ -75,7 +75,7 @@ class Properties(protected val defaults: Properties)
   }
 
   @inline @tailrec
-  private final def foreachAncestor(f: Properties => Unit): Unit = {
+  private final def foreachAncestor(f: js.Function1[Properties, Unit]): Unit = {
     f(this)
     if (defaults ne null)
       defaults.foreachAncestor(f)
