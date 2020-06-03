@@ -39,6 +39,9 @@ object JavalibIRCleaner {
   private val writeReplaceMethodName =
     MethodName("writeReplace", Nil, ClassRef(ObjectClass))
 
+  private lazy val baseDirectoryURI =
+    new java.io.File(".").getAbsoluteFile().toURI()
+
   def cleanIR(dependencyFiles: Seq[File], libFileMappings: Seq[(File, File)],
       logger: Logger): Set[File] = {
 
@@ -72,7 +75,7 @@ object JavalibIRCleaner {
 
         case JSClass | JSModuleClass =>
           errorManager.reportError(
-              s"found non-native JS class ${tree.className}")(tree.pos)
+              s"found non-native JS class ${tree.className.nameString}")(tree.pos)
       }
     }
 
@@ -91,7 +94,8 @@ object JavalibIRCleaner {
     private var _errorCount: Int = 0
 
     def reportError(msg: String)(implicit pos: Position): Unit = {
-      logger.error(s"$msg at $pos")
+      val fileStr = baseDirectoryURI.relativize(pos.source).toString
+      logger.error(s"$msg at $fileStr:${pos.line}:${pos.column}")
       _errorCount += 1
     }
 
@@ -244,7 +248,7 @@ object JavalibIRCleaner {
 
         case t: ClassOf =>
           if (transformTypeRef(t.typeRef) != t.typeRef)
-            reportError(s"illegal Class(${t.typeRef})")
+            reportError(s"illegal ClassOf(${t.typeRef})")
           t
 
         case t =>
@@ -375,7 +379,7 @@ object JavalibIRCleaner {
     }
 
     private def reportError(msg: String)(implicit pos: Position): Unit = {
-      errorManager.reportError(s"$msg in $enclosingClassName")
+      errorManager.reportError(s"$msg in ${enclosingClassName.nameString}")
     }
   }
 }
