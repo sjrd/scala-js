@@ -133,6 +133,38 @@ class MathTest {
     assertTrue(Math.log10(Double.NegativeInfinity).isNaN)
   }
 
+  @Test def toDegrees(): Unit = {
+    assertSameDouble(0.0, Math.toDegrees(0.0))
+    assertSameDouble(-0.0, Math.toDegrees(-0.0))
+    assertSameDouble(Double.NaN, Math.toDegrees(Double.NaN))
+    assertSameDouble(Double.PositiveInfinity, Math.toDegrees(Double.PositiveInfinity))
+    assertSameDouble(Double.NegativeInfinity, Math.toDegrees(Double.NegativeInfinity))
+
+    assertSameDouble(57.29577951308232, Math.toDegrees(1.0))
+    assertSameDouble(-57.29577951308232, Math.toDegrees(-1.0))
+    assertSameDouble(70735.52961937127, Math.toDegrees(1234.56789))
+    assertSameDouble(-70735.52961937127, Math.toDegrees(-1234.56789))
+
+    assertSameDouble(2.8e-322, Math.toDegrees(Double.MinPositiveValue))
+    assertSameDouble(Double.PositiveInfinity, Math.toDegrees(Double.MaxValue))
+  }
+
+  @Test def toRadians(): Unit = {
+    assertSameDouble(0.0, Math.toRadians(0.0))
+    assertSameDouble(-0.0, Math.toRadians(-0.0))
+    assertSameDouble(Double.NaN, Math.toRadians(Double.NaN))
+    assertSameDouble(Double.PositiveInfinity, Math.toRadians(Double.PositiveInfinity))
+    assertSameDouble(Double.NegativeInfinity, Math.toRadians(Double.NegativeInfinity))
+
+    assertSameDouble(0.017453292519943295, Math.toRadians(1.0))
+    assertSameDouble(-0.017453292519943295, Math.toRadians(-1.0))
+    assertSameDouble(21.547274519899176, Math.toRadians(1234.56789))
+    assertSameDouble(-21.547274519899176, Math.toRadians(-1234.56789))
+
+    assertSameDouble(0.0, Math.toRadians(Double.MinPositiveValue))
+    assertSameDouble(3.1375664143845866E306, Math.toRadians(Double.MaxValue))
+  }
+
   @Test def signumForDouble(): Unit = {
     assertEquals(1.0, Math.signum(234394.2198273), 0.0)
     assertEquals(-1.0, Math.signum(-124937498.58), 0.0)

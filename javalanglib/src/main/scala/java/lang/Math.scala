@@ -43,17 +43,11 @@ object Math {
   @inline def ceil(a: scala.Double): scala.Double = js.Math.ceil(a)
   @inline def floor(a: scala.Double): scala.Double = js.Math.floor(a)
 
-  def rint(a: scala.Double): scala.Double = {
-    val rounded = js.Math.round(a)
-    val mod = a % 1.0
-    // The following test is also false for specials (0's, Infinities and NaN)
-    if (mod == 0.5 || mod == -0.5) {
-      // js.Math.round(a) rounds up but we have to round to even
-      if (rounded % 2.0 == 0.0) rounded
-      else rounded - 1.0
-    } else {
-      rounded
-    }
+  @inline def rint(a: scala.Double): scala.Double = {
+    /* Exploit the loss of precision that occurs for subnormal values, which
+     * will round to nearest with ties-to-even.
+     */
+    (a * scala.Double.MinPositiveValue) / scala.Double.MinPositiveValue
   }
 
   @inline def round(a: scala.Float): scala.Int = js.Math.round(a).toInt
@@ -89,8 +83,12 @@ object Math {
 
   @inline def random(): scala.Double = js.Math.random()
 
-  @inline def toDegrees(a: scala.Double): scala.Double = a * 180.0 / PI
-  @inline def toRadians(a: scala.Double): scala.Double = a / 180.0 * PI
+  /* Note: by themselves, (180.0 / PI) and (PI / 180.0) are as accurate as
+   * possible, i.e., they evaluate to the Double values that are closest to the
+   * mathematical values 180/π and π/180, respectively.
+   */
+  @inline def toDegrees(a: scala.Double): scala.Double = a * (180.0 / PI)
+  @inline def toRadians(a: scala.Double): scala.Double = a * (PI / 180.0)
 
   @inline def signum(a: scala.Double): scala.Double = {
     if (a > 0) 1.0
