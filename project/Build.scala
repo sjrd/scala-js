@@ -869,6 +869,8 @@ object Build {
 
         fileSet.toSeq.filter(_.getPath().endsWith(".scala"))
       }.taskValue,
+
+      scalaJSLinkerConfig ~= { _.withESFeatures(_.withESVersion(ESVersion.ES2018)) },
   ).withScalaJSCompiler.withScalaJSJUnitPlugin.dependsOn(
       library, irProjectJS, jUnitRuntime % "test", testBridge % "test", jUnitAsyncJS % "test",
   )
@@ -1035,6 +1037,7 @@ object Build {
         }.taskValue,
       },
 
+      scalaJSLinkerConfig ~= { _.withESFeatures(_.withESVersion(ESVersion.ES2018)) },
       scalaJSLinkerConfig in Test ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   ).withScalaJSCompiler.withScalaJSJUnitPlugin.dependsOn(
       linkerInterfaceJS, library, irProjectJS, jUnitRuntime % "test", testBridge % "test", jUnitAsyncJS % "test"
