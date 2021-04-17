@@ -14,7 +14,7 @@ package java.util.regex
 
 import scala.language.implicitConversions
 
-import scala.annotation.switch
+import scala.annotation.{switch, tailrec}
 
 import scala.scalajs.js
 
@@ -33,7 +33,7 @@ final class Matcher private[regex] (
 
   // Match result (updated by successful matches)
   private var lastMatch: js.RegExp.ExecResult = null
-  private var lastMatchIsValid = false
+  private var lastMatchIsForMatches = false
   private var canStillFind = true
 
   // Append state (updated by replacement methods)
@@ -43,13 +43,9 @@ final class Matcher private[regex] (
 
   def matches(): Boolean = {
     resetMatch()
-    find()
-    // TODO this check is wrong with non-greedy patterns
-    // Further, it might be wrong to just use ^$ delimiters for two reasons:
-    // - They might already be there
-    // - They might not behave as expected when newline characters are present
-    if ((lastMatch ne null) && (ensureLastMatch.index != 0 || group().length() != inputstr.length()))
-      resetMatch()
+
+    lastMatch = pattern().jsRegExpForMatches.exec(inputstr)
+    lastMatchIsForMatches = true
     lastMatch ne null
   }
 
@@ -61,18 +57,66 @@ final class Matcher private[regex] (
     lastMatch ne null
   }
 
-  def find(): Boolean = if (canStillFind) {
-    lastMatchIsValid = true
-    lastMatch = regexp.exec(inputstr)
-    if (lastMatch ne null) {
-      if (lastMatch(0).get.isEmpty)
-        regexp.lastIndex += 1
+  def find(): Boolean = {
+    import PatternCompiler.Support._
+
+    if (canStillFind) {
+      def advanceOnce(): Boolean = {
+        lastMatch = regexp.exec(inputstr)
+        if (lastMatch ne null) {
+          if (lastMatch(0).get.isEmpty)
+            regexp.lastIndex += 1
+          true
+        } else {
+          canStillFind = false
+          false
+        }
+      }
+
+      if (!supportsSticky && pattern().sticky) {
+        val start = regexp.lastIndex
+        if (advanceOnce() && lastMatch.index > start) {
+          lastMatch = null
+          canStillFind = false
+        }
+      } else if (supportsUnicode) {
+        advanceOnce()
+      } else {
+        /* When the native RegExp does not support the 'u' flag (introduced in
+         * ECMAScript 2015), it can find a match starting in the middle of a
+         * surrogate pair. This can happen if the pattern can match a substring
+         * starting with a lone low surrogate. However, that is not valid,
+         * because surrogate pairs must always stick together.
+         *
+         * In all the other situations, the `PatternCompiler` makes sure that
+         * surrogate pairs are always matched together or not at all, but it
+         * cannot avoid this specific situation because there is no look-behind
+         * support in that case either. So we take care of it now by skipping
+         * matches that start in the middle of a surrogate pair.
+         */
+        @tailrec
+        def loop(): Unit = {
+          val start = regexp.lastIndex
+          if (advanceOnce()) {
+            val index = lastMatch.index
+            if (index > start && index < inputstr.length() &&
+                Character.isLowSurrogate(inputstr.charAt(index)) &&
+                Character.isHighSurrogate(inputstr.charAt(index - 1))) {
+              regexp.lastIndex = index + 1
+              loop()
+            }
+          }
+        }
+        loop()
+      }
+
+      lastMatchIsForMatches = false
+      startOfGroupCache = null
+      lastMatch ne null
     } else {
-      canStillFind = false
+      false
     }
-    startOfGroupCache = null
-    lastMatch ne null
-  } else false
+  }
 
   def find(start: Int): Boolean = {
     reset()
@@ -153,7 +197,6 @@ final class Matcher private[regex] (
   private def resetMatch(): Matcher = {
     regexp.lastIndex = 0
     lastMatch = null
-    lastMatchIsValid = false
     canStillFind = true
     appendPos = 0
     startOfGroupCache = null
@@ -186,34 +229,51 @@ final class Matcher private[regex] (
     lastMatch
   }
 
-  def groupCount(): Int = Matcher.getGroupCount(lastMatch, pattern())
+  def groupCount(): Int = pattern().groupCount
 
   def start(): Int = ensureLastMatch.index + regionStart()
   def end(): Int = start() + group().length
   def group(): String = ensureLastMatch(0).get
 
+  private def startInternal(compiledGroup: Int): Int = {
+    val s = startOfGroup(compiledGroup)
+    if (s == -1) -1
+    else s + regionStart()
+  }
+
   def start(group: Int): Int = {
     if (group == 0) start()
-    else startOfGroup(group)
+    else startInternal(pattern().numberedGroup(group))
   }
 
-  def end(group: Int): Int = {
-    val s = start(group)
+  def start(name: String): Int =
+    startInternal(pattern().namedGroup(name))
+
+  private def endInternal(compiledGroup: Int): Int = {
+    val s = startOfGroup(compiledGroup)
     if (s == -1) -1
-    else s + this.group(group).length
+    else s + ensureLastMatch(compiledGroup).get.length + regionStart()
   }
 
-  def group(group: Int): String = ensureLastMatch(group).orNull
+  def end(group: Int): Int =
+    if (group == 0) end()
+    else endInternal(pattern().numberedGroup(group))
 
-  def group(name: String): String = {
-    ensureLastMatch
-    throw new IllegalArgumentException
-  }
+  def end(name: String): Int =
+    endInternal(pattern().namedGroup(name))
+
+  def group(group: Int): String =
+    ensureLastMatch(pattern().numberedGroup(group)).orNull
+
+  def group(name: String): String =
+    ensureLastMatch(pattern().namedGroup(name)).orNull
 
   // Seal the state
 
-  def toMatchResult(): MatchResult =
-    new SealedResult(inputstr, lastMatch, pattern(), regionStart(), startOfGroupCache)
+  def toMatchResult(): MatchResult = {
+    new SealedResult(inputstr, lastMatch, lastMatchIsForMatches, pattern(),
+        regionStart(), startOfGroupCache)
+  }
 
   // Other query state methods
 
@@ -247,7 +307,7 @@ final class Matcher private[regex] (
   /** Returns a mapping from the group number to the respective start position. */
   private def startOfGroup: js.Array[Int] = {
     if (startOfGroupCache eq null)
-      startOfGroupCache = pattern0.groupStartMapper(inputstr, start())
+      startOfGroupCache = pattern0.groupStartMapper(lastMatchIsForMatches, inputstr, ensureLastMatch.index)
     startOfGroupCache
   }
 }
@@ -267,21 +327,13 @@ object Matcher {
     result
   }
 
-  private def getGroupCount(lastMatch: js.RegExp.ExecResult,
-      pattern: Pattern): Int = {
-    /* `pattern.groupCount` has the answer, but it can require some
-     * computation to get it, so try and use lastMatch's group count if we can.
-     */
-    if (lastMatch != null) lastMatch.length - 1
-    else pattern.groupCount
-  }
-
   private final class SealedResult(inputstr: String,
-      lastMatch: js.RegExp.ExecResult, pattern: Pattern,
-      regionStart: Int, private var startOfGroupCache: js.Array[Int])
+      lastMatch: js.RegExp.ExecResult, lastMatchIsForMatches: Boolean,
+      pattern: Pattern, regionStart: Int,
+      private var startOfGroupCache: js.Array[Int])
       extends MatchResult {
 
-    def groupCount(): Int = getGroupCount(lastMatch, pattern)
+    def groupCount(): Int = pattern.groupCount
 
     def start(): Int = ensureLastMatch.index + regionStart
     def end(): Int = start() + group().length
@@ -289,22 +341,42 @@ object Matcher {
 
     private def startOfGroup: js.Array[Int] = {
       if (startOfGroupCache eq null)
-        startOfGroupCache = pattern.groupStartMapper(inputstr, start())
+        startOfGroupCache = pattern.groupStartMapper(lastMatchIsForMatches, inputstr, ensureLastMatch.index)
       startOfGroupCache
+    }
+
+    private def startInternal(compiledGroup: Int): Int = {
+      val s = startOfGroup(compiledGroup)
+      if (s == -1) -1
+      else s + regionStart
     }
 
     def start(group: Int): Int = {
       if (group == 0) start()
-      else startOfGroup(group)
+      else startInternal(pattern.numberedGroup(group))
     }
 
-    def end(group: Int): Int = {
-      val s = start(group)
+    def start(name: String): Int =
+      startInternal(pattern.namedGroup(name))
+
+    private def endInternal(compiledGroup: Int): Int = {
+      val s = startOfGroup(compiledGroup)
       if (s == -1) -1
-      else s + this.group(group).length
+      else s + ensureLastMatch(compiledGroup).get.length + regionStart
     }
 
-    def group(group: Int): String = ensureLastMatch(group).orNull
+    def end(group: Int): Int =
+      if (group == 0) end()
+      else endInternal(pattern.numberedGroup(group))
+
+    def end(name: String): Int =
+      endInternal(pattern.namedGroup(name))
+
+    def group(group: Int): String =
+      ensureLastMatch(pattern.numberedGroup(group)).orNull
+
+    def group(name: String): String =
+      ensureLastMatch(pattern.namedGroup(name)).orNull
 
     private def ensureLastMatch: js.RegExp.ExecResult = {
       if (lastMatch == null)

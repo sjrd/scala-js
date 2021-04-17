@@ -37,4 +37,8 @@ object Platform {
   def hasCompliantModule: Boolean = true
   def hasStrictFloats: Boolean = true
   def hasAccurateFloats: Boolean = true
+
+  def regexSupportsUnicodeCase: Boolean = true
+  def regexSupportsUnicodeCharacterClasses: Boolean = true
+  def regexSupportsLookBehinds: Boolean = true
 }
