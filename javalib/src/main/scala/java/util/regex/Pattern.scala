@@ -30,6 +30,9 @@ final class Pattern private[regex] (
   @inline private def jsFlagsForFind: String =
     jsFlags + (if (sticky && PatternCompiler.Support.supportsSticky) "gy" else "g")
 
+  /** Whether we already added the 'd' flag to the native RegExp's. */
+  private var enabledNativeIndices: Boolean = false
+
   /** Compile the native RegExp once.
    *
    *  In `newJSRegExp()`, we clone that native RegExp using
@@ -37,7 +40,7 @@ final class Pattern private[regex] (
    *  optimizes by reusing the compiled internal representation of the RegExp.
    *  Otherwise, well, there's not much we can do about it.
    */
-  private[this] val jsRegExpBlueprint =
+  private[this] var jsRegExpBlueprint =
     new js.RegExp(jsPattern, jsFlagsForFind)
 
   /** Another version of the RegExp that is used by `Matcher.matches()`.
@@ -49,14 +52,11 @@ final class Pattern private[regex] (
    *  Since that RegExp is only used locally within `matches()`, and not stored
    *  in the `Matcher`, we can always reuse the same instance.
    */
-  private[regex] val jsRegExpForMatches: js.RegExp =
+  private[regex] var jsRegExpForMatches: js.RegExp =
     new js.RegExp("^" + jsPattern + "$", jsFlags)
 
   def pattern(): String = _pattern
   def flags(): Int = _flags
-
-  private lazy val indicesBuilder: IndicesBuilder =
-    IndicesBuilder(jsPattern, jsFlags)
 
   override def toString(): String = pattern()
 
@@ -87,9 +87,28 @@ final class Pattern private[regex] (
     }))
   }
 
+  private lazy val indicesBuilder: IndicesBuilder =
+    IndicesBuilder(jsPattern, jsFlags)
+
   private[regex] def getIndices(forMatches: Boolean, string: String,
       lastMatch: js.RegExp.ExecResult): IndicesBuilder.IndicesArray = {
-    indicesBuilder(forMatches, string, lastMatch.index)
+    if (PatternCompiler.Support.supportsIndices) {
+      val dynLastMatch = lastMatch.asInstanceOf[js.Dynamic]
+      if (!js.isUndefined(dynLastMatch.indices)) {
+        dynLastMatch.indices.asInstanceOf[IndicesBuilder.IndicesArray]
+      } else {
+        if (!enabledNativeIndices) {
+          jsRegExpBlueprint = new js.RegExp(jsPattern, jsFlagsForFind + "d")
+          jsRegExpForMatches = new js.RegExp("^" + jsPattern + "$", jsFlags + "d")
+          enabledNativeIndices = true
+        }
+        val regexp = if (forMatches) jsRegExpForMatches else newJSRegExp()
+        regexp.lastIndex = lastMatch.index
+        regexp.exec(string).asInstanceOf[js.Dynamic].indices.asInstanceOf[IndicesBuilder.IndicesArray]
+      }
+    } else {
+      indicesBuilder(forMatches, string, lastMatch.index)
+    }
   }
 
   def matcher(input: CharSequence): Matcher =
