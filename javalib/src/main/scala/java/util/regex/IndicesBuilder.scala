@@ -50,13 +50,13 @@ import scala.scalajs.js
  *
  *  @author Mikaël Mayer
  */
-private[regex] class GroupStartMapper private (pattern: String, flags: String,
-    node: GroupStartMapper.Node, groupCount: Int,
+private[regex] class IndicesBuilder private (pattern: String, flags: String,
+    node: IndicesBuilder.Node, groupCount: Int,
     jsRegExpForFind: js.RegExp, jsRegExpForMatches: js.RegExp) {
 
-  import GroupStartMapper._
+  import IndicesBuilder._
 
-  def apply(forMatches: Boolean, string: String, index: Int): js.Array[Int] = {
+  def apply(forMatches: Boolean, string: String, index: Int): IndicesArray = {
     val regExp =
       if (forMatches) jsRegExpForMatches
       else jsRegExpForFind
@@ -70,30 +70,36 @@ private[regex] class GroupStartMapper private (pattern: String, flags: String,
           s"Original pattern '$pattern' with flags '$flags' did match however.")
     }
 
-    // Prepare a `groupStartMap` array with the correct length filled with -1
-    val len = groupCount + 1 // index 0 is not used
-    val groupStartMap = new js.Array[Int](len)
-    var i = 0
+    val start = index // by definition
+    val end = start + allMatchResult(0).get.length()
+
+    // Prepare a `groupStartMap` array with the correct length filled with undefined
+    val len = groupCount + 1 // index 0 is the whole match
+    val groupStartMap = new IndicesArray(len)
+    groupStartMap(0) = js.Tuple2(start, end)
+    var i = 1
     while (i != len) {
-      groupStartMap(i) = -1
+      groupStartMap(i) = js.undefined
       i += 1
     }
 
-    node.propagateFromStart(allMatchResult, groupStartMap, index)
+    node.propagate(allMatchResult, groupStartMap, start, end)
 
     groupStartMap
   }
 }
 
-private[regex] object GroupStartMapper {
-  def apply(pattern: String, flags: String): GroupStartMapper = {
+private[regex] object IndicesBuilder {
+  type IndicesArray = js.Array[js.UndefOr[js.Tuple2[Int, Int]]]
+
+  def apply(pattern: String, flags: String): IndicesBuilder = {
     val parser = new Parser(pattern)
     val node = parser.parseTopLevel()
     node.setNewGroup(1)
     val allMatchingPattern = node.buildRegex(parser.groupNodeMap)
     val jsRegExpForFind = new js.RegExp(allMatchingPattern, flags + "g")
     val jsRegExpForMatches = new js.RegExp("^" + allMatchingPattern + "$", flags)
-    new GroupStartMapper(pattern, flags, node, parser.parsedGroupCount,
+    new IndicesBuilder(pattern, flags, node, parser.parsedGroupCount,
         jsRegExpForFind, jsRegExpForMatches)
   }
 
@@ -151,16 +157,16 @@ private[regex] object GroupStartMapper {
      *  `end`, while other nodes propagate the `start`.
      */
     def propagate(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int, end: Int): Unit
+        indices: IndicesArray, start: Int, end: Int): Unit
 
     /** Propagates the appropriate positions to the descendants of this node
      *  from its end position.
      */
     final def propagateFromEnd(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], end: Int): Unit = {
+        indices: IndicesArray, end: Int): Unit = {
 
       val start = matchResult(newGroup).fold(-1)(matched => end - matched.length)
-      propagate(matchResult, groupStartMap, start, end)
+      propagate(matchResult, indices, start, end)
     }
 
     /** Propagates the appropriate positions to the descendants of this node
@@ -169,10 +175,10 @@ private[regex] object GroupStartMapper {
      *  @return the end position of this node, as a convenience for `SequenceNode.propagate`
      */
     final def propagateFromStart(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int): Int = {
+        indices: IndicesArray, start: Int): Int = {
 
       val end = matchResult(newGroup).fold(-1)(matched => start + matched.length)
-      propagate(matchResult, groupStartMap, start, end)
+      propagate(matchResult, indices, start, end)
       end
     }
   }
@@ -186,15 +192,15 @@ private[regex] object GroupStartMapper {
       "(" + inner.buildRegex(groupNodeMap) + ")"
 
     def propagate(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int, end: Int): Unit = {
+        indices: IndicesArray, start: Int, end: Int): Unit = {
       /* #3901: A GroupNode within a negative look-ahead node may receive
        * `start != -1` from above, yet not match anything itself. We must
        * always keep the default `-1` if this group node does not match
        * anything.
        */
       if (matchResult(newGroup).isDefined)
-        groupStartMap(number) = start
-      inner.propagate(matchResult, groupStartMap, start, end)
+        indices(number) = js.Tuple2(start, end)
+      inner.propagate(matchResult, indices, start, end)
     }
   }
 
@@ -213,11 +219,11 @@ private[regex] object GroupStartMapper {
       "((" + indicator + inner.buildRegex(groupNodeMap) + "))"
 
     def propagate(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int, end: Int): Unit = {
+        indices: IndicesArray, start: Int, end: Int): Unit = {
       if (isLookBehind)
-        inner.propagateFromEnd(matchResult, groupStartMap, end)
+        inner.propagateFromEnd(matchResult, indices, end)
       else
-        inner.propagateFromStart(matchResult, groupStartMap, start)
+        inner.propagateFromStart(matchResult, indices, start)
     }
   }
 
@@ -232,8 +238,8 @@ private[regex] object GroupStartMapper {
       "(" + inner.buildRegex(groupNodeMap) + repeater + ")"
 
     def propagate(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int, end: Int): Unit = {
-      inner.propagateFromEnd(matchResult, groupStartMap, end)
+        indices: IndicesArray, start: Int, end: Int): Unit = {
+      inner.propagateFromEnd(matchResult, indices, end)
     }
   }
 
@@ -243,7 +249,7 @@ private[regex] object GroupStartMapper {
       "(" + regex + ")"
 
     def propagate(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int, end: Int): Unit = {
+        indices: IndicesArray, start: Int, end: Int): Unit = {
       // nothing to do
     }
   }
@@ -258,7 +264,7 @@ private[regex] object GroupStartMapper {
     }
 
     def propagate(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int, end: Int): Unit = {
+        indices: IndicesArray, start: Int, end: Int): Unit = {
       // nothing to do
     }
   }
@@ -288,13 +294,13 @@ private[regex] object GroupStartMapper {
     }
 
     def propagate(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int, end: Int): Unit = {
+        indices: IndicesArray, start: Int, end: Int): Unit = {
       val len = sequence.length
       var i = 0
       var nextStart = start
       while (i != len) {
         nextStart =
-          sequence(i).propagateFromStart(matchResult, groupStartMap, nextStart)
+          sequence(i).propagateFromStart(matchResult, indices, nextStart)
         i += 1
       }
     }
@@ -329,11 +335,11 @@ private[regex] object GroupStartMapper {
     }
 
     def propagate(matchResult: js.RegExp.ExecResult,
-        groupStartMap: js.Array[Int], start: Int, end: Int): Unit = {
+        indices: IndicesArray, start: Int, end: Int): Unit = {
       val len = alternatives.length
       var i = 0
       while (i != len) {
-        alternatives(i).propagate(matchResult, groupStartMap, start, end)
+        alternatives(i).propagate(matchResult, indices, start, end)
         i += 1
       }
     }

@@ -55,8 +55,8 @@ final class Pattern private[regex] (
   def pattern(): String = _pattern
   def flags(): Int = _flags
 
-  private[regex] lazy val groupStartMapper: GroupStartMapper =
-    GroupStartMapper(jsPattern, jsFlags)
+  private lazy val indicesBuilder: IndicesBuilder =
+    IndicesBuilder(jsPattern, jsFlags)
 
   override def toString(): String = pattern()
 
@@ -85,6 +85,11 @@ final class Pattern private[regex] (
     groupNumberMap(namedGroups.getOrElse(name, {
       throw new IllegalArgumentException(s"No group with name <$name>")
     }))
+  }
+
+  private[regex] def getIndices(forMatches: Boolean, string: String,
+      lastMatch: js.RegExp.ExecResult): IndicesBuilder.IndicesArray = {
+    indicesBuilder(forMatches, string, lastMatch.index)
   }
 
   def matcher(input: CharSequence): Matcher =

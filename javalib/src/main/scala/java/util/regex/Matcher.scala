@@ -111,7 +111,7 @@ final class Matcher private[regex] (
       }
 
       lastMatchIsForMatches = false
-      startOfGroupCache = null
+      indicesCache = null
       lastMatch ne null
     } else {
       false
@@ -199,7 +199,7 @@ final class Matcher private[regex] (
     lastMatch = null
     canStillFind = true
     appendPos = 0
-    startOfGroupCache = null
+    indicesCache = null
     this
   }
 
@@ -217,7 +217,7 @@ final class Matcher private[regex] (
     regexp = pattern.newJSRegExp()
     regexp.lastIndex = prevLastIndex
     lastMatch = null
-    startOfGroupCache = null
+    indicesCache = null
     this
   }
 
@@ -235,11 +235,8 @@ final class Matcher private[regex] (
   def end(): Int = start() + group().length
   def group(): String = ensureLastMatch(0).get
 
-  private def startInternal(compiledGroup: Int): Int = {
-    val s = startOfGroup(compiledGroup)
-    if (s == -1) -1
-    else s + regionStart()
-  }
+  private def startInternal(compiledGroup: Int): Int =
+    indices(compiledGroup).fold(-1)(_._1 + regionStart())
 
   def start(group: Int): Int = {
     if (group == 0) start()
@@ -249,11 +246,8 @@ final class Matcher private[regex] (
   def start(name: String): Int =
     startInternal(pattern().namedGroup(name))
 
-  private def endInternal(compiledGroup: Int): Int = {
-    val s = startOfGroup(compiledGroup)
-    if (s == -1) -1
-    else s + ensureLastMatch(compiledGroup).get.length + regionStart()
-  }
+  private def endInternal(compiledGroup: Int): Int =
+    indices(compiledGroup).fold(-1)(_._2 + regionStart())
 
   def end(group: Int): Int =
     if (group == 0) end()
@@ -272,7 +266,7 @@ final class Matcher private[regex] (
 
   def toMatchResult(): MatchResult = {
     new SealedResult(inputstr, lastMatch, lastMatchIsForMatches, pattern(),
-        regionStart(), startOfGroupCache)
+        regionStart(), indicesCache)
   }
 
   // Other query state methods
@@ -301,14 +295,14 @@ final class Matcher private[regex] (
   def hasAnchoringBounds(): Boolean = true
   //def useAnchoringBounds(b: Boolean): Matcher
 
-  // Lazily computed by `startOfGroup`, reset every time `lastMatch` changes
-  private var startOfGroupCache: js.Array[Int] = _
+  // Lazily computed by `indices`, reset every time `lastMatch` changes
+  private var indicesCache: IndicesBuilder.IndicesArray = _
 
   /** Returns a mapping from the group number to the respective start position. */
-  private def startOfGroup: js.Array[Int] = {
-    if (startOfGroupCache eq null)
-      startOfGroupCache = pattern0.groupStartMapper(lastMatchIsForMatches, inputstr, ensureLastMatch.index)
-    startOfGroupCache
+  private def indices: IndicesBuilder.IndicesArray = {
+    if (indicesCache eq null)
+      indicesCache = pattern0.getIndices(lastMatchIsForMatches, inputstr, ensureLastMatch)
+    indicesCache
   }
 }
 
@@ -330,7 +324,7 @@ object Matcher {
   private final class SealedResult(inputstr: String,
       lastMatch: js.RegExp.ExecResult, lastMatchIsForMatches: Boolean,
       pattern: Pattern, regionStart: Int,
-      private var startOfGroupCache: js.Array[Int])
+      private var indicesCache: IndicesBuilder.IndicesArray)
       extends MatchResult {
 
     def groupCount(): Int = pattern.groupCount
@@ -339,17 +333,14 @@ object Matcher {
     def end(): Int = start() + group().length
     def group(): String = ensureLastMatch(0).get
 
-    private def startOfGroup: js.Array[Int] = {
-      if (startOfGroupCache eq null)
-        startOfGroupCache = pattern.groupStartMapper(lastMatchIsForMatches, inputstr, ensureLastMatch.index)
-      startOfGroupCache
+    private def indices: IndicesBuilder.IndicesArray = {
+      if (indicesCache eq null)
+        indicesCache = pattern.getIndices(lastMatchIsForMatches, inputstr, ensureLastMatch)
+      indicesCache
     }
 
-    private def startInternal(compiledGroup: Int): Int = {
-      val s = startOfGroup(compiledGroup)
-      if (s == -1) -1
-      else s + regionStart
-    }
+    private def startInternal(compiledGroup: Int): Int =
+      indices(compiledGroup).fold(-1)(_._1 + regionStart)
 
     def start(group: Int): Int = {
       if (group == 0) start()
@@ -359,11 +350,8 @@ object Matcher {
     def start(name: String): Int =
       startInternal(pattern.namedGroup(name))
 
-    private def endInternal(compiledGroup: Int): Int = {
-      val s = startOfGroup(compiledGroup)
-      if (s == -1) -1
-      else s + ensureLastMatch(compiledGroup).get.length + regionStart
-    }
+    private def endInternal(compiledGroup: Int): Int =
+      indices(compiledGroup).fold(-1)(_._2 + regionStart)
 
     def end(group: Int): Int =
       if (group == 0) end()
