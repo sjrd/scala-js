@@ -189,6 +189,23 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
       case classDef: ClassDef =>
         transformClassDef(classDef)
 
+      case ImportNamespace(binding, from) =>
+        val defaultBindingIdentifier = setNodePosition(new Node(Token.EMPTY), pos)
+        val nameSpaceImportIdentifier =
+          setNodePosition(Node.newString(Token.IMPORT_STAR, binding.name), binding.pos.orElse(pos))
+        val moduleSpecifier = transformExpr(from)
+        new Node(Token.IMPORT, defaultBindingIdentifier,
+            nameSpaceImportIdentifier, moduleSpecifier)
+
+      case Export(bindings) =>
+        val exportsSpecs = setNodePosition(new Node(Token.EXPORT_SPECS), pos)
+        for ((ident, exportName) <- bindings) {
+          val importedName = setNodePosition(Node.newString(Token.NAME, ident.name), ident.pos.orElse(pos))
+          val destination = setNodePosition(Node.newString(Token.NAME, exportName.name), exportName.pos.orElse(pos))
+          exportsSpecs.addChildToBack(new Node(Token.EXPORT_SPEC, importedName, destination))
+        }
+        new Node(Token.EXPORT, exportsSpecs)
+
       case _ =>
         // We just assume it is an expression
         new Node(Token.EXPR_RESULT, transformExpr(tree))

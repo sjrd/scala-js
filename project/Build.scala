@@ -1652,6 +1652,7 @@ object Build {
       exampleSettings,
       name := "Hello World - Scala.js example",
       moduleName := "helloworld",
+      scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule).withPrettyPrint(true) },
       scalaJSUseMainModuleInitializer := true
   ).withScalaJSCompiler.dependsOn(library)
 
