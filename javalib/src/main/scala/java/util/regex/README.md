@@ -5,6 +5,7 @@ In addition to Java having many more features, they also *differ* in the specifi
 
 For performance and code size reasons, we still want to use the native JavaScript `RegExp` class.
 Modern JavaScript engines JIT-compile `RegExp`s to native code, so it is impossible to compete with that using a user-space engine.
+For example, see [V8 talking about its Irrregexp library](https://blog.chromium.org/2009/02/irregexp-google-chromes-new-regexp.html) and [SpiderMonkey talking about their latest integration of Irregexp](https://hacks.mozilla.org/2020/06/a-new-regexp-engine-in-spidermonkey/).
 
 Therefore, our strategy for `java.util.regex` is to *compile* Java regexes down to JavaScript regexes that behave in the same way.
 The compiler is in the file `PatternCompiler.scala`, and is invoked at the time of `Pattern.compile()`.
@@ -75,31 +76,27 @@ If `Pattern.compile()` succeeds, the regex is guaranteed to behave exactly like 
 The behavior of JavaScript is more "functional", whereas that of the JVM is more "imperative".
 This imperative nature is also reflected in the `hitEnd()` and `requireEnd()` methods of `Matcher`, which we do not support (they don't link).
 
+The behavior of the JVM does not appear to specified, and is questionable.
+There are several open issues that argue it is buggy:
+
+* https://bugs.openjdk.java.net/browse/JDK-8027747
+* https://bugs.openjdk.java.net/browse/JDK-8187083
+* https://bugs.openjdk.java.net/browse/JDK-8187080
+* https://bugs.openjdk.java.net/browse/JDK-8187082
+
+Therefore, it seems wise to keep the JavaScript behavior, and not try to replicate the JVM behavior at great cost (if that is even possible within our constrains).
+
 ## Implementation strategy
 
-Java regexes are compiled to JS regexes in one pass, using a recursive descent approach in the companion class.
+Java regexes are compiled to JS regexes in one pass, using a recursive descent approach.
 There is a state variable `pIndex` which indicates the position inside the original `pattern`.
 Compilation methods parse a subexpression at `pIndex`, advance `pIndex` past what they parsed, and return the result of the compilation.
-Results are of three possible types:
-
-* `String` for a compiled JS regexp subexpression,
-* `Int` for a code point, or
-* `CompiledCharClass` for a pre-compiled character class that can be inserted as a subexpression or in a `[]` character class.
 
 Parsing is always done at the code point level, and not at the individual `Char` level.
 
-### State
-
-In addition to `pIndex`, the following state is maintained during compilation:
-
-* `originalGroupCount`: the number of capturing groups (named and unnamed) from the original pattern for which a group number has been allocated so far,
-* `compiledGroupCount`: the number of capturing groups of the eventual compiled pattern for which a group number has been allocated so far,
-* `groupNumberMap`: a mapping from original group number to the corresponding group numbers in the compiled pattern,
-* `namedGroups`, a mapping from original group name to the corresponding *original* group number.
-
-Usually, there is a 1-to-1 relationship between original group numbers and compiled groups numbers. However, differences are introduced when compiling atomic groups and possessive quantifiers.
-
-We never produce named groups in the compiled patterns, even in ES 2018+, so there is no map of compiled group names.
+We first describe the compilation with the assumption that the underlying `RegExp`s support the `u` flag.
+This is always true in ES 2015+, and dynamically determined at run-time in ES 5.1.
+We will cover later what happens when it is not supported.
 
 ### JS RegExp flags and case sensitivity
 
@@ -122,36 +119,37 @@ When it is true:
 `PatternCompiler` never uses any other JS RegExp flag.
 `Pattern` adds the 'g' flag for its general-purpose instance of `RegExp` (the one used for everything except `Matcher.matches()`), as well as the 'y' flag if the regex is sticky and it is supported.
 
-### Entry point
+### Capturing groups
 
-The entry point is `PatternCompiler#compile()`, which:
+Usually, there is a 1-to-1 relationship between original group numbers and compiled groups numbers.
+However, differences are introduced when compiling atomic groups and possessive quantifiers.
+Therefore, we maintain a mapping from original group numbers to the corresponding group numbers in the compiled pattern.
+We use for those purposes:
 
-1. Processes an embedded flag expression as the beginning of the pattern,
-2. Validates the flags,
-3. Processes an initial `\G` boundary matcher to record the pattern as sticky, and
-4. Calls the main compilation method `compileTopLevelOrInsideGroup(insideGroup = false)`.
+* when compiling back references of the form `\N`, and
+* when using the `Matcher` API to retrieve the groups' contents, start and end positions.
 
-The latter is recursive for `()`-enclosed groups, and flat for other subexpressions.
+Named capturing groups are always compiled as numbered capturing groups, even in ES 2018+.
+We record an additional map of names to the corresponding original group numbers, and use it
 
-We first describe the compilation with the assumption that the underlying `RegExp`s support the `u` flag.
-This is always true in ES 2015+, and dynamically determined at run-time in ES 5.1.
-We will cover later what happens when it is not supported.
+* when compiling named back references of the form `\k<name>` (as numbered back references), and
+* when using the `Matcher` API with group names.
 
-### Main "control structures"
+### Other main "control structures"
 
 The following constructs are translated as is:
 
 * Sequences and alternatives,
 * Greedy quantifiers of the form `X*`, `X+` and `X?`,
 * Lazy quantifiers of the form `X*?`, `X+?` and `X??`,
-* Nameless capturing groups `(X)`, after updating the group counts and group number map,
-* Non-capturing groups and look-ahead groups of the form `(?:X)`, `(?=X)` and `(?!X)`,
+* Non-capturing groups of the form `(?:X)`,
+* Look-ahead groups of the form `(?=X)` and `(?!X)`,
 * Look-behind groups of the form `(?<=X)` and `(?<!X)`, after validating that they are supported.
 
-Named capturing groups are compiled as nameless ones.
-The mapping from their name to their allocated group number is recorded in `namedGroups`.
+The following constructs have special handling and will be discussed later:
 
-Atomic groups and possessive quantifiers are handled specially and will be discussed later.
+* Atomic groups of the form `(?>X)`, and
+* Possessive quantifiers, for example of the form `X*+`.
 
 ### Single code points
 
@@ -264,14 +262,6 @@ The other predefined assertions are compiled as follows:
 ### Linebreak matcher
 
 `\R` is compiled to its definition wrapped in a non-capturing group, i.e., to `(?:\r\n|[\n\u000B\u000C\r\u0085\u2028\u2029])` (but where the escapes are preprocessed as single Chars, as usual).
-
-### Back references
-
-After parsing, back references are replaced with a numeric back reference that corresponds in the compiled pattern.
-This is done using the state in `groupNumberMap` and `namedGroups`.
-Since named groups are compiled away as unnamed ones, named back references are also compiled to numeric back references.
-
-The back references are wrapped in `(?:\1)`, in case they happen to be followed by an ASCII digit code point.
 
 ### Atomic groups
 
