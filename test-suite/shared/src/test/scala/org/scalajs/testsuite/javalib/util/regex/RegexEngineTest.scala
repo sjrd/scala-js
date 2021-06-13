@@ -356,7 +356,10 @@ class RegexEngineTest  {
     assertNotMatches(GClefHigh + EscapedGClefLow, GClef)
     assertNotMatches(GClefHigh + "\\" + GClefLow, GClef)
 
-    // But a bare escape in front of a surrogate pair considers it as a whole
+    // A surrogate "pair" with 'x' escapes does *not* create a pair
+    assertNotMatches("\\x{D834}\\x{DD1E}", GClef)
+
+    // A bare escape in front of a surrogate pair considers it as a whole
     assertMatches("\\" + GClef, GClef)
 
     // Octal escapes
@@ -1356,6 +1359,12 @@ class RegexEngineTest  {
     assertMatches(gClefHighOrSomeLows, "\uDD24")
     assertNotMatches(gClefHighOrSomeLows, "\uDD25")
 
+    // A surrogate "pair" with 'x' escapes does *not* create a pair
+    val gClefHighOrLow3 = compile("[\\x{D834}\\x{DD1E}]")
+    assertNotMatches(gClefHighOrLow3, GClef)
+    assertMatches(gClefHighOrLow3, GClefHigh)
+    assertMatches(gClefHighOrLow3, GClefLow)
+
     // Range of supplementary code points with the same high surrogate
     val clefs = compile("[" + GClef + "-\\x{1D124}]")
     assertMatches(clefs, GClef)
@@ -1896,7 +1905,7 @@ class RegexEngineTest  {
 
     assertSyntaxError("""(?<A>a?)\k<B>?""", "named capturing group <B> does not exit", 12)
 
-    assertSyntaxError("""(?<A>a?)(?<A>dupe)""", "named capturing group <A> is already defined", 13)
+    assertSyntaxError("""(?<A>a?)(?<A>dupe)""", "named capturing group <A> is already defined", 12)
   }
 
   @Test def recursiveCapturingGroups(): Unit = {

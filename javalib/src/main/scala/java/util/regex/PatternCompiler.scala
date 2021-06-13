@@ -19,10 +19,10 @@ import java.lang.Character.{
   isBmpCodePoint,
   highSurrogate,
   lowSurrogate,
-  MIN_HIGH_SURROGATE => MinHigh,
-  MAX_HIGH_SURROGATE => MaxHigh,
-  MIN_LOW_SURROGATE => MinLow,
-  MAX_LOW_SURROGATE => MaxLow
+  MIN_HIGH_SURROGATE,
+  MAX_HIGH_SURROGATE,
+  MIN_LOW_SURROGATE,
+  MAX_LOW_SURROGATE
 }
 
 import java.util.ScalaOps._
@@ -68,9 +68,9 @@ private[regex] object PatternCompiler {
     case _   => throw new IllegalArgumentException("bad in-pattern flag")
   }
 
-  private def featureTest(pattern: String, flags: String): Boolean = {
+  private def featureTest(flags: String): Boolean = {
     try {
-      new js.RegExp(pattern, flags)
+      new js.RegExp("", flags)
       true
     } catch {
       case _: js.JavaScriptException =>
@@ -80,21 +80,21 @@ private[regex] object PatternCompiler {
 
   /** Cache for `Support.supportsUnicode`. */
   private val _supportsUnicode =
-    (esVersion >= ESVersion.ES2015) || featureTest("", "u")
+    (esVersion >= ESVersion.ES2015) || featureTest("u")
 
   /** Cache for `Support.supportsSticky`. */
   private val _supportsSticky =
-    (esVersion >= ESVersion.ES2015) || featureTest("", "y")
+    (esVersion >= ESVersion.ES2015) || featureTest("y")
 
   /** Cache for `Support.supportsDotAll`. */
   private val _supportsDotAll =
-    (esVersion >= ESVersion.ES2018) || featureTest("", "us")
+    (esVersion >= ESVersion.ES2018) || featureTest("us")
 
   /** Feature-test methods.
    *
    *  They are located in a separate object so that the methods can be fully
-   *  inlined and dead-code-eliminated away, depending on the target ES
-   *  version.
+   *  inlined and optimized away, without leaving a `LoadModule` of the
+   *  enclosing object behind, depending on the target ES version.
    */
   private[regex] object Support {
     /** Tests whether the underlying JS RegExp supports the 'u' flag. */
@@ -133,28 +133,6 @@ private[regex] object PatternCompiler {
 
   import Support._
 
-  /** The flags for the JS RegExp when using case sensitive matching in JS.
-   *
-   *  We always use the 'u' and 's' flags when they are supported.
-   *
-   *  This is also used when performing non-Unicode case insensitive matching,
-   *  since in that case the compiler duplicates all the ASCII letters with
-   *  their cased opposite, not relying on the JavaScript case insensitive
-   *  matching.
-   */
-  private val jsFlagsForCaseSensitive = {
-    if (supportsDotAll) "us"
-    else if (supportsUnicode) "u"
-    else ""
-  }
-
-  /** The flags for the JS RegExp when using case insensitive matching in JS.
-   *
-   *  This is equivalent to `jsFlagsForCaseSensitive + "i"`.
-   */
-  private val jsFlagsForCaseInsensitive =
-    jsFlagsForCaseSensitive + "i"
-
   // Helpers to deal with surrogate pairs when the 'u' flag is not supported
 
   private def codePointNotAmong(characters: String): String = {
@@ -166,8 +144,10 @@ private[regex] object PatternCompiler {
       else
         "[\\d\\D]" // In theory, "[^]" works, but XRegExp does not trust JS engines on that, so we don't either
     } else {
-      val highCharOrSupplementaryChar = s"[$MinHigh-$MaxHigh](?:[$MinLow-$MaxLow]|(?![$MinLow-$MaxLow]))"
-      s"(?:[^$characters$MinHigh-$MaxHigh]|$highCharOrSupplementaryChar)"
+      val highCharRange = s"$MIN_HIGH_SURROGATE-$MAX_HIGH_SURROGATE"
+      val lowCharRange = s"$MIN_LOW_SURROGATE-$MAX_LOW_SURROGATE"
+      val highCPOrSupplementaryCP = s"[$highCharRange](?:[$lowCharRange]|(?![$lowCharRange]))"
+      s"(?:[^$characters$highCharRange]|$highCPOrSupplementaryCP)"
     }
   }
 
@@ -214,7 +194,7 @@ private[regex] object PatternCompiler {
       isLetter(c) || isDigit(c)
 
     @inline def isHexDigit(c: Char): Boolean =
-      (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')
+      isDigit(c) || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')
 
     @inline def parseInt(s: String, radix: Int): Int =
       js.Dynamic.global.parseInt(s, radix).asInstanceOf[Int]
@@ -251,9 +231,16 @@ private[regex] object PatternCompiler {
 
   // This object is entirely inlined and DCE'ed. Keep it that way.
   private object CompiledCharClass {
+    /** Represents `\p{data}`. */
     final val PosP = 0
+
+    /** Represents `\P{data}`. */
     final val NegP = 1
+
+    /** Represents `[data]`. */
     final val PosClass = 2
+
+    /** Represents `[^data]`. */
     final val NegClass = 3
 
     @inline def posP(name: String): CompiledCharClass =
@@ -320,7 +307,7 @@ private[regex] object PatternCompiler {
    *  already known to be supported by the underlying `js.RegExp` (ES 2018),
    *  and we assume that that implies that `js.Map` is supported (ES 2015).
    */
-  private lazy val predefinedCharacterClasses: js.Map[String, CompiledCharClass] = {
+  private lazy val predefinedPCharacterClasses: js.Map[String, CompiledCharClass] = {
     import CompiledCharClass._
 
     val result = new js.Map[String, CompiledCharClass]()
@@ -389,7 +376,6 @@ private[regex] object PatternCompiler {
 
     /* POSIX character classes with Unicode compatibility
      * (resolved from the original definitions, which are in comments)
-     * See also the excerpt from PropList.txt about White_Space below.
      */
 
     result("Lower") = posP("Lower") // \p{IsLowercase}
@@ -403,10 +389,32 @@ private[regex] object PatternCompiler {
     // [^\p{IsWhite_Space}\p{gc=Cc}\p{gc=Cs}\p{gc=Cn}]
     result("Graph") = negClass("\\p{White_Space}\\p{Cc}\\p{Cs}\\p{Cn}")
 
-    // [\p{Graph}\p{Blank}&&[^\p{Cntrl}]]
+    /* [\p{Graph}\p{Blank}&&[^\p{Cntrl}]]
+     *   === (by definition of Cntrl)
+     * [\p{Graph}\p{Blank}&&[^\p{Cc}]]
+     *   === (because Graph already excludes anything in the Cc category)
+     * [\p{Graph}[\p{Blank}&&[^\p{Cc}]]]
+     *   === (by the resolved definition of Blank below)
+     * [\p{Graph}[\t\p{Zs}&&[^\p{Cc}]]]
+     *   === (by the fact that \t is a Cc, and general categories are disjoint)
+     * [\p{Graph}\p{Zs}]
+     *   === (by definition of Graph)
+     * [[^\p{IsWhite_Space}\p{Cc}\p{Cs}\p{Cn}]\p{Zs}]
+     *   === (see the excerpt from PropList.txt below)
+     * [[^\x09-\x0d\x85\p{Zs}\p{Zl}\p{Zp}\p{Cc}\p{Cs}\p{Cn}]\p{Zs}]
+     *   === (canceling \p{Zs})
+     * [^\x09-\x0d\x85\p{Zl}\p{Zp}\p{Cc}\p{Cs}\p{Cn}]
+     *   === (because \x09-\x0d and \x85 are all in the Cc category)
+     * [^\p{Zl}\p{Zp}\p{Cc}\p{Cs}\p{Cn}]
+     */
     result("Print") = negClass("\\p{Zl}\\p{Zp}\\p{Cc}\\p{Cs}\\p{Cn}")
 
-    // [\p{IsWhite_Space}&&[^\p{gc=Zl}\p{gc=Zp}\x0a\x0b\x0c\x0d\x85]]
+    /* [\p{IsWhite_Space}&&[^\p{gc=Zl}\p{gc=Zp}\x0a\x0b\x0c\x0d\x85]]
+     *   === (see the excerpt from PropList.txt below)
+     * [[\x09-\x0d\x85\p{gc=Zs}\p{gc=Zl}\p{gc=Zp}]&&[^\p{gc=Zl}\p{gc=Zp}\x0a\x0b\x0c\x0d\x85]]
+     *   === (by simplification)
+     * [\x09\p{gc=Zs}]
+     */
     result("Blank") = posClass("\t\\p{Zs}")
 
     result("Cntrl") = posP("Cc") // \p{gc=Cc}
@@ -432,6 +440,14 @@ private[regex] object PatternCompiler {
    *
    * Note that *all* the code points with general category Zs, Zl or Zp are
    * listed here. In addition, we have 0009-000D and 0085 from the Cc category.
+   * Therefore, the following equivalence holds:
+   *
+   *   \p{IsWhite_Space} === [\x09-\x0d\x85\p{gc=Zs}\p{gc=Zl}\p{gc=Zp}]
+   *
+   * That equivalence is known to be true as of Unicode 13.0.0, and seems to
+   * have been true for a number of past versions as well. We rely on it to
+   * define \p{Print} and \p{Blank} above. Those would become buggy if a future
+   * version of Unicode invalidates that assumption.
    */
 
   private val scriptCanonicalizeRegExp = new js.RegExp("(?:^|_)[a-z]", "g")
@@ -460,9 +476,13 @@ private[regex] object PatternCompiler {
     def isEmpty: Boolean = start > end
     def nonEmpty: Boolean = start <= end
 
-    def intersects(that: CodePointRange): Boolean =
-      this.end >= that.start && this.start <= that.end
-
+    /** Computes the intersection of two *non-empty* ranges.
+     *
+     *  This method makes no guarantee about its result if either or both input
+     *  ranges are empty.
+     *
+     *  The result range may be empty.
+     */
     def intersect(that: CodePointRange): CodePointRange =
       CodePointRange(Math.max(this.start, that.start), Math.min(this.end, that.end))
 
@@ -492,18 +512,31 @@ private[regex] object PatternCompiler {
       CodePointRange(Character.MIN_SUPPLEMENTARY_CODE_POINT, Character.MAX_CODE_POINT)
   }
 
-  private final class CharacterClassState(asciiCaseInsensitive: Boolean) {
-    var thisConjunct = ""
-    var thisSegment = ""
+  private final class CharacterClassBuilder(asciiCaseInsensitive: Boolean, isNegated: Boolean) {
+    private var conjunction = ""
+    private var thisConjunct = ""
+    private var thisSegment = ""
 
-    def addAlternative(alt: String): Unit = {
+    def finish(): String = {
+      val conjunct = conjunctResult()
+      if (conjunction == "") conjunct else s"(?:$conjunction$conjunct)"
+    }
+
+    def finishConjunct(): Unit = {
+      val conjunct = conjunctResult()
+      conjunction += (if (isNegated) conjunct + "|" else s"(?=$conjunct)")
+      thisConjunct = ""
+      thisSegment = ""
+    }
+
+    private def addAlternative(alt: String): Unit = {
       if (thisConjunct == "")
         thisConjunct = alt
       else
         thisConjunct += "|" + alt
     }
 
-    def finishConjunct(isNegated: Boolean): String = {
+    private def conjunctResult(): String = {
       if (isNegated) {
         val negThisSegment = codePointNotAmong(thisSegment)
         if (thisConjunct == "")
@@ -523,12 +556,37 @@ private[regex] object PatternCompiler {
       }
     }
 
-    def literalCodePoint(codePoint: Int): String = {
+    private def literalCodePoint(codePoint: Int): String = {
       val s = codePointToString(codePoint)
       if (codePoint == ']' || codePoint == '\\' || codePoint == '-' || codePoint == '^')
         "\\" + s
       else
         s
+    }
+
+    def addCharacterClass(cls: String): Unit =
+      addAlternative(cls)
+
+    def addCharacterClass(cls: CompiledCharClass): Unit = {
+      cls.kind match {
+        case CompiledCharClass.PosP =>
+          thisSegment += "\\p{" + cls.data + "}"
+        case CompiledCharClass.NegP =>
+          thisSegment += "\\P{" + cls.data + "}"
+        case CompiledCharClass.PosClass =>
+          thisSegment += cls.data
+        case CompiledCharClass.NegClass =>
+          addAlternative(codePointNotAmong(cls.data))
+      }
+    }
+
+    def addCodePointsInString(str: String, start: Int, end: Int): Unit = {
+      var i = start
+      while (i != end) {
+        val codePoint = str.codePointAt(i)
+        addSingleCodePoint(codePoint)
+        i += charCount(codePoint)
+      }
     }
 
     def addSingleCodePoint(codePoint: Int): Unit = {
@@ -544,7 +602,7 @@ private[regex] object PatternCompiler {
       } else {
         if (isBmpCodePoint(codePoint)) {
           // It is a high surrogate
-          addAlternative(s"(?:$s(?![$MinLow-$MaxLow]))")
+          addAlternative(s"(?:$s(?![$MIN_LOW_SURROGATE-$MAX_LOW_SURROGATE]))")
         } else {
           // It is a supplementary code point
           addAlternative(s)
@@ -565,7 +623,7 @@ private[regex] object PatternCompiler {
 
       val range = CodePointRange(startCodePoint, endCodePoint)
 
-      if (supportsUnicode || range.end < MinHigh) {
+      if (supportsUnicode || range.end < MIN_HIGH_SURROGATE) {
         val s = literalRange(range)
 
         if (isLowSurrogateCP(range.start)) {
@@ -595,7 +653,7 @@ private[regex] object PatternCompiler {
 
         val highSurrogates = range.intersect(CodePointRange.HighSurrogates)
         if (highSurrogates.nonEmpty)
-          addAlternative("[" + literalRange(highSurrogates) + "]" + s"(?![$MinLow-$MaxLow])")
+          addAlternative("[" + literalRange(highSurrogates) + "]" + s"(?![$MIN_LOW_SURROGATE-$MAX_LOW_SURROGATE])")
 
         val bmpAboveHighSurrogates = range.intersect(CodePointRange.BmpAboveHighSurrogates)
         if (bmpAboveHighSurrogates.nonEmpty)
@@ -614,14 +672,14 @@ private[regex] object PatternCompiler {
                 codePointToString(startHigh) + "[" + literalRange(CodePointRange(startLow, endLow)) + "]")
           } else {
             addAlternative(
-                codePointToString(startHigh) + "[" + literalRange(CodePointRange(startLow, MaxLow)) + "]")
+                codePointToString(startHigh) + "[" + literalRange(CodePointRange(startLow, MAX_LOW_SURROGATE)) + "]")
 
             val middleHighs = CodePointRange(startHigh + 1, endHigh - 1)
             if (middleHighs.nonEmpty)
-              addAlternative(s"[${literalRange(middleHighs)}][$MinLow-$MaxLow]")
+              addAlternative(s"[${literalRange(middleHighs)}][$MIN_LOW_SURROGATE-$MAX_LOW_SURROGATE]")
 
             addAlternative(
-                codePointToString(endHigh) + "[" + literalRange(CodePointRange(MinLow, endLow)) + "]")
+                codePointToString(endHigh) + "[" + literalRange(CodePointRange(MIN_LOW_SURROGATE, endLow)) + "]")
           }
         }
       }
@@ -664,7 +722,11 @@ private final class PatternCompiler(private val pattern: String, private var fla
   /** Map from original group number to compiled group number. */
   private val groupNumberMap = js.Array[Int](0)
 
-  /** A map from group names to group indices. */
+  /** Map from group name to original group number.
+   *
+   *  We store *original* group numbers, rather than compiled group numbers,
+   *  in order to make the renumbering caused by possessive quantifiers easier.
+   */
   private val namedGroups = js.Dictionary.empty[Int]
 
   @inline private def hasFlag(flag: Int): Boolean = (flags & flag) != 0
@@ -736,9 +798,18 @@ private final class PatternCompiler(private val pattern: String, private var fla
       compileTopLevel()
     }
 
-    val jsFlags =
-      if (unicodeCaseInsensitive) jsFlagsForCaseInsensitive
-      else jsFlagsForCaseSensitive
+    val jsFlags = {
+      // We always use the 'u' and 's' flags when they are supported.
+      val baseJSFlags = {
+        if (supportsDotAll) "us"
+        else if (supportsUnicode) "u"
+        else ""
+      }
+
+      // We add the 'i' flag when using Unicode-aware case insensitive matching.
+      if (unicodeCaseInsensitive) baseJSFlags + "i"
+      else baseJSFlags
+    }
 
     new Pattern(pattern, flags, jsPattern, jsFlags, sticky, originalGroupCount,
         groupNumberMap, namedGroups)
@@ -746,12 +817,6 @@ private final class PatternCompiler(private val pattern: String, private var fla
 
   private def parseError(desc: String): Nothing =
     throw new PatternSyntaxException(desc, pattern, pIndex)
-
-  @inline
-  private def requireES2015Features(purpose: String): Unit = {
-    if (!enableUnicodeCaseInsensitive)
-      parseErrorRequireESVersion(purpose, "2015")
-  }
 
   @inline
   private def requireES2018Features(purpose: String): Unit = {
@@ -784,6 +849,13 @@ private final class PatternCompiler(private val pattern: String, private var fla
         for (i <- 0 until chars.length())
           flags &= ~charToFlag(chars.charAt(i))
       }
+
+      /* The way things are done here, it is possible to *remove*
+       * `UNICODE_CASE` from the set of flags while leaving
+       * `UNICODE_CHARACTER_CLASS` in. This creates a somewhat inconsistent
+       * state, but it matches what the JVM does, as illustrated in the test
+       * `RegexPatternTest.flags()`.
+       */
 
       // Advance past the embedded flags
       pIndex += m(0).get.length()
@@ -839,7 +911,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
           s
       } else {
         if (isHighSurrogateCP(cp))
-          s"(?:$s(?![$MinLow-$MaxLow]))"
+          s"(?:$s(?![$MIN_LOW_SURROGATE-$MAX_LOW_SURROGATE]))"
         else if (isBmpCodePoint(cp))
           s
         else
@@ -856,15 +928,22 @@ private final class PatternCompiler(private val pattern: String, private var fla
   private def compileInsideGroup(): String =
     compileTopLevelOrInsideGroup(insideGroup = true)
 
+  /** The main parsing method.
+   *
+   *  It follows a recursive descent approach. It is recursive for any
+   *  `(...)`-enclosed subpattern, and flat for other kinds of patterns.
+   */
   private def compileTopLevelOrInsideGroup(insideGroup: Boolean): String = {
     // scalastyle:off return
-
-    var result = ""
+    // the 'return' is in the case ')'
 
     val pattern = this.pattern // local copy
     val len = pattern.length()
 
+    var result = ""
+
     while (pIndex != len) {
+      // Record the current compiledGroupCount, for possessive quantifiers
       val compiledGroupCountBeforeThisToken = compiledGroupCount
 
       // Set to false when parsing a token that cannot be repeated
@@ -872,6 +951,12 @@ private final class PatternCompiler(private val pattern: String, private var fla
 
       val dispatchCP = pattern.codePointAt(pIndex)
       val compiledToken: String = (dispatchCP: @switch) match {
+        case ')' =>
+          if (!insideGroup)
+            parseError("Unmatched closing ')'")
+          pIndex += 1
+          return result
+
         case '\\' =>
           compileEscape()
 
@@ -884,12 +969,6 @@ private final class PatternCompiler(private val pattern: String, private var fla
         case '(' =>
           compileGroup()
 
-        case ')' =>
-          if (!insideGroup)
-            parseError("Unmatched closing ')'")
-          pIndex += 1
-          return result
-
         case '|' =>
           if (sticky && !insideGroup)
             parseError("\\G is not supported when there is an alternative at the top level")
@@ -900,6 +979,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
         case '^' =>
           pIndex += 1
           if (multiline) {
+            // multiline implies ES2018, so we can use look-behind assertions
             if (unixLines)
               "(?<=^|\n)"
             else
@@ -911,6 +991,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
         case '$' =>
           pIndex += 1
           if (multiline) {
+            // multiline implies ES2018, so we can use look-behind assertions
             if (unixLines)
               "(?=$|\n)"
             else
@@ -929,125 +1010,29 @@ private final class PatternCompiler(private val pattern: String, private var fla
           codePointNotAmong(rejected)
 
         // experimentally, this is the set of chars considered as whitespace for comments
-        case ' ' | '\t' | '\n' | '\u000B' | '\f' | '\r' =>
+        case ' ' | '\t' | '\n' | '\u000B' | '\f' | '\r' if comments =>
           pIndex += 1
-          if (comments) {
-            repeaterAllowed = false
-            ""
-          } else {
-            codePointToString(dispatchCP)
-          }
+          repeaterAllowed = false
+          ""
 
-        case '#' =>
-          if (comments) {
-            // ignore until the end of a line
-            @inline def isEOL(c: Char): Boolean =
-              c == '\r' || c == '\n' || c == '\u0085' || c == '\u2028' || c == '\u2029'
-            while (pIndex != len && !isEOL(pattern.charAt(pIndex)))
-              pIndex += 1
-            repeaterAllowed = false
-            ""
-          } else {
+        case '#' if comments =>
+          // ignore until the end of a line
+          @inline def isEOL(c: Char): Boolean =
+            c == '\r' || c == '\n' || c == '\u0085' || c == '\u2028' || c == '\u2029'
+          while (pIndex != len && !isEOL(pattern.charAt(pIndex)))
             pIndex += 1
-            "#"
-          }
+          repeaterAllowed = false
+          ""
 
         case _ =>
           pIndex += charCount(dispatchCP)
           literal(dispatchCP)
       }
 
-      val startOfRepeater = pIndex
-      val repeaterDispatchChar =
-        if (!repeaterAllowed || startOfRepeater == len) '.'
-        else pattern.charAt(startOfRepeater)
-
-      @inline def hasRepeater: Boolean = {
-        repeaterDispatchChar == '?' || repeaterDispatchChar == '*' ||
-        repeaterDispatchChar == '+' || repeaterDispatchChar == '{'
-      }
-
-      val compiledTokenAndRepeater: String = if (hasRepeater) {
-        // There is a repeater
-        pIndex += 1
-
-        if (repeaterDispatchChar == '{') {
-          if (pIndex == len || !isDigit(pattern.charAt(pIndex)))
-            parseError("Illegal repetition")
-          while (pIndex != len && isDigit(pattern.charAt(pIndex)))
-            pIndex += 1
-          if (pIndex == len)
-            parseError("Illegal repetition")
-          if (pattern.charAt(pIndex) == ',') {
-            pIndex += 1
-            while (pIndex != len && isDigit(pattern.charAt(pIndex)))
-              pIndex += 1
-          }
-          if (pIndex == len || pattern.charAt(pIndex) != '}')
-            parseError("Illegal repetition")
-          pIndex += 1
-        }
-
-        if (pIndex != len) {
-          pattern.charAt(pIndex) match {
-            case '+' =>
-              /* Possessive quantifier (sugar for an atomic group over a greedy quantifier)
-               * This is very intricate. Not only do we need to surround a posteriori the
-               * previous token, we are introducing a new capturing group in between.
-               * This means that we need to renumber all backreferences contained in the
-               * compiled token.
-               */
-
-              // Remap group numbers
-              for (i <- 0 until groupNumberMap.length) {
-                val mapped = groupNumberMap(i)
-                if (mapped > compiledGroupCountBeforeThisToken)
-                  groupNumberMap(i) = mapped + 1
-              }
-
-              // Renumber all backreferences contained in the compiled token
-              import js.JSStringOps._
-              val amendedToken = compiledToken.jsReplace(renumberingRegExp, {
-                (str, backslashes, groupString) =>
-                  if (backslashes.length() % 2 == 0) {
-                    str
-                  } else {
-                    val groupNumber = parseInt(groupString, 10)
-                    if (groupNumber > compiledGroupCountBeforeThisToken)
-                      backslashes + (groupNumber + 1)
-                    else
-                      str
-                  }
-              }: js.Function3[String, String, String, String])
-
-              // Plan the future remapping
-              compiledGroupCount += 1
-
-              val greedyRepeater = pattern.substring(startOfRepeater, pIndex)
-              pIndex += 1
-
-              val myGroupNumber = compiledGroupCountBeforeThisToken + 1
-              s"(?:(?=($amendedToken$greedyRepeater))\\$myGroupNumber)"
-
-            case '?' =>
-              // Lazy quantifier
-              pIndex += 1
-              compiledToken + pattern.substring(startOfRepeater, pIndex)
-
-            case _ =>
-              // Greedy quantifier
-              compiledToken + pattern.substring(startOfRepeater, pIndex)
-          }
-        } else {
-          // Greedy quantifier
-          compiledToken + pattern.substring(startOfRepeater, pIndex)
-        }
-      } else {
-        // No repeater
-        compiledToken
-      }
-
-      result += compiledTokenAndRepeater
+      if (repeaterAllowed)
+        result += compileRepeater(compiledGroupCountBeforeThisToken, compiledToken)
+      else
+        result += compiledToken
     }
 
     if (insideGroup)
@@ -1055,6 +1040,118 @@ private final class PatternCompiler(private val pattern: String, private var fla
 
     result
     // scalastyle:on return
+  }
+
+  private def compileRepeater(compiledGroupCountBeforeThisToken: Int, compiledToken: String): String = {
+    val pattern = this.pattern // local copy
+    val len = pattern.length()
+
+    val startOfRepeater = pIndex
+    val repeaterDispatchChar =
+      if (startOfRepeater == len) '.'
+      else pattern.charAt(startOfRepeater)
+
+    @inline def hasRepeater: Boolean = {
+      repeaterDispatchChar == '?' || repeaterDispatchChar == '*' ||
+      repeaterDispatchChar == '+' || repeaterDispatchChar == '{'
+    }
+
+    if (hasRepeater) {
+      // There is a repeater
+      val baseRepeater = parseBaseRepeater(repeaterDispatchChar)
+
+      if (pIndex != len) {
+        pattern.charAt(pIndex) match {
+          case '+' =>
+            // Possessive quantifier
+            pIndex += 1
+            buildPossessiveQuantifier(compiledGroupCountBeforeThisToken, compiledToken, baseRepeater)
+          case '?' =>
+            // Lazy quantifier
+            pIndex += 1
+            compiledToken + baseRepeater + "?"
+          case _ =>
+            // Greedy quantifier
+            compiledToken + baseRepeater
+        }
+      } else {
+        // Greedy quantifier
+        compiledToken + baseRepeater
+      }
+    } else {
+      // No repeater
+      compiledToken
+    }
+  }
+
+  private def parseBaseRepeater(repeaterDispatchChar: Char): String = {
+    val pattern = this.pattern // local copy
+    val startOfRepeater = pIndex
+
+    pIndex += 1
+
+    if (repeaterDispatchChar == '{') {
+      val len = pattern.length()
+
+      if (pIndex == len || !isDigit(pattern.charAt(pIndex)))
+        parseError("Illegal repetition")
+      while (pIndex != len && isDigit(pattern.charAt(pIndex)))
+        pIndex += 1
+      if (pIndex == len)
+        parseError("Illegal repetition")
+      if (pattern.charAt(pIndex) == ',') {
+        pIndex += 1
+        while (pIndex != len && isDigit(pattern.charAt(pIndex)))
+          pIndex += 1
+      }
+      if (pIndex == len || pattern.charAt(pIndex) != '}')
+        parseError("Illegal repetition")
+      pIndex += 1
+    }
+
+    pattern.substring(startOfRepeater, pIndex)
+  }
+
+  /** Builds a possessive quantifier, which is sugar for an atomic group over
+   *  a greedy quantifier.
+   */
+  private def buildPossessiveQuantifier(compiledGroupCountBeforeThisToken: Int,
+      compiledToken: String, baseRepeater: String): String = {
+
+    /* This is very intricate. Not only do we need to surround a posteriori the
+     * previous token, we are introducing a new capturing group in between.
+     * This means that we need to renumber all backreferences contained in the
+     * compiled token.
+     */
+
+    // Remap group numbers
+    for (i <- 0 until groupNumberMap.length) {
+      val mapped = groupNumberMap(i)
+      if (mapped > compiledGroupCountBeforeThisToken)
+        groupNumberMap(i) = mapped + 1
+    }
+
+    // Renumber all backreferences contained in the compiled token
+    import js.JSStringOps._
+    val amendedToken = compiledToken.jsReplace(renumberingRegExp, {
+      (str, backslashes, groupString) =>
+        if (backslashes.length() % 2 == 0) { // poor man's negative look-behind
+          str
+        } else {
+          val groupNumber = parseInt(groupString, 10)
+          if (groupNumber > compiledGroupCountBeforeThisToken)
+            backslashes + (groupNumber + 1)
+          else
+            str
+        }
+    }: js.Function3[String, String, String, String])
+
+    // Plan the future remapping
+    compiledGroupCount += 1
+
+    // Finally, then encoding of the atomic group over the greedy quantifier
+    val myGroupNumber = compiledGroupCountBeforeThisToken + 1
+    s"(?:(?=($amendedToken$baseRepeater))\\$myGroupNumber)"
   }
 
   private def compileEscape(): String = {
@@ -1170,12 +1267,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
         if (pIndex == len || pattern.charAt(pIndex) != '<')
           parseError("\\k is not followed by '<' for named capturing group")
         pIndex += 1
-        val start = pIndex
-        while (pIndex != len && isLetterOrDigit(pattern.charAt(pIndex)))
-          pIndex += 1
-        if (pIndex == len || pattern.charAt(pIndex) != '>')
-          parseError("named capturing group is missing trailing '>'")
-        val groupName = pattern.substring(start, pIndex)
+        val groupName = parseGroupName()
         val groupNumber = namedGroups.getOrElse(groupName, {
           parseError(s"named capturing group <$groupName> does not exit")
         })
@@ -1396,7 +1488,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
         parsePCharacterClass()
     }
 
-    if (dispatchChar >= 'a')
+    if (dispatchChar >= 'a') // cheap isLower
       positive
     else
       positive.negated
@@ -1404,8 +1496,6 @@ private final class PatternCompiler(private val pattern: String, private var fla
 
   /** Parses and returns a translated version of a `\p` character class. */
   private def parsePCharacterClass(): CompiledCharClass = {
-    import CompiledCharClass._
-
     val pattern = this.pattern // local copy
     val len = pattern.length()
 
@@ -1432,7 +1522,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
       // For anything else, we need built-in support for \p
       requireES2018Features("Unicode character family")
 
-      predefinedCharacterClasses.getOrElse(property, {
+      predefinedPCharacterClasses.getOrElse(property, {
         val scriptPrefixLen = if (property.startsWith("Is")) {
           2
         } else if (property.startsWith("sc=")) {
@@ -1445,7 +1535,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
           // Error
           parseError(s"Unknown Unicode character class '$property'")
         }
-        posP("sc=" + canonicalizeScriptName(property.substring(scriptPrefixLen)))
+        CompiledCharClass.posP("sc=" + canonicalizeScriptName(property.substring(scriptPrefixLen)))
       })
     }
 
@@ -1456,15 +1546,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
 
   private def compileCharacterClass(): String = {
     // scalastyle:off return
-
-    val impossiblePattern = "[^\\d\\D]"
-
-    // State that crosses functions
-    val state = new CharacterClassState(asciiCaseInsensitive)
-    import state._
-
-    // State that is only used in this function
-    var conjunction = ""
+    // the 'return' is in the case ']'
 
     val pattern = PatternCompiler.this.pattern // local copy
     val len = pattern.length()
@@ -1478,76 +1560,10 @@ private final class PatternCompiler(private val pattern: String, private var fla
     if (isNegated)
       pIndex += 1
 
+    val builder = new CharacterClassBuilder(asciiCaseInsensitive, isNegated)
+
     while (pIndex != len) {
-      val dispatchCP = pattern.codePointAt(pIndex)
-
-      // startCodePoint will be -1 if it was a control sequence or a predefined character class
-      val startCodePoint: Int = (dispatchCP: @switch) match {
-        case ']' =>
-          pIndex += 1
-          val conjunct = finishConjunct(isNegated)
-          return (if (conjunction == "") conjunct else s"(?:$conjunction$conjunct)")
-
-        case '&' =>
-          pIndex += 1
-          if (pIndex != len && pattern.charAt(pIndex) == '&') {
-            pIndex += 1
-            val conjunct = finishConjunct(isNegated)
-            conjunction += (if (isNegated) conjunct + "|" else s"(?=$conjunct)")
-            thisConjunct = ""
-            thisSegment = ""
-            -1
-          } else {
-            '&'
-          }
-
-        case '[' =>
-          addAlternative(compileCharacterClass())
-          -1
-
-        case '\\' =>
-          pIndex += 1
-          if (pIndex == len)
-            parseError("Illegal escape sequence")
-          val c2 = pattern.charAt(pIndex)
-          (c2: @switch) match {
-            case 'd' | 'D' | 'h' | 'H' | 's' | 'S' | 'v' | 'V' | 'w' | 'W' | 'p' | 'P' =>
-              val cls = parsePredefinedCharacterClass(c2)
-              cls.kind match {
-                case CompiledCharClass.PosP =>
-                  thisSegment += "\\p{" + cls.data + "}"
-                case CompiledCharClass.NegP =>
-                  thisSegment += "\\P{" + cls.data + "}"
-                case CompiledCharClass.PosClass =>
-                  thisSegment += cls.data
-                case CompiledCharClass.NegClass =>
-                  addAlternative(codePointNotAmong(cls.data))
-              }
-              -1
-
-            case 'Q' =>
-              pIndex += 1
-              val end = pattern.indexOf("\\E", pIndex)
-              if (end < 0)
-                parseError("Unclosed character class")
-              while (pIndex != end) {
-                val codePoint = pattern.codePointAt(pIndex)
-                addSingleCodePoint(codePoint)
-                pIndex += charCount(codePoint)
-              }
-              pIndex += 2 // for the \E
-              -1
-
-            case _ =>
-              parseSingleCodePointEscape()
-          }
-
-        case _ =>
-          pIndex += charCount(dispatchCP)
-          dispatchCP
-      }
-
-      if (startCodePoint != -1) {
+      def processRangeOrSingleCodePoint(startCodePoint: Int): Unit = {
         @inline def canBeRangeEnd(c: Char): Boolean = c != '[' && c != ']'
 
         if (pIndex + 2 <= len && pattern.charAt(pIndex) == '-' &&
@@ -1560,20 +1576,61 @@ private final class PatternCompiler(private val pattern: String, private var fla
 
           val cpEnd = pattern.codePointAt(pIndex)
           pIndex += charCount(cpEnd)
-          val endCodePoint = if (cpEnd == '\\') {
-            parseSingleCodePointEscape()
-          } else {
-            cpEnd
-          }
+          val endCodePoint =
+            if (cpEnd == '\\') parseSingleCodePointEscape()
+            else cpEnd
 
           if (endCodePoint < startCodePoint)
             parseError("Illegal character range")
 
-          addCodePointRange(startCodePoint, endCodePoint)
+          builder.addCodePointRange(startCodePoint, endCodePoint)
         } else {
           // Single code point
-          addSingleCodePoint(startCodePoint)
+          builder.addSingleCodePoint(startCodePoint)
         }
+      }
+
+      (pattern.codePointAt(pIndex): @switch) match {
+        case ']' =>
+          pIndex += 1
+          return builder.finish()
+
+        case '&' =>
+          pIndex += 1
+          if (pIndex != len && pattern.charAt(pIndex) == '&') {
+            pIndex += 1
+            builder.finishConjunct()
+          } else {
+            processRangeOrSingleCodePoint('&')
+          }
+
+        case '[' =>
+          builder.addCharacterClass(compileCharacterClass())
+
+        case '\\' =>
+          pIndex += 1
+          if (pIndex == len)
+            parseError("Illegal escape sequence")
+          val c2 = pattern.charAt(pIndex)
+          (c2: @switch) match {
+            case 'd' | 'D' | 'h' | 'H' | 's' | 'S' | 'v' | 'V' | 'w' | 'W' | 'p' | 'P' =>
+              builder.addCharacterClass(parsePredefinedCharacterClass(c2))
+
+            case 'Q' =>
+              pIndex += 1
+              val end = pattern.indexOf("\\E", pIndex)
+              if (end < 0)
+                parseError("Unclosed character class")
+              builder.addCodePointsInString(pattern, pIndex, end)
+              pIndex = end + 2 // for the \E
+
+            case _ =>
+              processRangeOrSingleCodePoint(parseSingleCodePointEscape())
+          }
+
+        case codePoint =>
+          pIndex += charCount(codePoint)
+          processRangeOrSingleCodePoint(codePoint)
       }
     }
 
@@ -1588,6 +1645,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
     val start = pIndex
 
     if (start + 1 == len || pattern.charAt(start + 1) != '?') {
+      // Numbered capturing group
       pIndex = start + 1
       originalGroupCount += 1
       compiledGroupCount += 1
@@ -1600,6 +1658,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
       val c1 = pattern.charAt(start + 2)
 
       if (c1 == ':' || c1 == '=' || c1 == '!') {
+        // Non-capturing group or look-ahead
         pIndex = start + 3
         pattern.substring(start, start + 3) + compileInsideGroup() + ")"
       } else if (c1 == '<') {
@@ -1609,25 +1668,22 @@ private final class PatternCompiler(private val pattern: String, private var fla
         val c2 = pattern.charAt(start + 3)
 
         if (isLetter(c2)) {
-          val nameStart = start + 3
-          var nameEnd = nameStart + 1
-          while (nameEnd != len && isLetterOrDigit(pattern.charAt(nameEnd)))
-            nameEnd += 1
-          if (nameEnd == len || pattern.charAt(nameEnd) != '>')
-            parseError("named capturing group is missing trailing '>'")
-          val name = pattern.substring(nameStart, nameEnd)
-          pIndex = nameEnd + 1
+          // Named capturing group
+          pIndex = start + 3
+          val name = parseGroupName()
           originalGroupCount += 1
           compiledGroupCount += 1
           groupNumberMap.push(compiledGroupCount)
           if (namedGroups.contains(name))
             parseError(s"named capturing group <$name> is already defined")
           namedGroups(name) = originalGroupCount
+          pIndex += 1
           "(" + compileInsideGroup() + ")"
         } else {
-          requireES2018Features("Look-behind group")
+          // Look-behind group
           if (c2 != '=' && c2 != '!')
             parseError("Unknown look-behind group")
+          requireES2018Features("Look-behind group")
           pIndex = start + 4
           pattern.substring(start, start + 4) + compileInsideGroup() + ")"
         }
@@ -1636,10 +1692,27 @@ private final class PatternCompiler(private val pattern: String, private var fla
         pIndex = start + 3
         compiledGroupCount += 1
         val groupNumber = compiledGroupCount
-        "(?:(?=(" + compileInsideGroup() + s"))\\$groupNumber)"
+        s"(?:(?=(${compileInsideGroup()}))\\$groupNumber)"
       } else {
         parseError("Embedded flag expression in the middle of a pattern is not supported")
       }
     }
+  }
+
+  /** Parses a group name.
+   *
+   *  Pre: `pIndex` should point right after the opening '<'.
+   *
+   *  Post: `pIndex` points right before the closing '>' (it is guaranteed to be a '>').
+   */
+  private def parseGroupName(): String = {
+    val pattern = this.pattern // local copy
+    val len = pattern.length()
+    val start = pIndex
+    while (pIndex != len && isLetterOrDigit(pattern.charAt(pIndex)))
+      pIndex += 1
+    if (pIndex == len || pattern.charAt(pIndex) != '>')
+      parseError("named capturing group is missing trailing '>'")
+    pattern.substring(start, pIndex)
   }
 }
