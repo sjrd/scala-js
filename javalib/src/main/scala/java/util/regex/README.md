@@ -5,7 +5,7 @@ In addition to Java having many more features, they also *differ* in the specifi
 
 For performance and code size reasons, we still want to use the native JavaScript `RegExp` class.
 Modern JavaScript engines JIT-compile `RegExp`s to native code, so it is impossible to compete with that using a user-space engine.
-For example, see [V8 talking about its Irrregexp library](https://blog.chromium.org/2009/02/irregexp-google-chromes-new-regexp.html) and [SpiderMonkey talking about their latest integration of Irregexp](https://hacks.mozilla.org/2020/06/a-new-regexp-engine-in-spidermonkey/).
+For example, see [V8 talking about its Irregexp library](https://blog.chromium.org/2009/02/irregexp-google-chromes-new-regexp.html) and [SpiderMonkey talking about their latest integration of Irregexp](https://hacks.mozilla.org/2020/06/a-new-regexp-engine-in-spidermonkey/).
 
 Therefore, our strategy for `java.util.regex` is to *compile* Java regexes down to JavaScript regexes that behave in the same way.
 The compiler is in the file `PatternCompiler.scala`, and is invoked at the time of `Pattern.compile()`.
@@ -153,39 +153,17 @@ The following constructs have special handling and will be discussed later:
 
 ### Single code points
 
-The following subexpressions represent a single, fixed code point:
+Subexpressions that represent a single code point are parsed and normalized as the code point that they represent.
+For example, both `a` and `\x65` are compiled as `a`.
+Code points that are metacharacters in JS regexes (i.e., `^ $ \ . * + ? ( ) [ ] { } |`) are escaped with a `\`, for example `\$`.
+This is implemented as `def literal(cp: Int)`.
 
-* Any code point except `\ ( ) [ { . ^ $ |` (note that this includes `]` and `}`)
-* `\0n`, `\0nn` and `\0mnn`: octal escape
-* `\xhh` and `\x{h...h}`: hexadecimal escape
-* `\uhhhh\uhhhh` where the first escape represents a high surrogate and the second one represents a low surrogate: treated as a single escape for a single supplementary code point
-* `\uhhhh` in other situations: Unicode escape for a BMP code point (including unpaired surrogates)
-* `\a`, `\t`, `\n`, `\f`, `\r`, and `\e`, representing U+0007, U+0009, U+000A, U+000B, U+000D and U+001B, respectively
-* `\cx` where `x` is a code point, representing `x ^ 0x40` (this is not well documented in the JavaDoc, but is explained in [a StackOverflow question](https://stackoverflow.com/questions/35208570/java-regular-expression-cx-control-characters) and experimentally verified)
-* `\x` where `x` is any code point except an ASCII letter or digit, representing `x` itself (this includes standard escapes like `\\`, `\.`, etc.)
+Note that a double escape of the form `\uhhhh\uhhhh` representing a high surrogate and a low surrogate is treated as a single escape for a single supplementary code point.
+For example, `\uD834\uDD1E` is considered as a single escape for the code point `𝄞` (U+1D11E Musical Symbol G Clef).
 
-Single code point expressions are compiled irrespective of how they were represented in the source pattern.
-This is implemented in `def literal(cp: Int): String`.
-
-* If a single code point `x` is one of `^ $ \ . * + ? ( ) [ ] { } |`, it is compiled to `\x`.
-* If it is a low surrogate, it is compiled to `(?:x)`.
-* Otherwise, it is compiled to `x`.
-
-Note that `x` is a 1-Char string if it is a BMP code point, or a 2-Char string if it is a supplementary code point.
-
-For example:
-
-* `a` is compiled to `a`
-* `\x67` is compiled to `C`
-* `\x24` is compiled to `\$`
-* `\n` is compiled to a new line character, i.e., the Scala expression `0x000A.toChar` (not to the 2-Char string `"\\n"`)
-* `\uDD1E` is compiled to the Scala expression `"(?:" + 0xDD1E.toChar + ")"` because it is a low surrogate
-* `\uD834\uDD1E` is compiled to `𝄞`, i.e., the 2-char string `"" + 0xD834.toChar + 0xDD1E.toChar`
-* `\uD834\uD834` is not even parsed as a single code point, but as two separate subexpressions, because the second one is not a low surrogate
-
-The wrapping of low surrogates with `(?:x)` is there to ensure that we do not artificially create a surrogate pair in the compiled pattern where none existed in the source pattern.
-Consider the source pattern `\x{D834}\x{DD1E}`, for example.
-If low surrogates were not wrapped, it would be compiled to a surrogate pair, which would match the input string `"𝄞"` although it is not supposed to.
+This behavior only applies to `\u` escapes.
+A would-be double-escape `\x{D834}\x{DD1E}` constitutes two separate code points.
+In practice, such a sequence can never match anything in the input; if the input contained that sequence of code units, it would be considered as a single code point `𝄞`, which is not matched by a pattern meant to match two separate code points U+D834 and U+DD1E.
 
 ### Quotes
 
@@ -195,15 +173,6 @@ The full string in between is taken as a sequence of code points.
 Each code point is compiled as described in "Single code points" for `def literal(cp: Int)`, and the compiled patterns are concatenated in a sequence.
 This is implemented in `def literal(s: String)`.
 
-### The dot `.`
-
-A `.` represents "any" code point, except some kinds of new lines, depending on the `DOTALL` and `UNIX_LINES` flags.
-Since JavaScript's `.`'s interpretation of new lines is not the same as Java's, we compile `.` to custom character classes:
-
-- with `DOTALL`: compiled to `.` if there is native support for the 's' flag (recall that it is always used when supported), or `[\d\D]` otherwise.
-- without `DOTALL` but with `UNIX_LINES`: compiled to `[^\n]` (but with an NL character instead of the two characters `\` and `n`).
-- without `DOTALL` nor `UNIX_LINES`: compiled to `[^\n\r\u0085\u2028\u2029]` (again, where those escapes are actually preprocessed as single Chars).
-
 ### Predefined character classes
 
 Predefined character classes represent a set of code points that matches a single code point in the input string.
@@ -211,64 +180,12 @@ The set typically depends on the value of `UNICODE_CHARACTER_CLASS`.
 
 Since virtually none of them has a corresponding predefined character class in JS RegExps, they are all compiled as custom `[...]` character classes, according to their definition.
 
-For example:
-
-| Java pattern            | without `UNICODE_CHARACTER_CLASS` | with `UNICODE_CHARACTER_CLASS`                                    |
-|-------------------------|-----------------------------------|-------------------------------------------------------------------|
-| `\d`                    | `[0-9]`                           | `\p{Nd}`                                                          |
-| `\W`                    | `[^a-zA-Z_0-9]`                   | `[^\p{Alphabetic}\p{Mn}\p{Me}\p{Mc}\p{Nd}\p{Pc}\p{Join_Control}]` |
-| `\p{Print}`             | `[ -~]`                           | `[^\p{Zl}\p{Zp}\p{Cc}\p{Cs}\p{Cn}]`                               |
-| `\p{javaLetterOrDigit}` | `[\p{L}\p{Nd}]`                   | `[\p{L}\p{Nd}]`                                                   |
-
-Predefined character classes are stored as instances of `CompiledCharClass` in predefined constants and maps.
-A `CompiledCharClass` preserves enough structure to also allow good integration in custom `[]` character classes.
-The maps contain all the possible values for `\p{name}` *except* all the Unicode Scripts and Blocks (but it does contain all the Unicode character categories).
-Scripts are normalized on the fly (because Java allows them to be case-insensitive but JS requires the correct casing).
-Unicode blocks are not supported.
-
-To create a negative character class of the form `[^X]`, we use the function `codePointNotAmong`, which handles the special cases for
-
-* X being an empty set (notably for `.` with `DOTALL`, see above), and
-* handling surrogate pairs when the 'u' flag is not supported (see below).
-
-### Predefined assertions
-
-The assertion `^` is compiled to
-
-- `(?:^)` without `MULTILINE` (the wrapping is necessary in case it ends up being repeated, because that is not syntactically valid in JS, although it is valid once wrapped in a group)
-- `(?<=^|\n)` with `MULTILINE` and `UNIX_LINES`
-- `(?<=^|\r(?!\n)|[\n\u0085\u2028\u2029])` with `MULTILINE` but without `UNIX_LINES`
-
-Note that the latter two use look-behind assertions in JavaScript, requiring support for ES2018+.
-We cannot use the 'm' flag of JavaScript `RegExp`s because its semantics differ from the Java ones (either with or without `UNIX_LINES`).
-
-The assertion `$` is compiled in a similar way.
-
-The assertions `\b` and `\B` are compiled as is if both `UNICODE_CASE` and `UNICODE_CHARACTER_CLASS` are false.
-This is correct because:
-
-- since `UNICODE_CHARACTER_CLASS` is false, word chars are considered to be `[a-zA-Z_0-9]` for Java semantics, and
-- since `UNICODE_CASE` is false, we do not use the 'i' flag in the JS RegExp, and so word chars are considered to be `[a-zA-Z_0-9]` for the JS semantics as well.
-
-In all other cases, we determine the compiled form of `\w` and `\W` and use a custom look-around-based implementation. This requires ES2018+, hence why we go to the trouble of trying to reuse `\b` and `\B` if we can.
-
-The other predefined assertions are compiled as follows:
-
-- `\A` is always compiled to `(?:^)` (note that we never use the 'm' flag in the JS RegExp)
-- `\z` is always compiled to `(?:$)`
-- `\Z` with `UNIX_LINES` is compiled to `(?=\n?$)`
-- `\Z` without `UNIX_LINES` is compiled to `(?=(?:\r\n?|[\n\u0085\u2028\u2029])?$)`
-
-### Linebreak matcher
-
-`\R` is compiled to its definition wrapped in a non-capturing group, i.e., to `(?:\r\n|[\n\u000B\u000C\r\u0085\u2028\u2029])` (but where the escapes are preprocessed as single Chars, as usual).
-
 ### Atomic groups
 
 Atomic groups are not well documented in the JavaDoc, but they are well covered in outside documentation such as [on Regular-Expressions.info](https://www.regular-expressions.info/atomic.html).
 They have the form `(?>X)`.
-An atomic group matches whatever `X` matches, but does not backtrack in the middle.
-It is all-or-nothing.
+An atomic group matches whatever `X` matches, but once it has successfully matched a particular substring, it is considered as an atomic unit.
+If backtracking is needed later on because the rest of the pattern failed to match, the atomic group is backtracked as a whole.
 
 JS does not support atomic groups.
 However, there exists a trick to implement atomic groups on top of look-ahead groups and back references, including with the correct performance characterics.
@@ -300,72 +217,35 @@ The latter is pretty ugly, but is robust nevertheless.
 
 ### Custom character classes
 
-Custom character classes of the form `[...]` are very complicated.
-Java supports intersections and nested character classes, which virtually no other regular expression system supports.
-We have to compile all of those away.
+Unlike JavaScript, Java regexes support intersections and unions of character classes.
+We compile them away using the following equivalences:
 
-The parsing itself is already a bit involved, but not fundamentally complicated.
-As usual, we parse code points as indivisible units.
+* Positive intersection: `[A&&B]` is equivalent to `(?=[A])[B]`
+* Negative intersection: `[^A&&B]` is equivalent to `[^A]|[^B]`
+* Positive union: `[AB]` is equivalent to `[A]|[B]`
+* Negative union: `[^AB]` is equivalent to `(?![B])[^A]`
 
-Escapes for individual code points are handled as in "Single code points" (with the same parsing method, actually).
-Instead of being protected with `(?:X)`, low surrogates are moved to the beginning of any set of code points.
-This is fine because elements in sets can be reordered at will.
-The set of code points that are escaped with a `\` is also different (it is `] \ - ^`) and is handled in `literalCodePoint`.
+For example, using the rule on positive intersection, we can compile the example from the JavaDoc `[a-z&&[^m-p]]` to `(?=[a-z])[^m-p]`.
 
-Ranges of single codepoints are treated in the same way, with ranges whose starting code point is a low surrogate being moved to the beginning.
-
-Escapes for predefined character classes are also parsed as in "Predefined character classes", but they are kept under their `CompiledCharClass` form.
-
-`\Q..\E` escapes are processed in a similar way, and expand to a set of single code points (rather than a *sequence* of single code points as is the case outside character classes).
-
-With that out of the way, there are two main challenges left:
-
-* `CompiledCharClass` that represent negative classes, such as `\S` which represents `[^\t-\r ]`, and
-* Unions and intersections with nested character classes.
-
-When you consider nested negated character classes containing predefined character classes that represent negated classes themselves, the problem can seem extremely complex.
-Because of Unicode character classes, it is not possible to just *simplify* complex nested character classes somehow into a single character class at compile time.
-So we must compile down the unions, intersections and negations.
-
-Conceptually, we decompose complex character classes as follows.
-*A*, *B*, and *C* stand for any sequence of character class content without negation nor intersection, including potentially empty strings.
-*\c* stands for any predefined character class, including `\p{name}` ones.
-
-Note that the `^` has a special meaning only right after a `[`.
-It negates the entire character class.
-
-We get rid of intersections using the following equivalences:
-
-* `[A&&...&&B&&C]` is equivalent to `(?=[A])...(?=[B])[C]`
-* `[^A&&...&&B&&C]` is equivalent to `[^A]|...|[^B]|[^C]`
-
-Other complex constructs are dealt with as follows:
-
-* `[A\cB]` is in general equivalent to `[A[C]B]` where `C` is the expansion of the predefined character class `\c`, but we can simplify it as `[ACB]` if `C` is not of the form `^...`
-* `[^A\cB]` is in general equivalent to `[^A[C]B]` where `C` is the expansion of the predefined character class `\c`, but we can simplify it as `[^ACB]` if `C` is not of the form `^...`
-* `[ABC]` is equivalent to `[B]|[AC]`
-* `[^ABC]` is equivalent to `(?![B])[^AC]`
-* `[[A]]` is equivalent to `[A]`
-* `[[^A]]` is equivalent to `[^A]`
-
-Using those rewrite rules, we can always reduce a complex character class so that it does not contain any union, intersection or predefined character class.
-
-For example,
-
-* `[^a\dc]` expands to `[^a0-9c]` in ASCII mode, or `[^a\p{Nd}c]` in Unicode mode
-* `[a-z&&[^m-p]]` expands to `(?=[a-z])[^m-p]`
-* `[^2\D5]` expands to `[^2\P{Nd}5]` in Unicode mode, or `[^2[^0-9]5]` in ASCII mode, which then gives `(?![^0-9])[^25]`
-* `[d-l[o-t].-?&&f[k-q] -Z&&1-3\D]` expands to `(?=[d-l[o-t].-?])(?=[f[k-q] -Z])[1-3\D]`, then to `(?=[o-t]|[d-l.-?])(?=[k-q]|[f -Z])(?:[^0-9]|[1-3])`
-* `[^d-l[o-t].-?&&f[k-q] -Z&&1-3\D]` expands to `[^d-l[o-t].-?]|[^f[k-q] -Z]|[^1-3\D]`, then to `(?:(?![o-t])[^d-l.-?])|(?:(?![k-q])[^f -Z])|(?:(?![^0-9])[^1-3])`
-
-This is implemented in `compileCharacterClass()`, which uses a `CharacterClassState` and its methods to keep track of the parsing and compilation state.
-While the above description is declarative, `compileCharacterClass()`'s implementation is quite intricate to perform all the above rewritings in a single pass, rather than having to analyze and rewrite in a loop.
+An alternative design would have been to resolve all the operations at compile-time to get to flat code point sets.
+This would require to expand `\p{}` and `\P{}` Unicode property names into equivalent sets, which would need a significant chunk of the Unicode database to be available.
+That strategy would have a huge cost in terms of code size, and likely in terms of execution time as well (for compilation and/or matching).
 
 ### Handling surrogate pairs without support for the 'u' flag
 
 So far, we have assumed that the underlying RegExp supports the 'u' flag, which we test with `supportsUnicode`.
 In this section, we cover how the compilation is affected when it is not supported.
 This can only happen when we target ES 5.1.
+
+The ECMAScript specification is very precise about how patterns and strings are interpreted when the 'u' flag is enabled.
+It boils down to:
+
+* First, the pattern and the input, which are strings of 16-bit UTF-16 code units, are decoded into a *list of code points*, using the WTF-16 encoding.
+  This means that surrogate pairs become single supplementary code points, while lone surrogates (and other code units) become themselves as code points.
+* Then, all the regular expressions operators work on these lists of code points, never taking individual code units into account.
+
+The documentation for Java regexes does not really say anything about what it considers "characters" to be.
+However, experimentation and tests show that they behave exactly like ECMAScript with the 'u' flag.
 
 Without support for the 'u' flag, the JavaScript RegExp engine will parse the pattern and process the input with individual Chars rather than code points.
 In other words, it will consider surrogate pairs as two separate (and therefore separable) code units.
@@ -377,8 +257,10 @@ If we do nothing against it, it can jeopardize the semantics of regexes in sever
 * a surrogate pair in a character class will be interpreted as *either* the high surrogate or the low surrogate, instead of both together,
 * etc.
 
-Since even regexes that contain only ASCII characters and have no flags are affected by some of these issues, we cannot simply declare those features as unsupported.
-It would mean that virtually no regex would be correct in ECMAScript 5.1.
+Even patterns that contain only ASCII characters (escaped or not) and use no flags can behave incorrectly on inputs that contain surrogate characters (paired or unpaired).
+A possible design would have been to restrict the *inputs* to strings without surrogate code units when targeting ES 5.1.
+However, that could lead to patterns that fail at matching-time, rather than at compile-time (during `Pattern.compile()`), unlike all the other features that are conditioned on the ES version.
+
 Therefore, we go to great lengths to implement the right semantics despite the lack of support for 'u'.
 
 #### Overall idea of the solution
@@ -410,18 +292,23 @@ This means either
 We restrict the internal contract of `codePointNotAmong(s)` to only take BMP code points that are not high surrogates, and compile it to the same as the dot-all but with the characters in `s` excluded like the high surrogates: `(?:[^sH]|[H](?:[L]|(?![L])))`.
 
 Since `UNICODE_CHARACTER_CLASS` is not supported, all but one call site of `codePointNotAmong` already respect that stricter contract.
-The only one that does not is the call `codePointNotAmong(thisSegment)` inside `CharacterClassState.finishConjunct()`.
-To make that one compliant, we make sure not to add illegal characters in `thisSegment`.
-To do that, we exploit the rewrites for `[ABC]` and `[^ABC]` where `B` is an illegal character to isolate it in separate alternatives, that we can compile as a single code point above.
+The only one that does not is the call `codePointNotAmong(thisSegment)` inside `CharacterClassBuilder.conjunctResult()`.
+To make that one compliant, we make sure not to add illegal code points in `thisSegment`.
+To do that, we exploit the equivalences `[AB] = [A]|[B]` and `[^AB] = (?![A])[B]` where `A` is an illegal code point to isolate it in a separate alternative, that we can compile as a single code point above.
+For example, the character class `[k\uD834f]`, containing a high surrogate code point, is equivalent to `[\uD834]|[xf]`, which can be compiled as `(?:\uD834(?![L]))|[xf]`.
+That logic is implemented in `CharacterClassBuilder.addSingleCodePoint()`.
 
-In code point ranges, the story is much more intricate, but we can still achieve what we need by decomposing the range into smaller ones:
+Code point ranges that contain illegal code points are decomposed into the union of 4 (possibly empty) ranges:
 
-* one with only BMP code points below high surrogates
-* one with high surrogates
-* one with BMP code points above high surrogates
-* one with supplementary code points, which is further decomposed if necessary
+* one with only BMP code points below high surrogates, compiled as is
+* one with high surrogates `x-y`, compiled to `(?:[x-y](?![L]))`
+* one with BMP code points above high surrogates, compiled as is
+* one with supplementary code points `x-y`, where `x` is the surrogate pair `pq` and `y` is the pair `st`, which is further decomposed into:
+  * the range `pq-p\uDFFF`, compiled as `(?:p[q-\uDFFF])`
+  * the range `p'\uDC00-s'\uDFFF` where `p' = p+1` and `s' = s-1`, compiled to `(?:[p'-s'][\uDC00-\uDFFF])`
+  * the range `s\uDC00-st`, compiled to `(?:s[\uDC00-t])`
 
-More details can be found in `addCodePointRange`.
+That logic is implemented in `CharacterClassBuilder.addCodePointRange()`.
 
 ## About code size
 

@@ -905,8 +905,16 @@ private final class PatternCompiler(private val pattern: String, private var fla
       }
     } else {
       if (supportsUnicode) {
+        /* We wrap low surrogates with `(?:x)` to ensure that we do not
+         * artificially create a surrogate pair in the compiled pattern where
+         * none existed in the source pattern.
+         * Consider the source pattern `\x{D834}\x{DD1E}`, for example.
+         * If low surrogates were not wrapped, it would be compiled to a
+         * surrogate pair, which would match the input string `"𝄞"` although it
+         * is not supposed to.
+         */
         if (isLowSurrogateCP(cp))
-          s"(?:$s)" // protect a low surrogate to prevent it from merging with a high surrogate
+          s"(?:$s)"
         else
           s
       } else {
@@ -979,28 +987,46 @@ private final class PatternCompiler(private val pattern: String, private var fla
         case '^' =>
           pIndex += 1
           if (multiline) {
-            // multiline implies ES2018, so we can use look-behind assertions
+            /* `multiline` implies ES2018, so we can use look-behind assertions.
+             * We cannot use the 'm' flag of JavaScript RegExps because its
+             * semantics differ from the Java ones (either with or without
+             * `UNIX_LINES`).
+             */
             if (unixLines)
               "(?<=^|\n)"
             else
               "(?<=^|\r(?!\n)|[\n\u0085\u2028\u2029])"
           } else {
-            "(?:^)" // in case it is quantified
+            /* Wrap as (?:^) in case it ends up being repeated, for example
+             * `^+` becomes `(?:^)+`. This is necessary because `^+` is not
+             * syntactically valid in JS, although it is valid once wrapped in
+             * a group.
+             * (Not that repeating ^ has any useful purpose, but the spec does
+             * not prevent it.)
+             */
+            "(?:^)"
           }
 
         case '$' =>
           pIndex += 1
           if (multiline) {
-            // multiline implies ES2018, so we can use look-behind assertions
+            /* `multiline` implies ES2018, so we can use look-behind assertions.
+             * We cannot use the 'm' flag of JavaScript RegExps (see ^ above).
+             */
             if (unixLines)
               "(?=$|\n)"
             else
               "(?=$|(?<!\r)\n|[\r\u0085\u2028\u2029])"
           } else {
-            "(?:$)" // in case it is quantified
+            // Wrap as (?:$) for the same reason as ^ above
+            "(?:$)"
           }
 
         case '.' =>
+          /* Since JavaScript's `.`'s interpretation of new lines is not the
+           * same as Java's (with or without UNIX_LINES), we compile `.` to
+           * custom character classes.
+           */
           pIndex += 1
           val rejected = {
             if (dotAll) ""
@@ -1186,6 +1212,19 @@ private final class PatternCompiler(private val pattern: String, private var fla
         if (pattern.substring(pIndex, pIndex + 4) == "b{g}") {
           parseError("\\b{g} is not supported")
         } else {
+          /* Compile as is if both `UNICODE_CASE` and `UNICODE_CHARACTER_CLASS` are false.
+           * This is correct because:
+           * - since `UNICODE_CHARACTER_CLASS` is false, word chars are
+           *   considered to be `[a-zA-Z_0-9]` for Java semantics, and
+           * - since `UNICODE_CASE` is false, we do not use the 'i' flag in the
+           *   JS RegExp, and so word chars are considered to be `[a-zA-Z_0-9]`
+           *   for the JS semantics as well.
+           *
+           * In all other cases, we determine the compiled form of `\w` and use
+           * a custom look-around-based implementation.
+           * This requires ES2018+, hence why we go to the trouble of trying to
+           * reuse `\b` if we can.
+           */
           if (unicodeCaseOrUnicodeCharacterClass) {
             requireES2018Features("\\b with UNICODE_CASE") // UNICODE_CHARACTER_CLASS would have been rejected earlier
             pIndex += 1
@@ -1197,6 +1236,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
           }
         }
       case 'B' =>
+        // Same strategy as for \b above
         if (unicodeCaseOrUnicodeCharacterClass) {
           requireES2018Features("\\B with UNICODE_CASE") // UNICODE_CHARACTER_CLASS would have been rejected earlier
           pIndex += 1
@@ -1207,19 +1247,22 @@ private final class PatternCompiler(private val pattern: String, private var fla
           "\\B"
         }
       case 'A' =>
+        // We can always use ^ for start-of-text because we never use the 'm' flag in the JS RegExp
         pIndex += 1
-        "(?:^)" // in case it is quantified
+        "(?:^)" // wrap in case it is quantified (see compilation of '^')
       case 'G' =>
         parseError("\\G in the middle of a pattern is not supported")
       case 'Z' =>
+        // We can always use $ for end-of-text because we never use the 'm' flag in the JS RegExp
         pIndex += 1
         val lineTerminator =
           if (unixLines) "\n"
           else "(?:\r\n?|[\n\u0085\u2028\u2029])"
         "(?=" + lineTerminator + "?$)"
       case 'z' =>
+        // We can always use $ for end-of-text because we never use the 'm' flag in the JS RegExp
         pIndex += 1
-        "(?:$)" // in case it is quantified
+        "(?:$)" // wrap in case it is quantified (see compilation of '$')
 
       // Linebreak matcher
 
