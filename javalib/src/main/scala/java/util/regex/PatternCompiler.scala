@@ -951,95 +951,25 @@ private final class PatternCompiler(private val pattern: String, private var fla
     var result = ""
 
     while (pIndex != len) {
-      // Record the current compiledGroupCount, for possessive quantifiers
-      val compiledGroupCountBeforeThisToken = compiledGroupCount
-
-      // Set to false when parsing a token that cannot be repeated
-      var repeaterAllowed = true
-
       val dispatchCP = pattern.codePointAt(pIndex)
-      val compiledToken: String = (dispatchCP: @switch) match {
+      (dispatchCP: @switch) match {
+        // Cases that mess with the control flow and/or that cannot be repeated
+
         case ')' =>
           if (!insideGroup)
             parseError("Unmatched closing ')'")
           pIndex += 1
           return result
 
-        case '\\' =>
-          compileEscape()
-
-        case '[' =>
-          compileCharacterClass()
-
-        case '?' | '*' | '+' | '{' =>
-          parseError("Dangling meta character '" + codePointToString(dispatchCP) + "'")
-
-        case '(' =>
-          compileGroup()
-
         case '|' =>
           if (sticky && !insideGroup)
             parseError("\\G is not supported when there is an alternative at the top level")
           pIndex += 1
-          repeaterAllowed = false
-          "|"
-
-        case '^' =>
-          pIndex += 1
-          if (multiline) {
-            /* `multiline` implies ES2018, so we can use look-behind assertions.
-             * We cannot use the 'm' flag of JavaScript RegExps because its
-             * semantics differ from the Java ones (either with or without
-             * `UNIX_LINES`).
-             */
-            if (unixLines)
-              "(?<=^|\n)"
-            else
-              "(?<=^|\r(?!\n)|[\n\u0085\u2028\u2029])"
-          } else {
-            /* Wrap as (?:^) in case it ends up being repeated, for example
-             * `^+` becomes `(?:^)+`. This is necessary because `^+` is not
-             * syntactically valid in JS, although it is valid once wrapped in
-             * a group.
-             * (Not that repeating ^ has any useful purpose, but the spec does
-             * not prevent it.)
-             */
-            "(?:^)"
-          }
-
-        case '$' =>
-          pIndex += 1
-          if (multiline) {
-            /* `multiline` implies ES2018, so we can use look-behind assertions.
-             * We cannot use the 'm' flag of JavaScript RegExps (see ^ above).
-             */
-            if (unixLines)
-              "(?=$|\n)"
-            else
-              "(?=$|(?<!\r)\n|[\r\u0085\u2028\u2029])"
-          } else {
-            // Wrap as (?:$) for the same reason as ^ above
-            "(?:$)"
-          }
-
-        case '.' =>
-          /* Since JavaScript's `.`'s interpretation of new lines is not the
-           * same as Java's (with or without UNIX_LINES), we compile `.` to
-           * custom character classes.
-           */
-          pIndex += 1
-          val rejected = {
-            if (dotAll) ""
-            else if (unixLines) "\n"
-            else "\n\r\u0085\u2028\u2029"
-          }
-          codePointNotAmong(rejected)
+          result += "|"
 
         // experimentally, this is the set of chars considered as whitespace for comments
         case ' ' | '\t' | '\n' | '\u000B' | '\f' | '\r' if comments =>
           pIndex += 1
-          repeaterAllowed = false
-          ""
 
         case '#' if comments =>
           // ignore until the end of a line
@@ -1047,18 +977,31 @@ private final class PatternCompiler(private val pattern: String, private var fla
             c == '\r' || c == '\n' || c == '\u0085' || c == '\u2028' || c == '\u2029'
           while (pIndex != len && !isEOL(pattern.charAt(pIndex)))
             pIndex += 1
-          repeaterAllowed = false
-          ""
+
+        case '?' | '*' | '+' | '{' =>
+          parseError("Dangling meta character '" + codePointToString(dispatchCP) + "'")
+
+        // Regular cases, which can be repeated
 
         case _ =>
-          pIndex += charCount(dispatchCP)
-          literal(dispatchCP)
-      }
+          // Record the current compiledGroupCount, for possessive quantifiers
+          val compiledGroupCountBeforeThisToken = compiledGroupCount
 
-      if (repeaterAllowed)
-        result += compileRepeater(compiledGroupCountBeforeThisToken, compiledToken)
-      else
-        result += compiledToken
+          val compiledToken = (dispatchCP: @switch) match {
+            case '\\' => compileEscape()
+            case '['  => compileCharacterClass()
+            case '('  => compileGroup()
+            case '^'  => compileCaret()
+            case '$'  => compileDollar()
+            case '.'  => compileDot()
+
+            case _ =>
+              pIndex += charCount(dispatchCP)
+              literal(dispatchCP)
+          }
+
+          result += compileRepeater(compiledGroupCountBeforeThisToken, compiledToken)
+      }
     }
 
     if (insideGroup)
@@ -1178,6 +1121,61 @@ private final class PatternCompiler(private val pattern: String, private var fla
     // Finally, then encoding of the atomic group over the greedy quantifier
     val myGroupNumber = compiledGroupCountBeforeThisToken + 1
     s"(?:(?=($amendedToken$baseRepeater))\\$myGroupNumber)"
+  }
+
+  @inline
+  private def compileCaret(): String = {
+    pIndex += 1
+    if (multiline) {
+      /* `multiline` implies ES2018, so we can use look-behind assertions.
+       * We cannot use the 'm' flag of JavaScript RegExps because its semantics
+       * differ from the Java ones (either with or without `UNIX_LINES`).
+       */
+      if (unixLines)
+        "(?<=^|\n)"
+      else
+        "(?<=^|\r(?!\n)|[\n\u0085\u2028\u2029])"
+    } else {
+      /* Wrap as (?:^) in case it ends up being repeated, for example `^+`
+       * becomes `(?:^)+`. This is necessary because `^+` is not syntactically
+       * valid in JS, although it is valid once wrapped in a group.
+       * (Not that repeating ^ has any useful purpose, but the spec does not
+       * prevent it.)
+       */
+      "(?:^)"
+    }
+  }
+
+  @inline
+  private def compileDollar(): String = {
+    pIndex += 1
+    if (multiline) {
+      /* `multiline` implies ES2018, so we can use look-behind assertions.
+       * We cannot use the 'm' flag of JavaScript RegExps (see ^ above).
+       */
+      if (unixLines)
+        "(?=$|\n)"
+      else
+        "(?=$|(?<!\r)\n|[\r\u0085\u2028\u2029])"
+    } else {
+      // Wrap as (?:$) for the same reason as ^ above
+      "(?:$)"
+    }
+  }
+
+  @inline
+  private def compileDot(): String = {
+    /* Since JavaScript's `.`'s interpretation of new lines is not the same as
+     * Java's (with or without UNIX_LINES), we compile `.` to custom character
+     * classes.
+     */
+    pIndex += 1
+    val rejected = {
+      if (dotAll) ""
+      else if (unixLines) "\n"
+      else "\n\r\u0085\u2028\u2029"
+    }
+    codePointNotAmong(rejected)
   }
 
   private def compileEscape(): String = {
