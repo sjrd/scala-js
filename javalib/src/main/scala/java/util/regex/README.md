@@ -21,9 +21,9 @@ The following features are never supported:
 
 * the `CANON_EQ` flag,
 * the `\X`, `\b{g}` and `\N{...}` expressions,
-* `\p{name}` character classes representing Unicode *blocks*,
+* `\p{In𝘯𝘢𝘮𝘦}` character classes representing Unicode *blocks*,
 * the `\G` boundary matcher, *except* if it appears at the very beginning of the regex (e.g., `\Gfoo`),
-* embedded flag expressions with inner groups, i.e., constructs of the form `(?idmsuxU-idmsuxU:X)`,
+* embedded flag expressions with inner groups, i.e., constructs of the form `(?idmsuxU-idmsuxU:𝑋)`,
 * embedded flag expressions without inner groups, i.e., constructs of the form `(?idmsuxU-idmsuxU)`, *except* if they appear at the very beginning of the regex (e.g., `(?i)abc` is accepted, but `ab(?i)c` is not), and
 * numeric "back" references to groups that are defined later in the pattern (note that even Java does not support *named* back references like that).
 
@@ -34,9 +34,9 @@ The following features require `esVersion >= ESVersion.ES2015`:
 The following features require `esVersion >= ESVersion.ES2018`:
 
 * the `MULTILINE` and `UNICODE_CHARACTER_CLASS` flags,
-* look-behind assertions `(?<=X)` and `(?<!X)`,
+* look-behind assertions `(?<=𝑋)` and `(?<!𝑋)`,
 * the `\b` and `\B` expressions used together with the `UNICODE_CASE` flag,
-* `\p{name}` expressions where `name` is not one of the [POSIX character classes](https://docs.oracle.com/en/java/javase/15/docs/api/java.base/java/util/regex/Pattern.html#posix).
+* `\p{𝘯𝘢𝘮𝘦}` expressions where `𝘯𝘢𝘮𝘦` is not one of the [POSIX character classes](https://docs.oracle.com/en/java/javase/15/docs/api/java.base/java/util/regex/Pattern.html#posix).
 
 It is worth noting that, among others, the following features *are* supported in all cases, even when no equivalent feature exists in ECMAScript at all, or in the target version of ECMAScript:
 
@@ -48,8 +48,8 @@ It is worth noting that, among others, the following features *are* supported in
 * comments with the `COMMENTS` flag,
 * POSIX character classes in ASCII mode, or their Unicode variant with `UNICODE_CHARACTER_CLASS` (if the latter is itself supported, see above),
 * complex character classes with unions and intersections (e.g., `[a-z&&[^g-p]]`),
-* atomic groups `(?>X)`,
-* possessive quantifiers `X*+`, `X++` and `X?+`,
+* atomic groups `(?>𝑋)`,
+* possessive quantifiers `𝑋*+`, `𝑋++` and `𝑋?+`,
 * the `\A`, `\Z` and `\z` boundary matchers,
 * the `\R` expression,
 * embedded quotations with `\Q` and `\E`, both outside and inside character classes.
@@ -59,7 +59,7 @@ In addition, among others, the following features have the correct semantics fro
 * the `^` and `$` boundary matchers with the `MULTILINE` flag (when the latter is supported),
 * the predefined character classes `\h`, `\s`, `\v`, `\w` and their negated variants, respecting the `UNICODE_CHARACTER_CLASS` flag,
 * the `\b` and `\B` boundary matchers, respecting the `UNICODE_CHARACTER_CLASS` flag,
-* the internal format of `\p{name}` character classes, including the `\p{javaMethodName}` classes,
+* the internal format of `\p{𝘯𝘢𝘮𝘦}` character classes, including the `\p{java𝘔𝘦𝘵𝘩𝘰𝘥𝘕𝘢𝘮𝘦}` classes,
 * octal escapes and control escapes.
 
 ### Guarantees
@@ -126,13 +126,13 @@ However, differences are introduced when compiling atomic groups and possessive 
 Therefore, we maintain a mapping from original group numbers to the corresponding group numbers in the compiled pattern.
 We use for those purposes:
 
-* when compiling back references of the form `\N`, and
+* when compiling back references of the form `\𝑁`, and
 * when using the `Matcher` API to retrieve the groups' contents, start and end positions.
 
 Named capturing groups are always compiled as numbered capturing groups, even in ES 2018+.
 We record an additional map of names to the corresponding original group numbers, and use it
 
-* when compiling named back references of the form `\k<name>` (as numbered back references), and
+* when compiling named back references of the form `\k<𝘯𝘢𝘮𝘦>` (as numbered back references), and
 * when using the `Matcher` API with group names.
 
 ### Other main "control structures"
@@ -140,16 +140,16 @@ We record an additional map of names to the corresponding original group numbers
 The following constructs are translated as is:
 
 * Sequences and alternatives,
-* Greedy quantifiers of the form `X*`, `X+` and `X?`,
-* Lazy quantifiers of the form `X*?`, `X+?` and `X??`,
-* Non-capturing groups of the form `(?:X)`,
-* Look-ahead groups of the form `(?=X)` and `(?!X)`,
-* Look-behind groups of the form `(?<=X)` and `(?<!X)`, after validating that they are supported.
+* Greedy quantifiers of the form `𝑋*`, `𝑋+` and `𝑋?`,
+* Lazy quantifiers of the form `𝑋*?`, `𝑋+?` and `𝑋??`,
+* Non-capturing groups of the form `(?:𝑋)`,
+* Look-ahead groups of the form `(?=𝑋)` and `(?!𝑋)`,
+* Look-behind groups of the form `(?<=𝑋)` and `(?<!𝑋)`, after validating that they are supported.
 
 The following constructs have special handling and will be discussed later:
 
-* Atomic groups of the form `(?>X)`, and
-* Possessive quantifiers, for example of the form `X*+`.
+* Atomic groups of the form `(?>𝑋)`, and
+* Possessive quantifiers, for example of the form `𝑋*+`.
 
 ### Single code points
 
@@ -158,7 +158,7 @@ For example, both `a` and `\x65` are compiled as `a`.
 Code points that are metacharacters in JS regexes (i.e., `^ $ \ . * + ? ( ) [ ] { } |`) are escaped with a `\`, for example `\$`.
 This is implemented as `def literal(cp: Int)`.
 
-Note that a double escape of the form `\uhhhh\uhhhh` representing a high surrogate and a low surrogate is treated as a single escape for a single supplementary code point.
+Note that a double escape of the form `\uℎℎℎℎ\uℎℎℎℎ` representing a high surrogate and a low surrogate is treated as a single escape for a single supplementary code point.
 For example, `\uD834\uDD1E` is considered as a single escape for the code point `𝄞` (U+1D11E Musical Symbol G Clef).
 
 This behavior only applies to `\u` escapes.
@@ -183,35 +183,35 @@ Since virtually none of them has a corresponding predefined character class in J
 ### Atomic groups
 
 Atomic groups are not well documented in the JavaDoc, but they are well covered in outside documentation such as [on Regular-Expressions.info](https://www.regular-expressions.info/atomic.html).
-They have the form `(?>X)`.
-An atomic group matches whatever `X` matches, but once it has successfully matched a particular substring, it is considered as an atomic unit.
+They have the form `(?>𝑋)`.
+An atomic group matches whatever `𝑋` matches, but once it has successfully matched a particular substring, it is considered as an atomic unit.
 If backtracking is needed later on because the rest of the pattern failed to match, the atomic group is backtracked as a whole.
 
 JS does not support atomic groups.
 However, there exists a trick to implement atomic groups on top of look-ahead groups and back references, including with the correct performance characterics.
 It is well documented in the article [Mimicking Atomic Groups](https://blog.stevenlevithan.com/archives/mimic-atomic-groups).
-In a nutshell, we compile `(?>X)` to `(?:(?=(X))\N)` where `N` is the allocated group number for the capturing group `(X)`.
+In a nutshell, we compile `(?>𝑋)` to `(?:(?=(𝑋))\𝑁)` where `𝑁` is the allocated group number for the capturing group `(𝑋)`.
 
 This introduces a discrepancy between the original group numbers and the compiled group numbers for any subsequent capturing group.
 This is why we maintain `groupNumberMap`.
-Note that the discrepancy applies within `X` as well, so we record it before compiling the subexpression `X`.
+Note that the discrepancy applies within `𝑋` as well, so we record it before compiling the subexpression `𝑋`.
 
 ### Possessive quantifiers
 
 [Possessive quantifiers](https://www.regular-expressions.info/possessive.html) can be interpreted as sugar for atomic groups over greedy quantifiers.
-For example, `X*+` is equivalent to `(?>X*)`.
+For example, `𝑋*+` is equivalent to `(?>𝑋*)`.
 
 Since JS does not support possessive quantifiers any more than atomic groups, we compile them as that desugaring, followed by the compilation scheme of atomic groups.
 
 However, there is an additional problem.
-For atomic groups, we know before parsing `X` that we need to record a discrepancy in the group numbering.
-For possessive quantifiers, we only know that *after* having parsed `X`, but it should apply also *within* `X`.
+For atomic groups, we know before parsing `𝑋` that we need to record a discrepancy in the group numbering.
+For possessive quantifiers, we only know that *after* having parsed `𝑋`, but it should apply also *within* `𝑋`.
 We do that with postprocessing.
-Before compiling any token `X`, we record the current `compiledGroupCount`, and when compiling a possessive quantifier, we increment the compiled group number of those greater than the recorded count.
+Before compiling any token `𝑋`, we record the current `compiledGroupCount`, and when compiling a possessive quantifier, we increment the compiled group number of those greater than the recorded count.
 We do this
 
 - in the values of `groupNumberMap`, and
-- in the back references found in the compiled pattern for `X`.
+- in the back references found in the compiled pattern for `𝑋`.
 
 The latter is pretty ugly, but is robust nevertheless.
 
@@ -220,10 +220,10 @@ The latter is pretty ugly, but is robust nevertheless.
 Unlike JavaScript, Java regexes support intersections and unions of character classes.
 We compile them away using the following equivalences:
 
-* Positive intersection: `[A&&B]` is equivalent to `(?=[A])[B]`
-* Negative intersection: `[^A&&B]` is equivalent to `[^A]|[^B]`
-* Positive union: `[AB]` is equivalent to `[A]|[B]`
-* Negative union: `[^AB]` is equivalent to `(?![B])[^A]`
+* Positive intersection: `[𝐴&&𝐵]` is equivalent to `(?=[𝐴])[𝐵]`
+* Negative intersection: `[^𝐴&&𝐵]` is equivalent to `[^𝐴]|[^𝐵]`
+* Positive union: `[𝐴𝐵]` is equivalent to `[𝐴]|[𝐵]`
+* Negative union: `[^𝐴𝐵]` is equivalent to `(?![𝐴])[^𝐵]`
 
 For example, using the rule on positive intersection, we can compile the example from the JavaDoc `[a-z&&[^m-p]]` to `(?=[a-z])[^m-p]`.
 
@@ -279,34 +279,34 @@ To address that, we have special a posteriori handling in `Pattern.execFind()`.
 
 #### Concretely
 
-A single code point that is a high surrogate `x` is compiled to `(?:x(?![L]))`, where `L` is `\uDC00-\uDFFF`, the range of all low surrogates.
+A single code point that is a high surrogate `𝑥` is compiled to `(?:𝑥(?![ℒ]))`, where `ℒ` is `\uDC00-\uDFFF`, the range of all low surrogates.
 The negative look-ahead group prevents a match from separating the high surrogate from a following low surrogate.
 
-A dot-all (in `codePointNotAmong("")`) is compiled to `(?:[^H]|[H](?:[L]|(?![L])))`, where `H` is `\uD800-\uDBFF`, the range of all high surrogates.
+A dot-all (in `codePointNotAmong("")`) is compiled to `(?:[^ℋ]|[ℋ](?:[ℒ]|(?![ℒ])))`, where `ℋ` is `\uD800-\uDBFF`, the range of all high surrogates.
 This means either
 
 * any code unit that is not a high surrogate, or
 * a high surrogate and a following low surrogate (taking a full code point is allowed), or
 * a high surrogate that is not followed by a low surrogate (separating a surrogate pair is not allowed).
 
-We restrict the internal contract of `codePointNotAmong(s)` to only take BMP code points that are not high surrogates, and compile it to the same as the dot-all but with the characters in `s` excluded like the high surrogates: `(?:[^sH]|[H](?:[L]|(?![L])))`.
+We restrict the internal contract of `codePointNotAmong(𝑠)` to only take BMP code points that are not high surrogates, and compile it to the same as the dot-all but with the characters in `𝑠` excluded like the high surrogates: `(?:[^𝑠ℋ]|[ℋ](?:[ℒ]|(?![ℒ])))`.
 
 Since `UNICODE_CHARACTER_CLASS` is not supported, all but one call site of `codePointNotAmong` already respect that stricter contract.
 The only one that does not is the call `codePointNotAmong(thisSegment)` inside `CharacterClassBuilder.conjunctResult()`.
 To make that one compliant, we make sure not to add illegal code points in `thisSegment`.
-To do that, we exploit the equivalences `[AB] = [A]|[B]` and `[^AB] = (?![A])[B]` where `A` is an illegal code point to isolate it in a separate alternative, that we can compile as a single code point above.
-For example, the character class `[k\uD834f]`, containing a high surrogate code point, is equivalent to `[\uD834]|[xf]`, which can be compiled as `(?:\uD834(?![L]))|[xf]`.
+To do that, we exploit the equivalences `[𝐴𝐵] = [𝐴]|[𝐵]` and `[^𝐴𝐵] = (?![𝐴])[𝐵]` where `𝐴` is an illegal code point to isolate it in a separate alternative, that we can compile as a single code point above.
+For example, the character class `[k\uD834f]`, containing a high surrogate code point, is equivalent to `[\uD834]|[xf]`, which can be compiled as `(?:\uD834(?![ℒ]))|[xf])`.
 That logic is implemented in `CharacterClassBuilder.addSingleCodePoint()`.
 
 Code point ranges that contain illegal code points are decomposed into the union of 4 (possibly empty) ranges:
 
 * one with only BMP code points below high surrogates, compiled as is
-* one with high surrogates `x-y`, compiled to `(?:[x-y](?![L]))`
+* one with high surrogates `𝑥-𝑦`, compiled to `(?:[𝑥-𝑦](?![ℒ]))`
 * one with BMP code points above high surrogates, compiled as is
-* one with supplementary code points `x-y`, where `x` is the surrogate pair `pq` and `y` is the pair `st`, which is further decomposed into:
-  * the range `pq-p\uDFFF`, compiled as `(?:p[q-\uDFFF])`
-  * the range `p'\uDC00-s'\uDFFF` where `p' = p+1` and `s' = s-1`, compiled to `(?:[p'-s'][\uDC00-\uDFFF])`
-  * the range `s\uDC00-st`, compiled to `(?:s[\uDC00-t])`
+* one with supplementary code points `𝑥-𝑦`, where `𝑥` is the surrogate pair `𝑝𝑞` and `𝑦` is the pair `𝑠𝑡`, which is further decomposed into:
+  * the range `𝑝𝑞-𝑝\uDFFF`, compiled as `(?:𝑝[𝑞-\uDFFF])`
+  * the range `𝑝′\uDC00-𝑠′\uDFFF` where 𝑝′ = 𝑝+1 and 𝑠′ = 𝑠−1, compiled to `(?:[𝑝′-𝑠′][\uDC00-\uDFFF])`
+  * the range `𝑠\uDC00-𝑠𝑡`, compiled to `(?:𝑠[\uDC00-𝑡])`
 
 That logic is implemented in `CharacterClassBuilder.addCodePointRange()`.
 
