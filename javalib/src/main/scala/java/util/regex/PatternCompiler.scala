@@ -337,8 +337,8 @@ private[regex] object PatternCompiler {
     result("IsAlphabetic") = posP("Alphabetic")
     result("IsIdeographic") = posP("Ideographic")
     result("IsLetter") = posP("Letter")
-    result("IsLowercase") = posP("Lowercase")
-    result("IsUppercase") = posP("Uppercase")
+    result("IsLowercase") = posP("Lower")
+    result("IsUppercase") = posP("Upper")
     result("IsTitlecase") = posP("Lt")
     result("IsPunctuation") = posP("Punctuation")
     result("IsControl") = posP("Control")
@@ -361,14 +361,14 @@ private[regex] object PatternCompiler {
       posClass("\\p{L}\\p{Sc}\\p{Pc}\\p{Nd}\\p{Nl}\\p{Mn}\\p{Mc}\u0000-\u0008\u000E-\u001B\u007F-\u009F\\p{Cf}")
     result("javaJavaIdentifierStart") = posClass("\\p{L}\\p{Sc}\\p{Pc}\\p{Nl}")
     result("javaLetterOrDigit") = posClass("\\p{L}\\p{Nd}")
-    result("javaLowerCase") = posP("Lowercase")
+    result("javaLowerCase") = posP("Lower")
     result("javaMirrored") = posP("Bidi_Mirrored")
     result("javaSpaceChar") = posP("Z")
     result("javaTitleCase") = posP("Lt")
     result("javaUnicodeIdentifierPart") =
       posClass("\\p{ID_Continue}\u2E2F\u0000-\u0008\u000E-\u001B\u007F-\u009F\\p{Cf}")
     result("javaUnicodeIdentifierStart") = posClass("\\p{ID_Start}\u2E2F")
-    result("javaUpperCase") = posP("Uppercase")
+    result("javaUpperCase") = posP("Upper")
 
     // [\t-\r\u001C-\u001F\\p{Z}&&[^\u00A0\u2007\u202F]]
     result("javaWhitespace") =
@@ -1529,10 +1529,15 @@ private final class PatternCompiler(private val pattern: String, private var fla
         parsePCharacterClass()
     }
 
-    if (dispatchChar >= 'a') // cheap isLower
-      positive
+    val maybeNegated =
+      if (dispatchChar >= 'a') positive // cheap isLower
+      else positive.negated
+
+    // Avoid \P{} when using the 'i' flag in the JS RegExp, because it does not behave the way we want to
+    if (unicodeCaseInsensitive && maybeNegated.kind == CompiledCharClass.PosP)
+      CompiledCharClass.negClass("\\p{" + maybeNegated.data + "}")
     else
-      positive.negated
+      maybeNegated
   }
 
   /** Parses and returns a translated version of a `\p` character class. */

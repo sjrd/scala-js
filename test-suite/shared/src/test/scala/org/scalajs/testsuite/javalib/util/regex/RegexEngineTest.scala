@@ -1704,6 +1704,83 @@ class RegexEngineTest  {
     assertNotMatches(letterNotUpperNorLower, "N")
     assertNotMatches(letterNotUpperNorLower, "À")
     assertNotMatches(letterNotUpperNorLower, "0")
+
+    // Case-sensitive with \p{} and \P{} corner cases
+
+    for (pattern <- List("\\p{Ll}", "[\\p{Ll}]", "[^\\P{Ll}]")) {
+      val lowerASCIICaseInsensitive = compile(pattern)
+      assertMatches(lowerASCIICaseInsensitive, "c")
+      assertNotMatches(lowerASCIICaseInsensitive, "D")
+      assertMatches(lowerASCIICaseInsensitive, "é")
+      assertNotMatches(lowerASCIICaseInsensitive, "É")
+      assertNotMatches(lowerASCIICaseInsensitive, "5")
+      assertNotMatches(lowerASCIICaseInsensitive, "か")
+      assertNotMatches(lowerASCIICaseInsensitive, GClef)
+    }
+
+    for (pattern <- List("\\P{Ll}", "[\\P{Ll}]", "[^\\p{Ll}]")) {
+      val lowerASCIICaseInsensitive = compile(pattern)
+      assertNotMatches(lowerASCIICaseInsensitive, "c")
+      assertMatches(lowerASCIICaseInsensitive, "D")
+      assertNotMatches(lowerASCIICaseInsensitive, "é")
+      assertMatches(lowerASCIICaseInsensitive, "É")
+      assertMatches(lowerASCIICaseInsensitive, "5")
+      assertMatches(lowerASCIICaseInsensitive, "か")
+      assertMatches(lowerASCIICaseInsensitive, GClef)
+    }
+
+    // https://bugs.openjdk.java.net/browse/JDK-8214245
+    if (!executingInJVMOnLowerThanJDK15) {
+      // ASCII case-insensitive with \p{} and \P{} corner cases
+
+      /*for (pattern <- List("\\p{Ll}", "[\\p{Ll}]", "[^\\P{Ll}]")) {
+        val lowerASCIICaseInsensitive = compile(pattern, CaseInsensitive)
+        assertMatches(lowerASCIICaseInsensitive, "c")
+        assertMatches(lowerASCIICaseInsensitive, "D")
+        assertMatches(lowerASCIICaseInsensitive, "é")
+        if (!executingInJVM)
+          assertNotMatches(lowerASCIICaseInsensitive, "É")
+        assertNotMatches(lowerASCIICaseInsensitive, "5")
+        assertNotMatches(lowerASCIICaseInsensitive, "か")
+        assertNotMatches(lowerASCIICaseInsensitive, GClef)
+      }
+
+      for (pattern <- List("\\P{Ll}", "[\\P{Ll}]", "[^\\p{Ll}]")) {
+        val lowerASCIICaseInsensitive = compile(pattern, CaseInsensitive)
+        assertNotMatches(lowerASCIICaseInsensitive, "c")
+        assertNotMatches(lowerASCIICaseInsensitive, "D")
+        assertNotMatches(lowerASCIICaseInsensitive, "é")
+        if (!executingInJVM)
+          assertMatches(lowerASCIICaseInsensitive, "É")
+        assertMatches(lowerASCIICaseInsensitive, "5")
+        assertMatches(lowerASCIICaseInsensitive, "か")
+        assertMatches(lowerASCIICaseInsensitive, GClef)
+      }*/
+
+      // Unicode case-insensitive with \p{} and \P{} corner cases
+
+      for (pattern <- List("\\p{Ll}", "[\\p{Ll}]", "[^\\P{Ll}]")) {
+        val lowerASCIICaseInsensitive = compile(pattern, CaseInsensitive | UnicodeCase)
+        assertMatches(lowerASCIICaseInsensitive, "c")
+        assertMatches(lowerASCIICaseInsensitive, "D")
+        assertMatches(lowerASCIICaseInsensitive, "é")
+        assertMatches(lowerASCIICaseInsensitive, "É")
+        assertNotMatches(lowerASCIICaseInsensitive, "5")
+        assertNotMatches(lowerASCIICaseInsensitive, "か")
+        assertNotMatches(lowerASCIICaseInsensitive, GClef)
+      }
+
+      for (pattern <- List("\\P{Ll}", "[\\P{Ll}]", "[^\\p{Ll}]")) {
+        val lowerASCIICaseInsensitive = compile(pattern, CaseInsensitive | UnicodeCase)
+        assertNotMatches(lowerASCIICaseInsensitive, "c")
+        assertNotMatches(lowerASCIICaseInsensitive, "D")
+        assertNotMatches(lowerASCIICaseInsensitive, "é")
+        assertNotMatches(lowerASCIICaseInsensitive, "É")
+        assertMatches(lowerASCIICaseInsensitive, "5")
+        assertMatches(lowerASCIICaseInsensitive, "か")
+        assertMatches(lowerASCIICaseInsensitive, GClef)
+      }
+    }
   }
 
   @Test def characterClassWithQuote(): Unit = {
