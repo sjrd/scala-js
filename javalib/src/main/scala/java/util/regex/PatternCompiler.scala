@@ -1118,7 +1118,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
     // Plan the future remapping
     compiledGroupCount += 1
 
-    // Finally, then encoding of the atomic group over the greedy quantifier
+    // Finally, the encoding of the atomic group over the greedy quantifier
     val myGroupNumber = compiledGroupCountBeforeThisToken + 1
     s"(?:(?=($amendedToken$baseRepeater))\\$myGroupNumber)"
   }

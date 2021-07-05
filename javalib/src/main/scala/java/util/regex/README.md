@@ -76,7 +76,7 @@ If `Pattern.compile()` succeeds, the regex is guaranteed to behave exactly like 
 The behavior of JavaScript is more "functional", whereas that of the JVM is more "imperative".
 This imperative nature is also reflected in the `hitEnd()` and `requireEnd()` methods of `Matcher`, which we do not support (they don't link).
 
-The behavior of the JVM does not appear to specified, and is questionable.
+The behavior of the JVM does not appear to be specified, and is questionable.
 There are several open issues that argue it is buggy:
 
 * https://bugs.openjdk.java.net/browse/JDK-8027747
@@ -124,7 +124,7 @@ When it is true:
 Usually, there is a 1-to-1 relationship between original group numbers and compiled groups numbers.
 However, differences are introduced when compiling atomic groups and possessive quantifiers.
 Therefore, we maintain a mapping from original group numbers to the corresponding group numbers in the compiled pattern.
-We use for those purposes:
+We use it for the following purposes:
 
 * when compiling back references of the form `\𝑁`, and
 * when using the `Matcher` API to retrieve the groups' contents, start and end positions.
@@ -156,7 +156,7 @@ The following constructs have special handling and will be discussed later:
 Subexpressions that represent a single code point are parsed and normalized as the code point that they represent.
 For example, both `a` and `\x65` are compiled as `a`.
 Code points that are metacharacters in JS regexes (i.e., `^ $ \ . * + ? ( ) [ ] { } |`) are escaped with a `\`, for example `\$`.
-This is implemented as `def literal(cp: Int)`.
+This is implemented in `def literal(cp: Int)`.
 
 Note that a double escape of the form `\uℎℎℎℎ\uℎℎℎℎ` representing a high surrogate and a low surrogate is treated as a single escape for a single supplementary code point.
 For example, `\uD834\uDD1E` is considered as a single escape for the code point `𝄞` (U+1D11E Musical Symbol G Clef).
@@ -241,7 +241,7 @@ The ECMAScript specification is very precise about how patterns and strings are 
 It boils down to:
 
 * First, the pattern and the input, which are strings of 16-bit UTF-16 code units, are decoded into a *list of code points*, using the WTF-16 encoding.
-  This means that surrogate pairs become single supplementary code points, while lone surrogates (and other code units) become themselves as code points.
+  This means that surrogate pairs become single supplementary code points, while lone surrogates (and other code units) become themselves.
 * Then, all the regular expressions operators work on these lists of code points, never taking individual code units into account.
 
 The documentation for Java regexes does not really say anything about what it considers "characters" to be.
