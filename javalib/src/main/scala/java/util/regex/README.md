@@ -54,7 +54,8 @@ It is worth noting that, among others, the following features *are* supported in
 * the `\R` expression,
 * embedded quotations with `\Q` and `\E`, both outside and inside character classes.
 
-In addition, among others, the following features have the correct semantics from Java, even though their corresponding feature in JavaScript has different semantics:
+All the supported features have the correct semantics from Java.
+This is even true for features that exist in JavaScript but with different semantics, among which:
 
 * the `^` and `$` boundary matchers with the `MULTILINE` flag (when the latter is supported),
 * the predefined character classes `\h`, `\s`, `\v`, `\w` and their negated variants, respecting the `UNICODE_CHARACTER_CLASS` flag,
@@ -92,7 +93,8 @@ Java regexes are compiled to JS regexes in one pass, using a recursive descent a
 There is a state variable `pIndex` which indicates the position inside the original `pattern`.
 Compilation methods parse a subexpression at `pIndex`, advance `pIndex` past what they parsed, and return the result of the compilation.
 
-Parsing is always done at the code point level, and not at the individual `Char` level.
+Parsing is always done at the code point level, and not at the individual `Char` level, using the [WTF-16 encoding](https://simonsapin.github.io/wtf-8/#wtf-16).
+See [Handling surrogate pairs without support for the 'u' flag](#handling-surrogate-pairs-without-support-for-the-u-flag) for details about the behavior of lone surrogates.
 
 We first describe the compilation with the assumption that the underlying `RegExp`s support the `u` flag.
 This is always true in ES 2015+, and dynamically determined at run-time in ES 5.1.
