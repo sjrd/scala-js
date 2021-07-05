@@ -950,7 +950,15 @@ object Build {
 
       exportJars := true, // required so ScalaDoc linking works
 
-      testOptions += Tests.Argument(TestFrameworks.JUnit, "-a")
+      testOptions += Tests.Argument(TestFrameworks.JUnit, "-a"),
+
+      // Execute LibrarySizeTest only for the default Scala version of the build
+      testOptions ++= {
+        if (scalaVersion.value == DefaultScalaVersion)
+          Nil
+        else
+          Seq(Tests.Filter(s => !s.endsWith("LibrarySizeTest")))
+      },
   )
 
   lazy val linker: MultiScalaProject = MultiScalaProject(
