@@ -452,23 +452,21 @@ private[regex] object PatternCompiler {
 
   private val scriptCanonicalizeRegExp = new js.RegExp("(?:^|_)[a-z]", "g")
 
-  /** Canonicalizes a script name's casing.
+  /** A cache for verified and canonicalized script names.
    *
-   *  The JDK regexps compare script names while ignoring case, but JavaScript
-   *  requires the canonical name.
+   *  This is a `js.Map` (and a lazy val) because it is only used when `\\p` is
+   *  already known to be supported by the underlying `js.RegExp` (ES 2018),
+   *  and we assume that that implies that `js.Map` is supported (ES 2015).
    */
-  private def canonicalizeScriptName(scriptName: String): String = {
-    import js.JSStringOps._
+  private lazy val canonicalizedScriptNameCache: js.Map[String, String] = {
+    val result = new js.Map[String, String]()
 
-    val lowercase = scriptName.toLowerCase()
+    /* SignWriting is an exception. It has an uppercase 'W' even though it is
+     * not after '_'. We add the exception to the map immediately.
+     */
+    result("signwriting") = "SignWriting"
 
-    if (lowercase == "signwriting") {
-      // Exception: uppercase 'W' even though not after '_'
-      "SignWriting"
-    } else {
-      lowercase.jsReplace(scriptCanonicalizeRegExp,
-          ((s: String) => s.toUpperCase()): js.Function1[String, String])
-    }
+    result
   }
 
   @inline
@@ -1590,6 +1588,34 @@ private final class PatternCompiler(private val pattern: String, private var fla
     pIndex += 1
 
     result
+  }
+
+  /** Validates a script name and canonicalizes its casing.
+   *
+   *  The JDK regexps compare script names while ignoring case, but JavaScript
+   *  requires the canonical name.
+   *
+   *  After canonicalizing the script name, we try to create a `js.RegExp` that
+   *  uses it. If that fails, we report the (original) script name as unknown.
+   */
+  private def canonicalizeScriptName(scriptName: String): String = {
+    import js.JSStringOps._
+
+    val lowercase = scriptName.toLowerCase()
+
+    canonicalizedScriptNameCache.getOrElseUpdate(lowercase, {
+      val canonical = lowercase.jsReplace(scriptCanonicalizeRegExp,
+          ((s: String) => s.toUpperCase()): js.Function1[String, String])
+
+      try {
+        new js.RegExp(s"\\p{sc=$canonical}", "u")
+      } catch {
+        case _: js.JavaScriptException =>
+          parseError(s"Unknown character script name {$scriptName}")
+      }
+
+      canonical
+    })
   }
 
   private def compileCharacterClass(): String = {

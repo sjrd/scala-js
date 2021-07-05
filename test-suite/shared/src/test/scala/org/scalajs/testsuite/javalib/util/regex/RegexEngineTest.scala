@@ -1261,6 +1261,11 @@ class RegexEngineTest  {
       assertMatches(signWriting, "\uD836\uDC36") // U+1D836 SIGNWRITING HAND-FIST MIDDLE THUMB CUPPED INDEX UP
       assertNotMatches(signWriting, "A")
     }
+
+    // Non existing script names are rejected
+    assertSyntaxError("\\p{sc=FooBar}", "Unknown character script name {FooBar}", 12)
+    assertSyntaxError("\\p{script=ba_bar}", "Unknown character script name {ba_bar}", 16)
+    assertSyntaxError("\\p{IsFrobber}", "Unknown character script name {Frobber}", 12)
   }
 
   @Test def simpleCharacterClasses(): Unit = {
