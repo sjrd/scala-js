@@ -520,7 +520,7 @@ private[regex] object PatternCompiler {
       if (conjunction == "") conjunct else s"(?:$conjunction$conjunct)"
     }
 
-    def finishConjunct(): Unit = {
+    def startNewConjunct(): Unit = {
       val conjunct = conjunctResult()
       conjunction += (if (isNegated) conjunct + "|" else s"(?=$conjunct)")
       thisConjunct = ""
@@ -1673,7 +1673,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
           pIndex += 1
           if (pIndex != len && pattern.charAt(pIndex) == '&') {
             pIndex += 1
-            builder.finishConjunct()
+            builder.startNewConjunct()
           } else {
             processRangeOrSingleCodePoint('&')
           }
