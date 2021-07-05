@@ -709,9 +709,6 @@ private final class PatternCompiler(private val pattern: String, private var fla
   /** The parse index, within `pattern`. */
   private var pIndex: Int = 0
 
-  /** The number of capturing groups in the original pattern. */
-  private var originalGroupCount: Int = 0
-
   /** The number of capturing groups in the compiled pattern.
    *
    *  This is different than `originalGroupCount` when there are atomic groups
@@ -719,8 +716,18 @@ private final class PatternCompiler(private val pattern: String, private var fla
    */
   private var compiledGroupCount: Int = 0
 
-  /** Map from original group number to compiled group number. */
+  /** Map from original group number to compiled group number.
+   *
+   *  It contains a mapping for the entire match, which is group 0.
+   */
   private val groupNumberMap = js.Array[Int](0)
+
+  /** The number of capturing groups found so far in the original pattern.
+   *
+   *  This is `groupNumberMap.length - 1`, because `groupNumberMap` contains
+   *  the mapping for the entire match, which is group 0.
+   */
+  @inline private def originalGroupCount = groupNumberMap.length - 1
 
   /** Map from group name to original group number.
    *
@@ -1688,7 +1695,6 @@ private final class PatternCompiler(private val pattern: String, private var fla
     if (start + 1 == len || pattern.charAt(start + 1) != '?') {
       // Numbered capturing group
       pIndex = start + 1
-      originalGroupCount += 1
       compiledGroupCount += 1
       groupNumberMap.push(compiledGroupCount)
       "(" + compileInsideGroup() + ")"
@@ -1712,11 +1718,10 @@ private final class PatternCompiler(private val pattern: String, private var fla
           // Named capturing group
           pIndex = start + 3
           val name = parseGroupName()
-          originalGroupCount += 1
-          compiledGroupCount += 1
-          groupNumberMap.push(compiledGroupCount)
           if (namedGroups.contains(name))
             parseError(s"named capturing group <$name> is already defined")
+          compiledGroupCount += 1
+          groupNumberMap.push(compiledGroupCount) // this changes originalGroupCount
           namedGroups(name) = originalGroupCount
           pIndex += 1
           "(" + compileInsideGroup() + ")"
