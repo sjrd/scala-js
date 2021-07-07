@@ -12,7 +12,7 @@
 
 package java.util.regex
 
-import scala.annotation.switch
+import scala.annotation.{switch, tailrec}
 
 import java.lang.Character.{
   charCount,
@@ -977,11 +977,7 @@ private final class PatternCompiler(private val pattern: String, private var fla
           pIndex += 1
 
         case '#' if comments =>
-          // ignore until the end of a line
-          @inline def isEOL(c: Char): Boolean =
-            c == '\r' || c == '\n' || c == '\u0085' || c == '\u2028' || c == '\u2029'
-          while (pIndex != len && !isEOL(pattern.charAt(pIndex)))
-            pIndex += 1
+          skipSharpComment()
 
         case '?' | '*' | '+' | '{' =>
           parseError("Dangling meta character '" + codePointToString(dispatchCP) + "'")
@@ -1014,6 +1010,49 @@ private final class PatternCompiler(private val pattern: String, private var fla
 
     result
     // scalastyle:on return
+  }
+
+  /** Skip a '#' comment.
+   *
+   *  Pre-condition: `comments && pattern.charAt(pIndex) == '#'` is true
+   */
+  private def skipSharpComment(): Unit = {
+    val pattern = this.pattern // local copy
+    val len = pattern.length()
+
+    @inline def isEOL(c: Char): Boolean =
+      c == '\n' || c == '\r' || c == '\u0085' || c == '\u2028' || c == '\u2029'
+
+    while (pIndex != len && !isEOL(pattern.charAt(pIndex)))
+      pIndex += 1
+  }
+
+  /** Skip all comments.
+   *
+   *  Pre-condition: `comments` is true
+   */
+  @noinline
+  private def skipComments(): Unit = {
+    val pattern = this.pattern // local copy
+    val len = pattern.length()
+
+    @inline @tailrec
+    def loop(): Unit = {
+      if (pIndex != len) {
+        (pattern.charAt(pIndex): @switch) match {
+          case ' ' | '\t' | '\n' | '\u000B' | '\f' | '\r' =>
+            pIndex += 1
+            loop()
+          case '#' =>
+            skipSharpComment()
+            loop()
+          case _ =>
+            ()
+        }
+      }
+    }
+
+    loop()
   }
 
   private def compileRepeater(compiledGroupCountBeforeThisToken: Int, compiledToken: String): String = {
@@ -1638,26 +1677,34 @@ private final class PatternCompiler(private val pattern: String, private var fla
 
     while (pIndex != len) {
       def processRangeOrSingleCodePoint(startCodePoint: Int): Unit = {
-        @inline def canBeRangeEnd(c: Char): Boolean = c != '[' && c != ']'
+        if (comments)
+          skipComments()
 
-        if (pIndex + 2 <= len && pattern.charAt(pIndex) == '-' &&
-            canBeRangeEnd(pattern.charAt(pIndex + 1))) {
-          // Range of code points
-
+        if (pIndex != len && pattern.charAt(pIndex) == '-') {
+          // Perhaps a range of code points, unless the '-' is followed by '[' or ']'
           pIndex += 1
-          if (pIndex + 2 > len)
+          if (comments)
+            skipComments()
+
+          if (pIndex == len)
             parseError("Unclosed character class")
 
           val cpEnd = pattern.codePointAt(pIndex)
-          pIndex += charCount(cpEnd)
-          val endCodePoint =
-            if (cpEnd == '\\') parseSingleCodePointEscape()
-            else cpEnd
 
-          if (endCodePoint < startCodePoint)
-            parseError("Illegal character range")
-
-          builder.addCodePointRange(startCodePoint, endCodePoint)
+          if (cpEnd == '[' || cpEnd == ']') {
+            // Oops, it wasn't a range after all
+            builder.addSingleCodePoint(startCodePoint)
+            builder.addSingleCodePoint('-')
+          } else {
+            // Range of code points
+            pIndex += charCount(cpEnd)
+            val endCodePoint =
+              if (cpEnd == '\\') parseSingleCodePointEscape()
+              else cpEnd
+            if (endCodePoint < startCodePoint)
+              parseError("Illegal character range")
+            builder.addCodePointRange(startCodePoint, endCodePoint)
+          }
         } else {
           // Single code point
           builder.addSingleCodePoint(startCodePoint)
@@ -1701,6 +1748,11 @@ private final class PatternCompiler(private val pattern: String, private var fla
             case _ =>
               processRangeOrSingleCodePoint(parseSingleCodePointEscape())
           }
+
+        case ' ' | '\t' | '\n' | '\u000B' | '\f' | '\r' if comments =>
+          pIndex += 1
+        case '#' if comments =>
+          skipSharpComment()
 
         case codePoint =>
           pIndex += charCount(codePoint)

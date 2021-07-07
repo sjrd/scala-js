@@ -731,6 +731,75 @@ class RegexEngineTest  {
 
     assertMatches(lotsOfComments, "abc\u0085d\u2028e\u2029fghi")
 
+    val commentsInCharClass = compile(
+        "[\n" +
+        "  A-Z  # an uppercase letter\n" +
+        "  _ \t # or an underscore\n" +
+        "  f  - # gosh, we can even have ranges\n" +
+        "    j  # split by comments!\n" +
+        "]",
+        Comments)
+
+    assertMatches(commentsInCharClass, "A")
+    assertMatches(commentsInCharClass, "F")
+    assertMatches(commentsInCharClass, "R")
+    assertMatches(commentsInCharClass, "Z")
+    assertMatches(commentsInCharClass, "f")
+    assertMatches(commentsInCharClass, "g")
+    assertMatches(commentsInCharClass, "h")
+    assertMatches(commentsInCharClass, "i")
+    assertMatches(commentsInCharClass, "j")
+    assertMatches(commentsInCharClass, "_")
+    assertNotFind(commentsInCharClass, " ")
+    assertNotFind(commentsInCharClass, "\t")
+    assertNotFind(commentsInCharClass, "\n")
+    assertNotFind(commentsInCharClass, "#")
+    assertNotFind(commentsInCharClass, "-")
+    assertNotFind(commentsInCharClass, "!")
+    assertNotFind(commentsInCharClass, "a")
+    assertNotFind(commentsInCharClass, "e")
+    assertNotFind(commentsInCharClass, "k")
+    assertNotFind(commentsInCharClass, "l")
+    assertNotFind(commentsInCharClass, "z")
+
+    val fakeRangeWithComments = compile("[A-D G # comment\n -]", Comments)
+    assertMatches(fakeRangeWithComments, "A")
+    assertMatches(fakeRangeWithComments, "C")
+    assertMatches(fakeRangeWithComments, "D")
+    assertMatches(fakeRangeWithComments, "G")
+    assertMatches(fakeRangeWithComments, "-")
+    assertNotMatches(fakeRangeWithComments, "E")
+    assertNotMatches(fakeRangeWithComments, "I")
+    assertNotMatches(fakeRangeWithComments, "e")
+    assertNotMatches(fakeRangeWithComments, "]")
+    assertNotMatches(fakeRangeWithComments, " ")
+    assertNotMatches(fakeRangeWithComments, "\n")
+    assertNotMatches(fakeRangeWithComments, "#")
+
+    /* If there is a comment between the '-' and the ']', the JVM does not
+     * detect that it is a fake range, and reports a syntax error. Our
+     * implementation correctly detects that case, because it was easier than
+     * not detecting it.
+     */
+    if (executingInJVM) {
+      assertSyntaxError("[A-D G - ]", Comments, "irrelevant", 0)
+      assertSyntaxError("[A-D G -# comment\n]", Comments, "irrelevant", 0)
+    } else {
+      val fakeRangeWithCommentsOnRHS = compile("[A-D G - # comment\n ]", Comments)
+      assertMatches(fakeRangeWithCommentsOnRHS, "A")
+      assertMatches(fakeRangeWithCommentsOnRHS, "C")
+      assertMatches(fakeRangeWithCommentsOnRHS, "D")
+      assertMatches(fakeRangeWithCommentsOnRHS, "G")
+      assertMatches(fakeRangeWithCommentsOnRHS, "-")
+      assertNotMatches(fakeRangeWithCommentsOnRHS, "E")
+      assertNotMatches(fakeRangeWithCommentsOnRHS, "I")
+      assertNotMatches(fakeRangeWithCommentsOnRHS, "e")
+      assertNotMatches(fakeRangeWithCommentsOnRHS, "]")
+      assertNotMatches(fakeRangeWithCommentsOnRHS, " ")
+      assertNotMatches(fakeRangeWithCommentsOnRHS, "\n")
+      assertNotMatches(fakeRangeWithCommentsOnRHS, "#")
+    }
+
     // We can still match against whitespace in the input
     assertMatches("\ta\\ b\t", Comments, "a b")
     assertMatches("\ta.b\t", Comments, "a b")
