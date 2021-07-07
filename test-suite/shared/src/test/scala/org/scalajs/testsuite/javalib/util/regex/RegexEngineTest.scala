@@ -308,7 +308,11 @@ class RegexEngineTest  {
     assertMatches("a\\+", "a+")
     assertMatches("a\\{3}", "a{3}")
     assertMatches("\\(5\\)", "(5)")
+
+    // Escapes for characters that are syntax characters only when using Comments (the escapes work regardless)
+    assertMatches("\\ \\\t\\\n\\\u000B\\\f\\\r", " \t\n\u000B\f\r")
     assertMatches("\\ \\\t\\\n\\\u000B\\\f\\\r", Comments, " \t\n\u000B\f\r")
+    assertMatches("\\#abc", "#abc")
     assertMatches("\\#abc", Comments, "#abc")
 
     // Letter escapes for special chars
@@ -327,7 +331,10 @@ class RegexEngineTest  {
     assertMatches("\\c_", "\u001F")
     assertMatches("\\c?", 0x007f.toChar.toString())
 
-    // More control escapes that are not really meant to be used
+    /* More control escapes that are not really meant to be used.
+     * In general, '\cx' means `x ^ 0x40`, as explained at
+     * https://stackoverflow.com/questions/35208570/java-regular-expression-cx-control-characters
+     */
     assertMatches("\\cb", 0x0022.toChar.toString())
     assertMatches("\\c" + GClefHigh, "" + (0xd834 ^ 0x40).toChar)
     assertMatches("\\c" + GClef, GClefHigh + (0xdd1e ^ 0x40).toChar)
@@ -433,8 +440,10 @@ class RegexEngineTest  {
     assertFind(repeatedSupplementaryCodePoint, "bca\uD834\uDD1E\uDD1Edef", 2, 5)
 
     // After quotes, a quantifier applies to the last code point (sic!)
-    assertFind("a\\Qbc\\d\\E*", "aaabc\\dbc\\dbc", 2, 7)
-    assertFind("a\\Qbc\\b\\E*", "aaabc\\bbc\\bbc", 2, 8)
+    val repeatedQuote = compile("a\\Qbc\\d\\E*")
+    assertFind(repeatedQuote, "aaabc\\dbc\\dbc", 2, 7)
+    assertFind(repeatedQuote, "aaabc\\ddc", 2, 8)
+    assertFind(repeatedQuote, "aaabc\\bc", 2, 6)
 
     val repeatedQuoteEndingWithSupplementaryCodePoint = compile("a\\Qbc\\\uD834\uDD1E\\E*")
     assertFind(repeatedQuoteEndingWithSupplementaryCodePoint, "aaabc\\\uD834\uDD1E\uD834\uDD1Ebc", 2, 10)
@@ -443,29 +452,54 @@ class RegexEngineTest  {
   }
 
   @Test def lazyQuantifiers(): Unit = {
-    val starLazy = compile("ba*?")
-    assertMatches(starLazy, "b")
-    assertMatches(starLazy, "ba")
-    assertMatches(starLazy, "baaaaa")
-    assertFind(starLazy, "cbaaassefaa", 1, 2)
-    assertFind(starLazy, "cbsssefaaaaa", 1, 2)
-    assertNotFind(starLazy, "qsessqsssddff")
+    val starLazy = compile("a[bc]*?b")
+    assertMatches(starLazy, "ab")
+    assertMatches(starLazy, "abbbb")
+    assertMatches(starLazy, "abccbb")
+    assertFind(starLazy, "abbb", 0, 2)
+    assertFind(starLazy, "accbbbccb", 0, 4)
+    assertNotFind(starLazy, "accc")
 
-    val plusLazy = compile("ba+?")
-    assertMatches(plusLazy, "ba")
-    assertMatches(plusLazy, "baaaa")
-    assertNotFind(plusLazy, "b")
-    assertFind(plusLazy, "cbaaassefaa", 1, 3)
-    assertFind(plusLazy, "cbsssefbaaa", 7, 9)
-    assertNotFind(plusLazy, "qsebsqsbsddfb")
+    val starLazyAtEnd = compile("ba*?")
+    assertMatches(starLazyAtEnd, "b")
+    assertMatches(starLazyAtEnd, "ba")
+    assertMatches(starLazyAtEnd, "baaaaa")
+    assertFind(starLazyAtEnd, "cbaaassefaa", 1, 2)
+    assertFind(starLazyAtEnd, "cbsssefaaaaa", 1, 2)
+    assertNotFind(starLazyAtEnd, "qsessqsssddff")
 
-    val questionLazy = compile("ba??")
-    assertMatches(questionLazy, "b")
-    assertMatches(questionLazy, "ba")
-    assertNotMatches(questionLazy, "baa")
-    assertFind(questionLazy, "cbaaassefaa", 1, 2)
-    assertFind(questionLazy, "cbssefbaaa", 1, 2)
-    assertNotFind(questionLazy, "qsessqsssddff")
+    val plusLazy = compile("a[bc]+?b")
+    assertMatches(plusLazy, "abb")
+    assertMatches(plusLazy, "acb")
+    assertMatches(plusLazy, "abbbcccbb")
+    assertFind(plusLazy, "abbb", 0, 3)
+    assertFind(plusLazy, "accbbbccb", 0, 4)
+    assertNotFind(plusLazy, "accc")
+    assertNotFind(plusLazy, "ab")
+
+    val plusLazyAtEnd = compile("ba+?")
+    assertMatches(plusLazyAtEnd, "ba")
+    assertMatches(plusLazyAtEnd, "baaaa")
+    assertNotFind(plusLazyAtEnd, "b")
+    assertFind(plusLazyAtEnd, "cbaaassefaa", 1, 3)
+    assertFind(plusLazyAtEnd, "cbsssefbaaa", 7, 9)
+    assertNotFind(plusLazyAtEnd, "qsebsqsbsddfb")
+
+    val questionLazy = compile("a[bc]??b")
+    assertMatches(questionLazy, "ab")
+    assertMatches(questionLazy, "abb")
+    assertMatches(questionLazy, "acb")
+    assertFind(questionLazy, "abbb", 0, 2)
+    assertFind(questionLazy, "acbbbccb", 0, 3)
+    assertNotFind(questionLazy, "accbb")
+
+    val questionLazyAtEnd = compile("ba??")
+    assertMatches(questionLazyAtEnd, "b")
+    assertMatches(questionLazyAtEnd, "ba")
+    assertNotMatches(questionLazyAtEnd, "baa")
+    assertFind(questionLazyAtEnd, "cbaaassefaa", 1, 2)
+    assertFind(questionLazyAtEnd, "cbssefbaaa", 1, 2)
+    assertNotFind(questionLazyAtEnd, "qsessqsssddff")
   }
 
   @Test def possessiveQuantifiers(): Unit = {
@@ -477,7 +511,7 @@ class RegexEngineTest  {
     val plusPossessive = compile("ab++[bd]")
     assertFind(plusPossessive, " a  abbbb  abbbdba ", 11, 16)
     assertFind(plusPossessive, " a  abbbb  adba  abdd ", 17, 20)
-    assertNotFind(plusPossessive, " a  abbbb dab adba ")
+    assertNotFind(plusPossessive, " a  ad  abbbb dab adba ")
 
     val questionPossessive = compile("ab?+[bd]")
     assertFind(questionPossessive, " a  ab   abb abb ", 9, 12)
@@ -576,7 +610,7 @@ class RegexEngineTest  {
     assertMatches(dotAll, "\u2029")
 
     assertNotMatches(dotAll, "\r\n")
-    assertFind(dotUnixLines, "\r\n", 0, 1)
+    assertFind(dotAll, "\r\n", 0, 1)
 
     val dotAllUnixLines = compile(".", DotAll | UnixLines)
 
@@ -594,7 +628,7 @@ class RegexEngineTest  {
     assertMatches(dotAllUnixLines, "\u2029")
 
     assertNotMatches(dotAllUnixLines, "\r\n")
-    assertFind(dotUnixLines, "\r\n", 0, 1)
+    assertFind(dotAllUnixLines, "\r\n", 0, 1)
 
     // Test case for #1847, and for the (?s) leading flag
     val codeMatcher = Pattern.compile("(?s).*<code>(.*?)</code>.*")
@@ -683,7 +717,7 @@ class RegexEngineTest  {
   }
 
   @Test def comments(): Unit = {
-    val abc = compile(
+    val lotsOfComments = compile(
         "  \ta  # a comment is interrupted by \r" +
         "b      # or \n" +
         "c      # or \u0085" +
@@ -695,7 +729,17 @@ class RegexEngineTest  {
         "i",
         Comments)
 
-    assertMatches(abc, "abc\u0085d\u2028e\u2029fghi")
+    assertMatches(lotsOfComments, "abc\u0085d\u2028e\u2029fghi")
+
+    // We can still match against whitespace in the input
+    assertMatches("\ta\\ b\t", Comments, "a b")
+    assertMatches("\ta.b\t", Comments, "a b")
+    assertMatches("\ta[\\ c]b\t", Comments, "a b")
+
+    // We can still match against '#' in the input
+    assertMatches("\ta\\#b\t", Comments, "a#b")
+    assertMatches("\ta.b\t", Comments, "a#b")
+    assertMatches("\ta[\\#c]b\t", Comments, "a#b")
   }
 
   @Test def predefinedCharacterClasses(): Unit = {
@@ -1571,18 +1615,18 @@ class RegexEngineTest  {
     assertNotMatches(an_and_ks, "A")
     assertNotMatches(an_and_ks, "N")
 
-    val az_butNot_def = compile("[a-z&&[^dfh]]")
-    assertMatches(az_butNot_def, "a")
-    assertMatches(az_butNot_def, "c")
-    assertMatches(az_butNot_def, "e")
-    assertMatches(az_butNot_def, "i")
-    assertMatches(az_butNot_def, "r")
-    assertNotMatches(az_butNot_def, "d")
-    assertNotMatches(az_butNot_def, "f")
-    assertNotMatches(az_butNot_def, "h")
-    assertNotMatches(az_butNot_def, "A")
-    assertNotMatches(az_butNot_def, "0")
-    assertNotMatches(az_butNot_def, "\n")
+    val az_butNot_dfh = compile("[a-z&&[^dfh]]")
+    assertMatches(az_butNot_dfh, "a")
+    assertMatches(az_butNot_dfh, "c")
+    assertMatches(az_butNot_dfh, "e")
+    assertMatches(az_butNot_dfh, "i")
+    assertMatches(az_butNot_dfh, "r")
+    assertNotMatches(az_butNot_dfh, "d")
+    assertNotMatches(az_butNot_dfh, "f")
+    assertNotMatches(az_butNot_dfh, "h")
+    assertNotMatches(az_butNot_dfh, "A")
+    assertNotMatches(az_butNot_dfh, "0")
+    assertNotMatches(az_butNot_dfh, "\n")
 
     val az_butNot_mp = compile("[a-z&&[^m-p]]")
     assertMatches(az_butNot_mp, "a")
@@ -1877,40 +1921,20 @@ class RegexEngineTest  {
     assertFind(lineBreakUnixLines, "ab\n\ncd", 2, 3)
   }
 
-  @Test def matchesWithNonGreedyOperators(): Unit = {
-    val opt = compile("ab??")
-    assertMatches(opt, "a")
-    assertMatches(opt, "ab")
-    assertFind(opt, "ab", 0, 1)
-
-    val star = compile("ab*?")
-    assertMatches(star, "a")
-    assertMatches(star, "ab")
-    assertMatches(star, "abbbbbb")
-    assertFind(star, "abbbb", 0, 1)
-
-    val plus = compile("ab+?")
-    assertNotFind(plus, "a")
-    assertMatches(plus, "ab")
-    assertMatches(plus, "abb")
-    assertMatches(plus, "abbbbbb")
-    assertFind(plus, "abbbb", 0, 2)
-  }
-
   @Test def namedCaptureGroups(): Unit = {
-    val named = compile(raw".*((?<pizza>Pizza).*?)+")
+    val named = compile(".*((?<pizza>Pizza).*?)+")
     val m = assertMatchesAndGroupsEquals(named, "PizzaWithPizza", "Pizza", "Pizza")
     assertEquals("Pizza", m.group("pizza"))
 
-    val ref = compile(raw"(?<pizza>Pizza)\k<pizza>*?")
+    val ref = compile("(?<pizza>Pizza)\\k<pizza>*?")
     assertMatches(ref, "Pizza")
     assertMatches(ref, "PizzaPizza")
     assertMatches(ref, "PizzaPizzaPizza")
     assertNotMatches(ref, "PizzaPizzicatoPizza")
 
-    assertSyntaxError("""(?<A>a?)\k<B>?""", "named capturing group <B> does not exit", 12)
+    assertSyntaxError("(?<A>a?)\\k<B>?", "named capturing group <B> does not exit", 12)
 
-    assertSyntaxError("""(?<A>a?)(?<A>dupe)""", "named capturing group <A> is already defined", 12)
+    assertSyntaxError("(?<A>a?)(?<A>dupe)", "named capturing group <A> is already defined", 12)
   }
 
   @Test def recursiveCapturingGroups(): Unit = {
@@ -1922,18 +1946,18 @@ class RegexEngineTest  {
     assertNotMatches(rec, "aaa")
 
     // The JVM kind of supports "back references" to later groups, but we don't
-    assertSyntaxErrorInJS("""(a?\2?)(b?\1?)""", "numbered capturing group <2> does not exist", 4)
+    assertSyntaxErrorInJS("(a?\\2?)(b?\\1?)", "numbered capturing group <2> does not exist", 4)
 
     // The JVM tolerates "back references" to non-existing groups, but we don't
-    assertSyntaxErrorInJS("""(a?\3?)(b?\1?)""", "numbered capturing group <3> does not exist", 4)
+    assertSyntaxErrorInJS("(a?\\3?)(b?\\1?)", "numbered capturing group <3> does not exist", 4)
 
-    val namedRec = compile(raw"(?<A>a?\k<A>?)\k<A>")
+    val namedRec = compile("(?<A>a?\\k<A>?)\\k<A>")
     assertMatches(namedRec, "aa")
     assertMatches(namedRec, "")
     assertNotMatches(namedRec, "ab")
     assertNotMatches(namedRec, "a")
 
-    assertSyntaxError("""(?<A>a?\k<B>?)(?<B>b?\k<A>?)""", "named capturing group <B> does not exit", 11)
+    assertSyntaxError("(?<A>a?\\k<B>?)(?<B>b?\\k<A>?)", "named capturing group <B> does not exit", 11)
   }
 
   @Test def backReferenceLimit(): Unit = {
@@ -2015,6 +2039,24 @@ class RegexEngineTest  {
    *  When the groups are fetched in the original code, we check the groups
    *  here. Otherwise, we don't, even if there are capturing groups in the
    *  regex.
+   *
+   *  These tests only really test that the regexes still work, but not that
+   *  they work *in the same way* as before. In fact, they don't for some
+   *  corner cases. By inspection, all the regexes below use features in 4
+   *  categories:
+   *
+   *  - Features whose semantics are equivalent in `js.RegExp` and `Pattern`,
+   *    notably ASCII characters, repeaters, classes of ASCII characters, the
+   *    '\d' character class, the '^' and '$' boundary matchers (without
+   *    multiline).
+   *  - The '.', which *is* different: it matches '\x85' in `js.RegExp` but not
+   *    in `Pattern`; this was judged acceptable as unlikely to cause a real
+   *    difference in practice.
+   *  - One regex uses the `CASE_INSENSITIVE` with a pattern that contains only
+   *    ASCII letters: it now really only matches other ASCII letters; this was
+   *    judged acceptable as probably the intended meaning anyway.
+   *  - One regex uses '\s' and '\S', for which we obtained confirmation from
+   *    the maintainer that the change in semantics was not an issue.
    */
   @Test def regexesFoundInLibraries(): Unit = {
     // scalastyle:off line.size.limit
