@@ -297,7 +297,7 @@ Since `UNICODE_CHARACTER_CLASS` is not supported, all but one call site of `code
 The only one that does not is the call `codePointNotAmong(thisSegment)` inside `CharacterClassBuilder.conjunctResult()`.
 To make that one compliant, we make sure not to add illegal code points in `thisSegment`.
 To do that, we exploit the equivalences `[𝐴𝐵] = [𝐴]|[𝐵]` and `[^𝐴𝐵] = (?![𝐴])[𝐵]` where `𝐴` is an illegal code point to isolate it in a separate alternative, that we can compile as a single code point above.
-For example, the character class `[k\uD834f]`, containing a high surrogate code point, is equivalent to `[\uD834]|[xf]`, which can be compiled as `(?:\uD834(?![ℒ]))|[xf])`.
+For example, the character class `[k\uD834f]`, containing a high surrogate code point, is equivalent to `[\uD834]|[kf]`, which can be compiled as `(?:\uD834(?![ℒ]))|[kf])`.
 That logic is implemented in `CharacterClassBuilder.addSingleCodePoint()`.
 
 Code point ranges that contain illegal code points are decomposed into the union of 4 (possibly empty) ranges:
@@ -315,7 +315,7 @@ That logic is implemented in `CharacterClassBuilder.addCodePointRange()`.
 ## About code size
 
 For historical reasons, code size is critical in this class.
-Before Scala.js 1.6.0, `java.util.regex.Pattern` was just a wrapper over native `RegExp`s.
+Before Scala.js 1.7.0, `java.util.regex.Pattern` was just a wrapper over native `RegExp`s.
 The patterns were passed through with minimal preprocessing, without caring about the proper semantics.
 This created an expectation of small code size for this class.
 When we fixed the semantics, we had to introduce this compiler, which is non-trivial.
