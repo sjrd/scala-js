@@ -870,6 +870,24 @@ class RegressionTest {
     assertEquals("lazily always", ex2.getMessage())
   }
 
+  @Test def paramDefWithWrongTypeWithHKTAndTypeAliases_Issue3953(): Unit = {
+    import scala.language.higherKinds
+
+    sealed class StreamT[M[_]](val step: M[Step[StreamT[M]]])
+
+    sealed abstract class Step[S]
+
+    def mustMatch[A](actual: A)(f: PartialFunction[A, Boolean]): Boolean =
+      f.applyOrElse(actual, (_: Any) => false)
+
+    type Id[A] = A
+
+    val result = mustMatch(new StreamT[Id](null).step) {
+      case _ => true
+    }
+    assertTrue(result)
+  }
+
 }
 
 object RegressionTest {
