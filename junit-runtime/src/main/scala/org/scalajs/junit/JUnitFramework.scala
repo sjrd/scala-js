@@ -42,7 +42,7 @@ final class JUnitFramework extends Framework {
     var verbose = false
     var noColor = false
     var decodeScalaNames = false
-    var logAssert = false
+    var logAssert = true
     var notLogExceptionClass = false
     for (str <- args) {
       str match {

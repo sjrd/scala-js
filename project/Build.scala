@@ -268,7 +268,7 @@ object Build {
     else sourceDir / "scala-old-collections"
 
   val JUnitDeps = Seq(
-    "com.novocode" % "junit-interface" % "0.11" % "test",
+    "com.github.sbt" % "junit-interface" % "0.13.2" % "test",
     "junit" % "junit" % "4.13.2" % "test",
   )
 
