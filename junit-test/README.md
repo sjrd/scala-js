@@ -4,5 +4,5 @@ The recordings lie in the `outputs` directory. To re-record all tests, set the
 `org.scalajs.junit.utils.record` system property and run the JVM tests:
 
 ```
-sbt -Dorg.scalajs.junit.utils.record jUnitTestOutputsJVM/test
+sbt -Dorg.scalajs.junit.utils.record jUnitTestOutputsJVM2_12/test
 ```

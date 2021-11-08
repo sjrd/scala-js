@@ -39,7 +39,7 @@ final class JUnitFramework extends Framework {
   }
 
   private def parseRunSettings(args: Array[String]): RunSettings = {
-    var verbose = false
+    var verbose = true
     var noColor = false
     var decodeScalaNames = false
     var logAssert = true

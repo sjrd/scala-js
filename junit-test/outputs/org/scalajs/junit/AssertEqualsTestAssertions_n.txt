@@ -1,7 +1,7 @@
-ldTest run started
+ldTest run org.scalajs.junit.AssertEqualsTest started
 ldTest org.scalajs.junit.AssertEqualsTest.test started
-leTest org.scalajs.junit.AssertEqualsTest.test failed: expected:<false> but was:<true>, took <TIME>
+leTest org.scalajs.junit.AssertEqualsTest.test failed: java.lang.AssertionError: expected:<false> but was:<true>, took <TIME>
 e2org.scalajs.junit.AssertEqualsTest.test
 ldTest org.scalajs.junit.AssertEqualsTest.test finished, took <TIME>
-ldTest run finished: 1 failed, 0 ignored, 1 total, <TIME>
+ldTest run org.scalajs.junit.AssertEqualsTest finished: 1 failed, 0 ignored, 1 total, <TIME>
 d

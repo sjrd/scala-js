@@ -1,8 +1,9 @@
-ldTest run started
+ldTest run org.scalajs.junit.MultiAssumeFail2Test started
 ldTest org.scalajs.junit.MultiAssumeFail2Test.multiTest1 started
 lwTest assumption in test org.scalajs.junit.MultiAssumeFail2Test.multiTest1 failed: org.junit.AssumptionViolatedException: This assume should not pass, took <TIME>
 e3org.scalajs.junit.MultiAssumeFail2Test.multiTest1
 ldTest org.scalajs.junit.MultiAssumeFail2Test.multiTest1 finished, took <TIME>
+e0org.scalajs.junit.MultiAssumeFail2Test.multiTest1
 ldTest org.scalajs.junit.MultiAssumeFail2Test.multiTest2 started
 ldTest org.scalajs.junit.MultiAssumeFail2Test.multiTest2 finished, took <TIME>
 e0org.scalajs.junit.MultiAssumeFail2Test.multiTest2
@@ -13,8 +14,9 @@ ldTest org.scalajs.junit.MultiAssumeFail2Test.multiTest4 started
 lwTest assumption in test org.scalajs.junit.MultiAssumeFail2Test.multiTest4 failed: org.junit.AssumptionViolatedException: This assume should not pass, took <TIME>
 e3org.scalajs.junit.MultiAssumeFail2Test.multiTest4
 ldTest org.scalajs.junit.MultiAssumeFail2Test.multiTest4 finished, took <TIME>
+e0org.scalajs.junit.MultiAssumeFail2Test.multiTest4
 ldTest org.scalajs.junit.MultiAssumeFail2Test.multiTest5 started
 ldTest org.scalajs.junit.MultiAssumeFail2Test.multiTest5 finished, took <TIME>
 e0org.scalajs.junit.MultiAssumeFail2Test.multiTest5
-ldTest run finished: 0 failed, 0 ignored, 5 total, <TIME>
+ldTest run org.scalajs.junit.MultiAssumeFail2Test finished: 0 failed, 0 ignored, 5 total, <TIME>
 d

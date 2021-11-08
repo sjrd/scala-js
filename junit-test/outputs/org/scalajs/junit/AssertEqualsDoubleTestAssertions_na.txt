@@ -1,10 +1,10 @@
-ldTest run started
+ldTest run org.scalajs.junit.AssertEqualsDoubleTest started
 ldTest org.scalajs.junit.AssertEqualsDoubleTest.failsWithDouble started
-leTest org.scalajs.junit.AssertEqualsDoubleTest.failsWithDouble failed: java.lang.AssertionError: Use assertEquals(expected, actual, delta) to compare floating-point numbers, took <TIME>
+leTest org.scalajs.junit.AssertEqualsDoubleTest.failsWithDouble failed: Use assertEquals(expected, actual, delta) to compare floating-point numbers, took <TIME>
 e2org.scalajs.junit.AssertEqualsDoubleTest.failsWithDouble
 ldTest org.scalajs.junit.AssertEqualsDoubleTest.failsWithDouble finished, took <TIME>
 ldTest org.scalajs.junit.AssertEqualsDoubleTest.failsWithDoubleMessage started
-leTest org.scalajs.junit.AssertEqualsDoubleTest.failsWithDoubleMessage failed: java.lang.AssertionError: Use assertEquals(expected, actual, delta) to compare floating-point numbers, took <TIME>
+leTest org.scalajs.junit.AssertEqualsDoubleTest.failsWithDoubleMessage failed: Use assertEquals(expected, actual, delta) to compare floating-point numbers, took <TIME>
 e2org.scalajs.junit.AssertEqualsDoubleTest.failsWithDoubleMessage
 ldTest org.scalajs.junit.AssertEqualsDoubleTest.failsWithDoubleMessage finished, took <TIME>
 ldTest org.scalajs.junit.AssertEqualsDoubleTest.worksWithByte started
@@ -19,5 +19,5 @@ e0org.scalajs.junit.AssertEqualsDoubleTest.worksWithInt
 ldTest org.scalajs.junit.AssertEqualsDoubleTest.worksWithShort started
 ldTest org.scalajs.junit.AssertEqualsDoubleTest.worksWithShort finished, took <TIME>
 e0org.scalajs.junit.AssertEqualsDoubleTest.worksWithShort
-ldTest run finished: 2 failed, 0 ignored, 6 total, <TIME>
+ldTest run org.scalajs.junit.AssertEqualsDoubleTest finished: 2 failed, 0 ignored, 6 total, <TIME>
 d

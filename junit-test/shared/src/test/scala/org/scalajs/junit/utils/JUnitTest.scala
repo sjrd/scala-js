@@ -55,10 +55,19 @@ abstract class JUnitTest {
       List('v', 's', 'n')
   )
 
+  private val argsTrueByDefault: Set[Char] = Set('a', 'v')
+
   @Test def testJUnitOutput(): AsyncResult = await {
     val futs = for (args <- frameworkArgss) yield {
+      val actualArgs = for {
+        arg <- args
+      } yield {
+        if (argsTrueByDefault.contains(arg)) "+" + arg
+        else "-" + arg
+      }
+
       for {
-        rawOut <- runTests(args.map("-" + _))
+        rawOut <- runTests(actualArgs)
       } yield {
         val out = postprocessOutput(rawOut)
 
@@ -253,4 +262,3 @@ object JUnitTest {
     }
   }
 }
-
