@@ -44,7 +44,6 @@ object ExposedValues extends AutoPlugin {
           .withAsInstanceOfs(CheckedBehavior.Compliant)
           .withArrayIndexOutOfBounds(CheckedBehavior.Compliant)
           .withModuleInit(CheckedBehavior.Compliant)
-          .withStrictFloats(true)
       }
     }
 
