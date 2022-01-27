@@ -457,31 +457,27 @@ private[emitter] object CoreJSLib {
           Apply(funGenerator, Nil)
       }
 
-      val mathBuiltins = Block(
-        List("imul", "fround", "clz32").map { builtinName =>
-          val rhs0 = genIdentBracketSelect(MathRef, builtinName)
-          val rhs =
-            if (esVersion >= ESVersion.ES2015) rhs0
-            else rhs0 || genPolyfillFor(builtinName)
-          extractWithGlobals(globalVarDef(builtinName, CoreVar, rhs))
-        }
-      )
+      // var $builtinName = globalRefScope.builtinName || genPolyfillFor(builtinName);
+      def polyfillableGlobalVarDef(globalRefScope: VarRef, builtinName: String): Tree = {
+        extractWithGlobals(globalVarDef(builtinName, CoreVar,
+            genIdentBracketSelect(globalRefScope, builtinName) || genPolyfillFor(builtinName)))
+      }
 
       val es5Compat = condTree(esVersion < ESVersion.ES2015)(Block(
-        extractWithGlobals(globalVarDef("is", CoreVar,
-            genIdentBracketSelect(ObjectRef, "is") || genPolyfillFor("is"))),
+        polyfillableGlobalVarDef(MathRef, "imul"),
+        polyfillableGlobalVarDef(MathRef, "fround"),
+        polyfillableGlobalVarDef(MathRef, "clz32"),
+        polyfillableGlobalVarDef(ObjectRef, "is"),
         extractWithGlobals(globalVarDef("privateJSFieldSymbol", CoreVar,
             If(UnaryOp(JSUnaryOp.typeof, SymbolRef) !== str("undefined"),
                 SymbolRef, genPolyfillFor("privateJSFieldSymbol"))))
       ))
 
       val es2017Compat = condTree(esVersion < ESVersion.ES2017)(Block(
-        extractWithGlobals(globalVarDef("getOwnPropertyDescriptors", CoreVar,
-            genIdentBracketSelect(ObjectRef, "getOwnPropertyDescriptors") ||
-                genPolyfillFor("getOwnPropertyDescriptors")))
+        polyfillableGlobalVarDef(ObjectRef, "getOwnPropertyDescriptors")
       ))
 
-      Block(mathBuiltins, es5Compat, es2017Compat)
+      Block(es5Compat, es2017Compat)
     }
 
     private def declareCachedL0(): Tree = {
@@ -611,12 +607,8 @@ private[emitter] object CoreJSLib {
 
       defineFunction1("objectClone") { instance =>
         // return Object.create(Object.getPrototypeOf(instance), $getOwnPropertyDescriptors(instance));
-        val callGetOwnPropertyDescriptors = {
-          if (esVersion >= ESVersion.ES2017)
-            Apply(genIdentBracketSelect(ObjectRef, "getOwnPropertyDescriptors"), instance :: Nil)
-          else
-            genCallHelper("getOwnPropertyDescriptors", instance)
-        }
+        val callGetOwnPropertyDescriptors = genCallBuiltinOrPolyfillHelper(
+            ESVersion.ES2017, ObjectRef, "getOwnPropertyDescriptors", instance)
         Return(Apply(genIdentBracketSelect(ObjectRef, "create"), List(
             Apply(genIdentBracketSelect(ObjectRef, "getPrototypeOf"), instance :: Nil),
             callGetOwnPropertyDescriptors)))
@@ -894,7 +886,8 @@ private[emitter] object CoreJSLib {
                 (abs & bigInt(~0xffffL)) | bigInt(0x8000L)
               })),
               const(absR, Apply(NumberRef, y :: Nil)),
-              Return(genCallHelper("fround", If(x < bigInt(0L), -absR, absR)))
+              Return(genCallBuiltinOrPolyfillHelper(ESVersion.ES2015, MathRef,
+                  "fround", If(x < bigInt(0L), -absR, absR)))
             )
           }
         ))
@@ -1188,7 +1181,7 @@ private[emitter] object CoreJSLib {
         condTree(strictFloats)(
           defineFunction1("isFloat") { v =>
             Return((typeof(v) === str("number")) &&
-                ((v !== v) || (genCallHelper("fround", v) === v)))
+                ((v !== v) || (genCallBuiltinOrPolyfillHelper(ESVersion.ES2015, MathRef,"fround", v) === v)))
           }
         )
       )
@@ -1952,6 +1945,17 @@ private[emitter] object CoreJSLib {
 
     private def genArrowFunction(args: List[ParamDef], body: Tree): Function =
       jsGen.genArrowFunction(args, None, body)
+
+    private def genCallBuiltinOrPolyfillHelper(builtinESVersion: ESVersion,
+        globalRefScope: VarRef, builtinName: String, args: Tree*): Tree = {
+      if (esFeatures.esVersion >= builtinESVersion) {
+        Apply(
+            genIdentBracketSelect(globalRefScope, builtinName),
+            args.toList)
+      } else {
+        genCallHelper(builtinName, args: _*)
+      }
+    }
 
     private def maybeWrapInUBE(behavior: CheckedBehavior, exception: Tree): Tree = {
       if (behavior == CheckedBehavior.Fatal) {
