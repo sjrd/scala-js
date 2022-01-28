@@ -130,14 +130,22 @@ final class _String private () // scalastyle:ignore
   }
 
   override def hashCode(): Int = {
+    /* By spec, this must be
+     *   s[0]*31^(n-1) + s[1]*31^(n-2) + ... + s[n-1]
+     */
     var res = 0
-    var mul = 1 // holds pow(31, length-i-1)
-    var i = length() - 1
-    while (i >= 0) {
-      res += charAt(i) * mul
-      mul *= 31
-      i -= 1
+    val n = length()
+    var i = 0
+    // Invariant: res = s[0]*31^(i-1) + s[1]*31^(i-2) + ... + s[i-2]*31 + s[i-1]
+    while (i != n) {
+      res = ((res << 5) - res) + charAt(i) // equiv to res = res * 31 + s[i]
+      // res = (s[0]*31^(i-1) + s[1]*31^(i-2) + ... + s[i-2]*31   + s[i-1]   ) * 31 + s[i]
+      //     =  s[0]*31^(i  ) + s[1]*31^(i-1) + ... + s[i-2]*31^2 + s[i-1]*31       + s[i]
+      i += 1
+      // res =  s[0]*31^(i-1) + s[1]*31^(i-2) + ... + s[i-3]*31^2 + s[i-2]*31 + s[i-1]
+      // which is the invariant
     }
+    // i = n so res = s[0]*31^(n-1) + s[1]*31^(n-2) + ... + s[n-2]*31 + s[n-1]
     res
   }
 
