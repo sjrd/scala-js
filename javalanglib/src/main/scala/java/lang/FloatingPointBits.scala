@@ -242,15 +242,59 @@ private[lang] object FloatingPointBits {
     val s = sign & scala.Int.MinValue
     val av = sign * value
 
+    // Compute e and twoPowE
+    var e = 0 // biased
+    var twoPowE = 2.0 // = pow(2, 1024 - 1023)
+    if (av < twoPowE) { twoPowE /= 1.3407807929942597e154 } else { e |= 1024; twoPowE *= 1.3407807929942597e154 }
+    if (av < twoPowE) { twoPowE /= 1.157920892373162e77 } else { e |= 512; twoPowE *= 1.157920892373162e77 }
+    if (av < twoPowE) { twoPowE /= 3.4028236692093846e38 } else { e |= 256; twoPowE *= 3.4028236692093846e38 }
+    if (av < twoPowE) { twoPowE /= 1.8446744073709552e19 } else { e |= 128; twoPowE *= 1.8446744073709552e19 }
+    if (av < twoPowE) { twoPowE /= 4.294967296e9 } else { e |= 64; twoPowE *= 4.294967296e9 }
+    if (av < twoPowE) { twoPowE /= 65536.0 } else { e |= 32; twoPowE *= 65536.0 }
+    if (av < twoPowE) { twoPowE /= 256.0 } else { e |= 16; twoPowE *= 256.0 }
+    if (av < twoPowE) { twoPowE /= 16.0 } else { e |= 8; twoPowE *= 16.0 }
+    if (av < twoPowE) { twoPowE /= 4.0 } else { e |= 4; twoPowE *= 4.0 }
+    if (av < twoPowE) { twoPowE /= 2.0 } else { e |= 2; twoPowE *= 2.0 }
+    if (av < twoPowE) {
+      if (e == (1 << ebits) - 2)
+        twoPowE = 8.98846567431158E307 // pow(2, 2046 - 1023) -- in this case, twoPowE was Infinity from the last step
+      else
+        twoPowE /= 2.0
+    } else {
+      e |= 1
+    }
+
     // Compute e and f
-    val powsOf2 = this.doublePowsOf2 // local cache
-    val e = encodeIEEE754Exponent(ebits, powsOf2, av)
-    val f = encodeIEEE754MantissaBits(ebits, fbits, powsOf2, scala.Double.MinPositiveValue, av, e)
+    //val powsOf2 = this.doublePowsOf2 // local cache
+    //val e = encodeIEEE754Exponent(ebits, powsOf2, av)
+    val f = encodeIEEE754MantissaBits2(ebits, fbits, twoPowE, scala.Double.MinPositiveValue, av, e)
 
     // Encode
     val hi = s | (e << hifbits) | rawToInt(f / 0x100000000L.toDouble)
     val lo = rawToInt(f)
     (hi.toLong << 32) | (lo.toLong & 0xffffffffL)
+  }
+
+  @inline
+  private def encodeIEEE754MantissaBits2(ebits: Int, fbits: Int,
+      twoPowE: scala.Double, minPositiveValue: scala.Double,
+      av: scala.Double, e: Int): scala.Double = {
+
+    // Some constants
+    val specialExponent = (1 << ebits) - 1
+    val twoPowFbits = (1L << fbits).toDouble
+
+    if (e == specialExponent) {
+      if (av != av)
+        (1L << (fbits - 1)).toDouble // NaN
+      else
+        0.0 // Infinity
+    } else {
+      if (e == 0)
+        av / minPositiveValue // Subnormal
+      else
+        ((av / twoPowE) - 1.0) * twoPowFbits // Normal
+    }
   }
 
   @inline
