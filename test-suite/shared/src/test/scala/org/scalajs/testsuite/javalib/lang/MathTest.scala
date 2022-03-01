@@ -24,25 +24,25 @@ import org.scalajs.testsuite.utils.Platform._
 class MathTest {
 
   /** Like `assertEquals` with `delta = 0.0`, but positive and negative zeros
-   *  compare not equal.
+   *  compare not equal, and `NaN` compares as equal to itself.
    */
   private def assertSameDouble(expected: Double, actual: Double): Unit =
     assertTrue(s"expected: $expected but was: $actual", expected.equals(actual))
 
   /** Like `assertEquals` with `delta = 0.0`, but positive and negative zeros
-   *  compare not equal.
+   *  compare not equal, and `NaN` compares as equal to itself.
    */
   private def assertSameDouble(msg: String, expected: Double, actual: Double): Unit =
     assertTrue(s"$msg; expected: $expected but was: $actual", expected.equals(actual))
 
   /** Like `assertEquals` with `delta = 0.0f`, but positive and negative zeros
-   *  compare not equal.
+   *  compare not equal, and `NaN` compares as equal to itself.
    */
   private def assertSameFloat(expected: Float, actual: Float): Unit =
     assertTrue(s"expected: $expected but was: $actual", expected.equals(actual))
 
   /** Like `assertEquals` with `delta = 0.0f`, but positive and negative zeros
-   *  compare not equal.
+   *  compare not equal, and `NaN` compares as equal to itself.
    */
   private def assertSameFloat(msg: String, expected: Float, actual: Float): Unit =
     assertTrue(s"$msg; expected: $expected but was: $actual", expected.equals(actual))
@@ -131,6 +131,38 @@ class MathTest {
     assertTrue(Math.log10(Double.NaN).isNaN)
     assertSameDouble(Double.PositiveInfinity, Math.log10(Double.PositiveInfinity))
     assertTrue(Math.log10(Double.NegativeInfinity).isNaN)
+  }
+
+  @Test def toDegrees(): Unit = {
+    assertSameDouble(0.0, Math.toDegrees(0.0))
+    assertSameDouble(-0.0, Math.toDegrees(-0.0))
+    assertSameDouble(Double.NaN, Math.toDegrees(Double.NaN))
+    assertSameDouble(Double.PositiveInfinity, Math.toDegrees(Double.PositiveInfinity))
+    assertSameDouble(Double.NegativeInfinity, Math.toDegrees(Double.NegativeInfinity))
+
+    assertSameDouble(57.29577951308232, Math.toDegrees(1.0))
+    assertSameDouble(-57.29577951308232, Math.toDegrees(-1.0))
+    assertSameDouble(70735.52961937127, Math.toDegrees(1234.56789))
+    assertSameDouble(-70735.52961937127, Math.toDegrees(-1234.56789))
+
+    assertSameDouble(2.8e-322, Math.toDegrees(Double.MinPositiveValue))
+    assertSameDouble(Double.PositiveInfinity, Math.toDegrees(Double.MaxValue))
+  }
+
+  @Test def toRadians(): Unit = {
+    assertSameDouble(0.0, Math.toRadians(0.0))
+    assertSameDouble(-0.0, Math.toRadians(-0.0))
+    assertSameDouble(Double.NaN, Math.toRadians(Double.NaN))
+    assertSameDouble(Double.PositiveInfinity, Math.toRadians(Double.PositiveInfinity))
+    assertSameDouble(Double.NegativeInfinity, Math.toRadians(Double.NegativeInfinity))
+
+    assertSameDouble(0.017453292519943295, Math.toRadians(1.0))
+    assertSameDouble(-0.017453292519943295, Math.toRadians(-1.0))
+    assertSameDouble(21.547274519899176, Math.toRadians(1234.56789))
+    assertSameDouble(-21.547274519899176, Math.toRadians(-1234.56789))
+
+    assertSameDouble(0.0, Math.toRadians(Double.MinPositiveValue))
+    assertSameDouble(3.1375664143845866E306, Math.toRadians(Double.MaxValue))
   }
 
   @Test def signumForDouble(): Unit = {
@@ -415,44 +447,52 @@ class MathTest {
   @Test def rintForDouble(): Unit = {
     import Math.rint
 
-    def isPosZero(x: Double): Boolean =
-      x == 0.0 && (1.0 / x) == Double.PositiveInfinity
-
-    def isNegZero(x: Double): Boolean =
-      x == 0.0 && (1.0 / x) == Double.NegativeInfinity
-
     // Specials
-    assertTrue(isPosZero(rint(+0.0)))
-    assertTrue(isNegZero(rint(-0.0)))
-    assertEquals(Double.PositiveInfinity, rint(Double.PositiveInfinity), 0.0)
-    assertEquals(Double.NegativeInfinity, rint(Double.NegativeInfinity), 0.0)
-    assertTrue(rint(Double.NaN).isNaN)
+    assertSameDouble(+0.0, rint(+0.0))
+    assertSameDouble(-0.0, rint(-0.0))
+    assertSameDouble(Double.PositiveInfinity, rint(Double.PositiveInfinity))
+    assertSameDouble(Double.NegativeInfinity, rint(Double.NegativeInfinity))
+    assertSameDouble(Double.NaN, rint(Double.NaN))
 
     // Positive values
-    assertTrue(isPosZero(rint(0.1)))
-    assertTrue(isPosZero(rint(0.5)))
-    assertEquals(1.0, rint(0.5000000000000001), 0.0)
-    assertEquals(1.0, rint(0.999), 0.0)
-    assertEquals(1.0, rint(1.4999999999999998), 0.0)
-    assertEquals(2.0, rint(1.5), 0.0)
-    assertEquals(2.0, rint(2.0), 0.0)
-    assertEquals(2.0, rint(2.1), 0.0)
-    assertEquals(2.0, rint(2.5), 0.0)
-    assertEquals(Double.MaxValue, rint(Double.MaxValue), 0.0)
-    assertEquals(4503599627370496.0, rint(4503599627370495.5), 0.0) // MaxSafeInt / 2
+    assertSameDouble(+0.0, rint(Double.MinPositiveValue))
+    assertSameDouble(+0.0, rint(java.lang.Double.MIN_NORMAL))
+    assertSameDouble(+0.0, rint(0.1))
+    assertSameDouble(+0.0, rint(0.5))
+    assertSameDouble(1.0, rint(0.5000000000000001))
+    assertSameDouble(1.0, rint(0.999))
+    assertSameDouble(1.0, rint(1.4999999999999998))
+    assertSameDouble(2.0, rint(1.5))
+    assertSameDouble(2.0, rint(2.0))
+    assertSameDouble(2.0, rint(2.1))
+    assertSameDouble(2.0, rint(2.5))
+    assertSameDouble(2251799813685248.0, rint(2251799813685248.5)) // 2^51 + 0.5
+    assertSameDouble(2251799813685249.0, rint(2251799813685249.0)) // 2^51 + 1.0
+    assertSameDouble(2251799813685250.0, rint(2251799813685249.5)) // 2^51 + 1.5
+    assertSameDouble(4503599627370495.0, rint(4503599627370495.0)) // 2^52 - 1.0
+    assertSameDouble(4503599627370496.0, rint(4503599627370496.0)) // 2^52
+    assertSameDouble(4503599627370497.0, rint(4503599627370497.0)) // 2^52 + 1.0
+    assertSameDouble(Double.MaxValue, rint(Double.MaxValue))
 
     // Negative values
-    assertTrue(isNegZero(rint(-0.1)))
-    assertTrue(isNegZero(rint(-0.5)))
-    assertEquals(-1.0, rint(-0.5000000000000001), 0.0)
-    assertEquals(-1.0, rint(-0.999), 0.0)
-    assertEquals(-1.0, rint(-1.4999999999999998), 0.0)
-    assertEquals(-2.0, rint(-1.5), 0.0)
-    assertEquals(-2.0, rint(-2.0), 0.0)
-    assertEquals(-2.0, rint(-2.1), 0.0)
-    assertEquals(-2.0, rint(-2.5), 0.0)
-    assertEquals(Double.MinValue, rint(Double.MinValue), 0.0)
-    assertEquals(-4503599627370496.0, rint(-4503599627370495.5), 0.0) // -MaxSafeInt / 2
+    assertSameDouble(-0.0, rint(-Double.MinPositiveValue))
+    assertSameDouble(-0.0, rint(-java.lang.Double.MIN_NORMAL))
+    assertSameDouble(-0.0, rint(-0.1))
+    assertSameDouble(-0.0, rint(-0.5))
+    assertSameDouble(-1.0, rint(-0.5000000000000001))
+    assertSameDouble(-1.0, rint(-0.999))
+    assertSameDouble(-1.0, rint(-1.4999999999999998))
+    assertSameDouble(-2.0, rint(-1.5))
+    assertSameDouble(-2.0, rint(-2.0))
+    assertSameDouble(-2.0, rint(-2.1))
+    assertSameDouble(-2.0, rint(-2.5))
+    assertSameDouble(-2251799813685248.0, rint(-2251799813685248.5)) // 2^51 + 0.5
+    assertSameDouble(-2251799813685249.0, rint(-2251799813685249.0)) // 2^51 + 1.0
+    assertSameDouble(-2251799813685250.0, rint(-2251799813685249.5)) // 2^51 + 1.5
+    assertSameDouble(-4503599627370495.0, rint(-4503599627370495.0)) // 2^52 - 1.0
+    assertSameDouble(-4503599627370496.0, rint(-4503599627370496.0)) // 2^52
+    assertSameDouble(-4503599627370497.0, rint(-4503599627370497.0)) // 2^52 + 1.0
+    assertSameDouble(Double.MinValue, rint(Double.MinValue))
   }
 
   @Test def addExact(): Unit = {

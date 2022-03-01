@@ -44,16 +44,45 @@ object Math {
   @inline def ceil(a: scala.Double): scala.Double = js.Math.ceil(a)
   @inline def floor(a: scala.Double): scala.Double = js.Math.floor(a)
 
-  def rint(a: scala.Double): scala.Double = {
-    val rounded = js.Math.round(a)
-    val mod = a % 1.0
-    // The following test is also false for specials (0's, Infinities and NaN)
-    if (mod == 0.5 || mod == -0.5) {
-      // js.Math.round(a) rounds up but we have to round to even
-      if (rounded % 2.0 == 0.0) rounded
-      else rounded - 1.0
+  @inline def rint(x: scala.Double): scala.Double = {
+    /* We apply the technique described in Section II of
+     *   Claude-Pierre Jeannerod, Jean-Michel Muller, Paul Zimmermann.
+     *   On various ways to split a floating-point number.
+     *   ARITH 2018 - 25th IEEE Symposium on Computer Arithmetic,
+     *   Jun 2018, Amherst (MA), United States.
+     *   pp.53-60, 10.1109/ARITH.2018.8464793. hal-01774587v2
+     * available at
+     *   https://hal.inria.fr/hal-01774587v2/document
+     * with β = 2, p = 53, and C = 2^(p-1) = 2^52.
+     *
+     * That is only valid for values x <= 2^52. Fortunately, all values that
+     * are >= 2^52 are already integers, so we can return them as is.
+     *
+     * We cannot use "the 1.5 trick" with C = 2^(p-1) + 2^(p-2) to handle
+     * negative numbers, because that would further reduce the range of valid
+     * `x` to maximum 2^51, although we actually need it up to 2^52. Therefore,
+     * we have a separate branch for negative numbers. This also allows to
+     * gracefully deal with the fact that we need to return -0.0 for values in
+     * the range [-0.5,-0.0).
+     *
+     * ---
+     *
+     * Even though there are several conditions, this implementation remains
+     * much faster (20x for normal inputs) than the subnormal trick
+     *   x * MinPositiveValue / MinPositiveValue
+     * because using subnormal values is much slower in hardware.
+     */
+    val C = 4503599627370496.0 // 2^52
+    if (x > 0) {
+      if (x >= C) x
+      else (C + x) - C
+    } else if (x < 0) {
+      // do not "optimize" as `C - (C - a)`, as it would return +0.0 where it should return -0.0
+      if (x <= -C) x
+      else -((C - x) - C)
     } else {
-      rounded
+      // Handling zeroes here avoids the need to distinguish +0.0 from -0.0
+      x // 0.0, -0.0 and NaN
     }
   }
 
@@ -90,8 +119,15 @@ object Math {
 
   @inline def random(): scala.Double = js.Math.random()
 
-  @inline def toDegrees(a: scala.Double): scala.Double = a * 180.0 / PI
-  @inline def toRadians(a: scala.Double): scala.Double = a / 180.0 * PI
+  /* Note: by themselves, (180.0 / PI) and (PI / 180.0) are as accurate as
+   * possible, i.e., they evaluate to the Double values that are closest to the
+   * mathematical values 180/π and π/180, respectively.
+   * (180.0 / PI) is correct up to the 17th significand decimal digit, whereas
+   * (PI / 180.0) is only correct up to the 16th digit. Therefore, we use
+   * (180.0 / PI) in both calculations.
+   */
+  @inline def toDegrees(a: scala.Double): scala.Double = a * (180.0 / PI)
+  @inline def toRadians(a: scala.Double): scala.Double = a / (180.0 / PI)
 
   @inline def signum(a: scala.Double): scala.Double = {
     if (a > 0) 1.0
@@ -131,51 +167,146 @@ object Math {
     }
   }
 
-  def nextUp(a: scala.Double): scala.Double = {
-    if (a != a || a == scala.Double.PositiveInfinity) {
-      a
-    } else if (a == -0.0) { // also matches +0.0 but that's fine
-      scala.Double.MinPositiveValue
+  /* The implementations of nextUp and nextDown are taken from
+   *   Siegfried Rump, Paul Zimmermann, Sylvie Boldo, Guillaume Melquiond.
+   *   Computing predecessor and successor in rounding to nearest.
+   *   BIT Numerical Mathematics, Springer Verlag, 2009, 49 (2), pp.419-431.
+   *   10.1007/s10543-009-0218-z. inria-00337537
+   * available at
+   *   https://hal.inria.fr/inria-00337537/document
+   *
+   * We separated the positive and negative input paths in order to avoid
+   * calls to `abs`. We also augmented some of the paths with special cases for
+   * infinite inputs and -0.0 outputs.
+   */
+
+  def nextUp(c: scala.Double): scala.Double = {
+    val u = 1.1102230246251565e-16 // 2^(-53)
+    val invu = 9007199254740992.0 // 2^53
+    val phi = 1.1102230246251568e-16 // nextUp(u)
+    val eta = scala.Double.MinPositiveValue // 2^(-1047)
+    val threshold1 = 0.5 * (invu * invu) * eta
+    val threshold2 = eta * invu
+    if (c >= 0.0) {
+      if (c >= threshold1) {
+        c + (phi * c)
+      } else if (c < threshold2) {
+        c + eta
+      } else {
+        val C = c * invu
+        (C + (phi * C)) * u
+      }
     } else {
-      val abits = Double.doubleToLongBits(a)
-      val rbits = if (a > 0) abits + 1L else abits - 1L
-      Double.longBitsToDouble(rbits)
+      if (c <= -threshold1) {
+        if (c == scala.Double.NegativeInfinity)
+          -scala.Double.MaxValue // special case
+        else
+          c - (phi * c)
+      } else if (c > -threshold2) {
+        if (c == -eta)
+          -0.0 // special case
+        else
+          c + eta
+      } else {
+        val C = c * invu
+        (C - (phi * C)) * u
+      }
     }
   }
 
-  def nextUp(a: scala.Float): scala.Float = {
-    if (a != a || a == scala.Float.PositiveInfinity) {
-      a
-    } else if (a == -0.0f) { // also matches +0.0f but that's fine
-      scala.Float.MinPositiveValue
+  def nextUp(c: scala.Float): scala.Float = {
+    val u = 5.960464477539063e-8f // 2^(-24)
+    val invu = 16777216.0f // 2^24
+    val phi = 5.960465e-8f // nextUp(u)
+    val eta = scala.Float.MinPositiveValue // 2^(-149)
+    val threshold1 = 0.5f * (invu * invu) * eta
+    val threshold2 = eta * invu
+    if (c >= 0.0f) {
+      if (c >= threshold1) {
+        c + (phi * c)
+      } else if (c < threshold2) {
+        c + eta
+      } else {
+        val C = c * invu
+        (C + (phi * C)) * u
+      }
     } else {
-      val abits = Float.floatToIntBits(a)
-      val rbits = if (a > 0) abits + 1 else abits - 1
-      Float.intBitsToFloat(rbits)
+      if (c <= -threshold1) {
+        if (c == scala.Float.NegativeInfinity)
+          -scala.Float.MaxValue // special case
+        else
+          c - (phi * c)
+      } else if (c > -threshold2) {
+        if (c == -eta)
+          -0.0f // special case
+        else
+          c + eta
+      } else {
+        val C = c * invu
+        (C - (phi * C)) * u
+      }
     }
   }
 
-  def nextDown(a: scala.Double): scala.Double = {
-    if (a != a || a == scala.Double.NegativeInfinity) {
-      a
-    } else if (a == 0.0) { // also matches -0.0 but that's fine
-      -scala.Double.MinPositiveValue
+  def nextDown(c: scala.Double): scala.Double = {
+    val u = 1.1102230246251565e-16 // 2^(-53)
+    val invu = 9007199254740992.0 // 2^53
+    val phi = 1.1102230246251568e-16 // nextUp(u)
+    val eta = scala.Double.MinPositiveValue // 2^(-1047)
+    val threshold1 = 0.5 * (invu * invu) * eta
+    val threshold2 = eta * invu
+    if (c >= 0.0) {
+      if (c >= threshold1) {
+        if (c == scala.Double.PositiveInfinity)
+          scala.Double.MaxValue // special case
+        else
+          c - (phi * c)
+      } else if (c < threshold2) {
+        c - eta
+      } else {
+        val C = c * invu
+        (C - (phi * C)) * u
+      }
     } else {
-      val abits = Double.doubleToLongBits(a)
-      val rbits = if (a > 0) abits - 1L else abits + 1L
-      Double.longBitsToDouble(rbits)
+      if (c <= -threshold1) {
+        c + (phi * c)
+      } else if (c > -threshold2) {
+        c - eta
+      } else {
+        val C = c * invu
+        (C + (phi * C)) * u
+      }
     }
   }
 
-  def nextDown(a: scala.Float): scala.Float = {
-    if (a != a || a == scala.Float.NegativeInfinity) {
-      a
-    } else if (a == 0.0f) { // also matches -0.0f but that's fine
-      -scala.Float.MinPositiveValue
+  def nextDown(c: scala.Float): scala.Float = {
+    val u = 5.960464477539063e-8f // 2^(-24)
+    val invu = 16777216.0f // 2^24
+    val phi = 5.960465e-8f // nextUp(u)
+    val eta = scala.Float.MinPositiveValue // 2^(-149)
+    val threshold1 = 0.5f * (invu * invu) * eta
+    val threshold2 = eta * invu
+    if (c >= 0.0f) {
+      if (c >= threshold1) {
+        if (c == scala.Float.PositiveInfinity)
+          scala.Float.MaxValue // special case
+        else
+          c - (phi * c)
+      } else if (c < threshold2) {
+        c - eta
+      } else {
+        val C = c * invu
+        (C - (phi * C)) * u
+      }
     } else {
-      val abits = Float.floatToIntBits(a)
-      val rbits = if (a > 0) abits - 1 else abits + 1
-      Float.intBitsToFloat(rbits)
+      if (c <= -threshold1) {
+        c + (phi * c)
+      } else if (c > -threshold2) {
+        c - eta
+      } else {
+        val C = c * invu
+        (C + (phi * C)) * u
+      }
     }
   }
 
@@ -201,24 +332,57 @@ object Math {
       b.toFloat
   }
 
+  /* The implementations for ulp are derived from the "naive" implementation
+   * `ulp(c) = nextUp(abs(c)) - abs(c)`, but in which we have inlined the
+   * non-negative case of `nextUp` and pushed `- abs(c)` inside the branches.
+   */
+
   def ulp(a: scala.Double): scala.Double = {
-    val absa = abs(a)
-    if (absa == scala.Double.PositiveInfinity)
-      scala.Double.PositiveInfinity
-    else if (absa == scala.Double.MaxValue)
-      1.9958403095347198e292
-    else
-      nextUp(absa) - absa // this case handles NaN as well
+    val u = 1.1102230246251565e-16 // 2^(-53)
+    val invu = 9007199254740992.0 // 2^53
+    val phi = 1.1102230246251568e-16 // nextUp(u)
+    val eta = scala.Double.MinPositiveValue // 2^(-1047)
+    val threshold1 = 0.5 * (invu * invu) * eta
+    val threshold2 = eta * invu
+
+    val c = if (a < 0) -a else a
+    if (c >= threshold1) {
+      if (c < scala.Double.MaxValue)
+        (c + (phi * c)) - c
+      else if (c == scala.Double.MaxValue)
+        1.9958403095347198e292
+      else
+        c // Infinity
+    } else if (c < threshold2) {
+      eta
+    } else {
+      val C = c * invu
+      (C + (phi * C)) * u - c
+    }
   }
 
   def ulp(a: scala.Float): scala.Float = {
-    val absa = abs(a)
-    if (absa == scala.Float.PositiveInfinity)
-      scala.Float.PositiveInfinity
-    else if (absa == scala.Float.MaxValue)
-      2.028241e31f
-    else
-      nextUp(absa) - absa // this case handles NaN as well
+    val u = 5.960464477539063e-8f // 2^(-24)
+    val invu = 16777216.0f // 2^24
+    val phi = 5.960465e-8f // nextUp(u)
+    val eta = scala.Float.MinPositiveValue // 2^(-149)
+    val threshold1 = 0.5f * (invu * invu) * eta
+    val threshold2 = eta * invu
+
+    val c = if (a < 0) -a else a
+    if (c >= threshold1) {
+      if (c < scala.Float.MaxValue)
+        (c + (phi * c)) - c
+      else if (c == scala.Float.MaxValue)
+        2.028241e31f
+      else
+        c // Infinity
+    } else if (c < threshold2) {
+      eta
+    } else {
+      val C = c * invu
+      (C + (phi * C)) * u - c
+    }
   }
 
   def hypot(a: scala.Double, b: scala.Double): scala.Double = {
