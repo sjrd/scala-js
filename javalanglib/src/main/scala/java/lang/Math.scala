@@ -41,8 +41,39 @@ object Math {
   @inline def min(a: scala.Float, b: scala.Float): scala.Float = js.Math.min(a, b).toFloat
   @inline def min(a: scala.Double, b: scala.Double): scala.Double = js.Math.min(a, b)
 
-  @inline def ceil(a: scala.Double): scala.Double = js.Math.ceil(a)
-  @inline def floor(a: scala.Double): scala.Double = js.Math.floor(a)
+  def ceil(x: scala.Double): scala.Double = {
+    if (x > 0.0)
+      posCeil(x)
+    else if (x < 0.0)
+      -posFloor(-x)
+    else
+      x
+  }
+
+  def floor(x: scala.Double): scala.Double = {
+    if (x > 0.0)
+      posFloor(x)
+    else if (x < 0.0)
+      -posCeil(-x)
+    else
+      x
+  }
+
+  @inline private def posCeil(x: scala.Double): scala.Double = {
+    val f = posFloor(x)
+    if (f == x) f else f + 1.0
+  }
+
+  @inline private def posFloor(x: scala.Double): scala.Double = {
+    val twoPow52 = 4.503599627370496e15
+    val twoPow53 = 9.007199254740992e15
+    if (x < twoPow52) {
+      val C = twoPow53 - x
+      (C + (x - 0.5)) - C
+    } else {
+      x
+    }
+  }
 
   @inline def rint(x: scala.Double): scala.Double = {
     /* We apply the technique described in Section II of
