@@ -1003,7 +1003,7 @@ object Build {
     commonLinkerSettings _
   ).settings(
       libraryDependencies ++= Seq(
-          "com.google.javascript" % "closure-compiler" % "v20220202",
+          "com.google.javascript" % "closure-compiler" % "v20220502",
           "com.google.jimfs" % "jimfs" % "1.1" % "test",
           "org.scala-js" %% "scalajs-env-nodejs" % "1.3.0" % "test",
           "org.scala-js" %% "scalajs-js-envs-test-kit" % "1.3.0" % "test"
@@ -1704,6 +1704,7 @@ object Build {
       exampleSettings,
       name := "Hello World - Scala.js example",
       moduleName := "helloworld",
+      scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
       scalaJSUseMainModuleInitializer := true
   ).withScalaJSCompiler.dependsOn(library)
 

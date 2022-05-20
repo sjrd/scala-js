@@ -33,6 +33,7 @@ import org.scalajs.linker.backend.emitter.Emitter
 import org.scalajs.linker.backend.javascript.{Trees => js}
 import org.scalajs.linker.standard._
 import org.scalajs.linker.standard.ModuleSet.ModuleID
+import com.google.javascript.jscomp.deps.ModuleLoader.ResolutionMode
 
 /** The Closure backend of the Scala.js linker.
  *
@@ -48,8 +49,8 @@ final class ClosureLinkerBackend(config: LinkerBackendImpl.Config)
       s"Cannot use features $esFeatures with the Closure Compiler " +
       "because they allow to use BigInts")
 
-  require(moduleKind != ModuleKind.ESModule,
-      s"Cannot use module kind $moduleKind with the Closure Compiler")
+  /*require(moduleKind != ModuleKind.ESModule,
+      s"Cannot use module kind $moduleKind with the Closure Compiler")*/
 
   private[this] val emitter = {
     val emitterConfig = Emitter.Config(config.commonConfig.coreSpec)
@@ -238,6 +239,11 @@ final class ClosureLinkerBackend(config: LinkerBackendImpl.Config)
     options.setWarningLevel(DiagnosticGroups.CHECK_REGEXP, CheckLevel.OFF)
     options.setWarningLevel(DiagnosticGroups.CHECK_TYPES, CheckLevel.OFF)
     options.setWarningLevel(DiagnosticGroups.CHECK_USELESS_CODE, CheckLevel.OFF)
+
+    options.setEnableModuleRewriting(false)
+    options.setEs6ModuleTranspilation(ClosureOptions.Es6ModuleTranspilation.NONE)
+    options.setModuleResolutionMode(ResolutionMode.NODE)
+    options.setWarningLevel(DiagnosticGroups.MODULE_LOAD, CheckLevel.OFF)
 
     if (config.sourceMap) {
       val sourceMapFileName =

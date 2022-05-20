@@ -465,7 +465,7 @@ private[sbtplugin] object ScalaJSPluginInternal {
             ((moduleName in fullOptJS).value + "-opt.js")),
 
       scalaJSLinkerConfig in fullOptJS ~= { prevConfig =>
-        val useClosure = prevConfig.moduleKind != ModuleKind.ESModule
+        val useClosure = true // prevConfig.moduleKind != ModuleKind.ESModule
         prevConfig
           .withSemantics(_.optimized)
           .withClosureCompiler(useClosure)
