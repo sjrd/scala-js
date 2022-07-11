@@ -189,6 +189,7 @@ class JSSAMTest extends DirectTest with TestHelpers {
 
   @Test
   def missingThisArgForJSThisFunction: Unit = {
+    // PRES
     """
     trait BadThisFunction1 extends js.ThisFunction {
       def apply(): Int

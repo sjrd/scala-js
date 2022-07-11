@@ -53,6 +53,7 @@ trait JSDefinitions {
     lazy val JSObjectClass    = getRequiredClass("scala.scalajs.js.Object")
     lazy val JSFunctionClass = getRequiredClass("scala.scalajs.js.Function")
     lazy val JSThisFunctionClass = getRequiredClass("scala.scalajs.js.ThisFunction")
+    lazy val JSNewTargetThisFunctionClass = getRequiredClass("scala.scalajs.js.NewTargetThisFunction")
 
     lazy val UnionClass = getRequiredClass("scala.scalajs.js.$bar")
 

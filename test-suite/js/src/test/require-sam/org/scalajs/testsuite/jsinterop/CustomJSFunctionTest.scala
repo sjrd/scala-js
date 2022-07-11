@@ -99,6 +99,33 @@ class CustomJSFunctionTest {
         getAllArgs.asInstanceOf[MyJSThisFunctionWithRestParam[Foo, Int, js.Array[Any]]](Foo(5), 4, 8))
   }
 
+  @Test def customJSNewTargetThisFunctions(): Unit = {
+    // PRES
+    val f1: MyNewTargetFunction1[js.Any, Int, js.Dynamic] = { (newTarget, o, i) =>
+      val o2 = if (js.isUndefined(o)) js.Dynamic.literal() else o.asInstanceOf[js.Dynamic]
+      o2.newTarget = newTarget
+      o2.field = i
+      o2
+    }
+    val ctor1 = f1.asInstanceOf[js.Dynamic]
+
+    val o1 = ctor1(5)
+    assertEquals(js.undefined, o1.newTarget)
+    assertEquals(5, o1.field)
+    assertSame(js.Dynamic.global.Object.prototype, js.Object.getPrototypeOf(o1.asInstanceOf[js.Object]))
+
+    val o2 = js.Dynamic.newInstance(ctor1)(6)
+    assertSame(ctor1, o2.newTarget)
+    assertEquals(6, o2.field)
+    assertSame(ctor1.prototype, js.Object.getPrototypeOf(o2.asInstanceOf[js.Object]))
+
+    val obj = new js.Object
+    val o3 = ctor1.call(obj, 7)
+    assertSame(obj, o3)
+    assertEquals(js.undefined, o3.newTarget)
+    assertEquals(7, o3.field)
+  }
+
 }
 
 object CustomJSFunctionTest {
@@ -124,5 +151,9 @@ object CustomJSFunctionTest {
 
   trait MyJSThisFunctionWithRestParam[-This, -T, +R] extends js.ThisFunction {
     def apply(thiz: This, args: T*): R
+  }
+
+  trait MyNewTargetFunction1[-This, -T1, +R] extends js.NewTargetThisFunction {
+    def apply(newTarget: js.Any, ths: This, x1: T1): R
   }
 }

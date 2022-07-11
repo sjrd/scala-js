@@ -8,88 +8,65 @@ package helloworld
 import scala.scalajs.js
 import js.annotation._
 
+trait MyThisFunction1[-This, -T1, +R] extends js.ThisFunction {
+  def apply(ths: This, x1: T1): R
+}
+
+trait MyNewTargetFunction1[-This, -T1, +R] extends js.NewTargetThisFunction {
+  def apply(newTarget: Any, ths: This, x1: T1): R
+}
+
 object HelloWorld {
   def main(args: Array[String]): Unit = {
-    import js.DynamicImplicits.truthValue
+    testThisFunction()
+    testNewTargetFunction()
+  }
 
-    if (js.typeOf(js.Dynamic.global.document) != "undefined" &&
-        js.Dynamic.global.document &&
-        js.Dynamic.global.document.getElementById("playground")) {
-      sayHelloFromDOM()
-      sayHelloFromTypedDOM()
-      sayHelloFromJQuery()
-      sayHelloFromTypedJQuery()
-    } else {
-      println("Hello world!")
+  def testThisFunction(): Unit = {
+    val ctor0: MyThisFunction1[Any, Int, Unit] = { (o, i) =>
+      if (js.isUndefined(o))
+        throw new IllegalArgumentException("ctor must be called with 'new'")
+      o.asInstanceOf[js.Dynamic].field = i
     }
+    val ctor = ctor0.asInstanceOf[js.Dynamic]
+
+    try {
+      val o1 = ctor(5)
+      println(o1.field)
+    } catch {
+      case _: IllegalArgumentException =>
+        println("caught IllegalArgumentException")
+    }
+
+    val o2 = js.Dynamic.newInstance(ctor)(6)
+    println(o2.field)
+
+    val o3 = ctor.call(o2, 7)
+    //println(o3.field)
+    println(o2.field)
   }
 
-  def sayHelloFromDOM(): Unit = {
-    val document = js.Dynamic.global.document
-    val playground = document.getElementById("playground")
+  def testNewTargetFunction(): Unit = {
+    val ctor0: MyNewTargetFunction1[Any, Int, Unit] = { (newTarget, o, i) =>
+      if (js.isUndefined(newTarget))
+        throw new IllegalArgumentException("ctor must be called with 'new'")
+      o.asInstanceOf[js.Dynamic].field = i
+    }
+    val ctor = ctor0.asInstanceOf[js.Dynamic]
 
-    val newP = document.createElement("p")
-    newP.innerHTML = "Hello world! <i>-- DOM</i>"
-    playground.appendChild(newP)
+    try {
+      val o1 = ctor(5)
+      println(o1.field)
+    } catch {
+      case _: IllegalArgumentException =>
+        println("caught IllegalArgumentException")
+    }
+
+    val o2 = js.Dynamic.newInstance(ctor)(6)
+    println(o2.field)
+
+    val o3 = ctor.call(o2, 7)
+    println(o3.field)
+    println(o2.field)
   }
-
-  def sayHelloFromTypedDOM(): Unit = {
-    val document = window.document
-    val playground = document.getElementById("playground")
-
-    val newP = document.createElement("p")
-    newP.innerHTML = "Hello world! <i>-- typed DOM</i>"
-    playground.appendChild(newP)
-  }
-
-  def sayHelloFromJQuery(): Unit = {
-    // val $ is fine too, but not very recommended in Scala code
-    val jQuery = js.Dynamic.global.jQuery
-    val newP = jQuery("<p>").html("Hello world! <i>-- jQuery</i>")
-    newP.appendTo(jQuery("#playground"))
-  }
-
-  def sayHelloFromTypedJQuery(): Unit = {
-    val jQuery = helloworld.JQuery
-    val newP = jQuery("<p>").html("Hello world! <i>-- typed jQuery</i>")
-    newP.appendTo(jQuery("#playground"))
-  }
-}
-
-@js.native
-@JSGlobalScope
-object window extends js.Object {
-  val document: DOMDocument = js.native
-
-  def alert(msg: String): Unit = js.native
-}
-
-@js.native
-trait DOMDocument extends js.Object {
-  def getElementById(id: String): DOMElement = js.native
-  def createElement(tag: String): DOMElement = js.native
-}
-
-@js.native
-trait DOMElement extends js.Object {
-  var innerHTML: String = js.native
-
-  def appendChild(child: DOMElement): Unit = js.native
-}
-
-@js.native
-@JSGlobal("jQuery")
-object JQuery extends js.Object {
-  def apply(selector: String): JQuery = js.native
-}
-
-@js.native
-trait JQuery extends js.Object {
-  def text(value: String): JQuery = js.native
-  def text(): String = js.native
-
-  def html(value: String): JQuery = js.native
-  def html(): String = js.native
-
-  def appendTo(parent: JQuery): JQuery = js.native
 }

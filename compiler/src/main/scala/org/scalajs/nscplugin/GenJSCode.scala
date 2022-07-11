@@ -6149,7 +6149,10 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
         // Fifth step: build the js.Closure
 
-        val isThisFunction = sym.isSubClass(JSThisFunctionClass) && {
+        // PRES
+        val isNewTargetFunction = sym.isSubClass(JSNewTargetThisFunctionClass)
+
+        val isThisFunction = !isNewTargetFunction && sym.isSubClass(JSThisFunctionClass) && {
           val ok = patchedParams.nonEmpty
           if (!ok) {
             reporter.error(pos,
@@ -6166,7 +6169,23 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             s"$capturedArgs does not match $ctorParamDefs")
 
         val closure = {
-          if (isThisFunction) {
+          if (isNewTargetFunction) {
+            val newTargetParam :: thisParam :: actualParams = patchedParams
+            js.Closure(
+              arrow = false,
+              ctorParamDefs,
+              actualParams,
+              patchedRepeatedParam,
+              js.Block(
+                js.VarDef(newTargetParam.name, newTargetParam.originalName, newTargetParam.ptpe,
+                    mutable = false, js.JSNewTarget()(newTargetParam.pos))(newTargetParam.pos),
+                js.VarDef(thisParam.name, thisParam.originalName, thisParam.ptpe,
+                    mutable = false, js.This()(thisParam.ptpe)(thisParam.pos))(thisParam.pos),
+                patchedBody
+              ),
+              capturedArgs
+            )
+          } else if (isThisFunction) {
             val thisParam :: actualParams = patchedParams
             js.Closure(
                 arrow = false,
