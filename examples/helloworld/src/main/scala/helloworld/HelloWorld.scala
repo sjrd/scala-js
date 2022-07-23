@@ -14,6 +14,11 @@ trait MyThisFunction1[-This, -T1, +R] extends js.ThisFunction {
 
 trait MyNewTargetFunction1[-This, -T1, +R] extends js.NewTargetThisFunction {
   def apply(newTarget: Any, ths: This, x1: T1): R
+  def apply(newTarget: Any, ths: This, x1: T1, x2: T1): R
+}
+
+trait MyEvilNewTargetFunction extends js.NewTargetThisFunction {
+  def apply(x1: Int): Int
 }
 
 object HelloWorld {
@@ -65,8 +70,12 @@ object HelloWorld {
     val o2 = js.Dynamic.newInstance(ctor)(6)
     println(o2.field)
 
-    val o3 = ctor.call(o2, 7)
+    /*val o3 = ctor.call(o2, 7)
     println(o3.field)
-    println(o2.field)
+    println(o2.field)*/
+
+    val ctor1: MyEvilNewTargetFunction = { (i) => i + 1 }
+    val ctor2 = ctor1.asInstanceOf[js.Dynamic]
+    println(js.Dynamic.newInstance(ctor2)(1, 2, 3)) // new ctor2(1, 2, 3)
   }
 }

@@ -6150,7 +6150,15 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         // Fifth step: build the js.Closure
 
         // PRES
-        val isNewTargetFunction = sym.isSubClass(JSNewTargetThisFunctionClass)
+        val isNewTargetFunction = sym.isSubClass(JSNewTargetThisFunctionClass) && {
+          val ok = patchedParams.nonEmpty && patchedParams.tail.nonEmpty
+          if (!ok) {
+            reporter.error(pos,
+                "The SAM or apply method for a js.NewTargetThisFunction must have two " +
+                "leading non-varargs parameters")
+          }
+          ok
+        }
 
         val isThisFunction = !isNewTargetFunction && sym.isSubClass(JSThisFunctionClass) && {
           val ok = patchedParams.nonEmpty
