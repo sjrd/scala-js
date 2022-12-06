@@ -247,7 +247,7 @@ object Serializers {
         case VarDef(ident, originalName, vtpe, mutable, rhs) =>
           writeTagAndPos(TagVarDef)
           writeLocalIdent(ident); writeOriginalName(originalName)
-          writeType(vtpe); writeBoolean(mutable); writeTree(rhs)
+          writeType(vtpe, tree); writeBoolean(mutable); writeTree(rhs)
 
         case Skip() =>
           writeTagAndPos(TagSkip)
@@ -258,7 +258,7 @@ object Serializers {
 
         case Labeled(label, tpe, body) =>
           writeTagAndPos(TagLabeled)
-          writeLabelIdent(label); writeType(tpe); writeTree(body)
+          writeLabelIdent(label); writeType(tpe, tree); writeTree(body)
 
         case Assign(lhs, rhs) =>
           writeTagAndPos(TagAssign)
@@ -271,7 +271,7 @@ object Serializers {
         case If(cond, thenp, elsep) =>
           writeTagAndPos(TagIf)
           writeTree(cond); writeTree(thenp); writeTree(elsep)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case While(cond, body) =>
           writeTagAndPos(TagWhile)
@@ -290,7 +290,7 @@ object Serializers {
           writeTagAndPos(TagTryCatch)
           writeTree(block); writeLocalIdent(errVar)
           writeOriginalName(errVarOriginalName); writeTree(handler)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case TryFinally(block, finalizer) =>
           writeTagAndPos(TagTryFinally)
@@ -308,7 +308,7 @@ object Serializers {
             writeTrees(caze._1); writeTree(caze._2)
           }
           writeTree(default)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case Debugger() =>
           writeTagAndPos(TagDebugger)
@@ -328,12 +328,12 @@ object Serializers {
         case Select(qualifier, className, field) =>
           writeTagAndPos(TagSelect)
           writeTree(qualifier); writeName(className); writeFieldIdent(field)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case SelectStatic(className, field) =>
           writeTagAndPos(TagSelectStatic)
           writeName(className); writeFieldIdent(field)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case SelectJSNativeMember(className, member) =>
           writeTagAndPos(TagSelectJSNativeMember)
@@ -342,17 +342,17 @@ object Serializers {
         case Apply(flags, receiver, method, args) =>
           writeTagAndPos(TagApply)
           writeApplyFlags(flags); writeTree(receiver); writeMethodIdent(method); writeTrees(args)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case ApplyStatically(flags, receiver, className, method, args) =>
           writeTagAndPos(TagApplyStatically)
           writeApplyFlags(flags); writeTree(receiver); writeName(className); writeMethodIdent(method); writeTrees(args)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case ApplyStatic(flags, className, method, args) =>
           writeTagAndPos(TagApplyStatic)
           writeApplyFlags(flags); writeName(className); writeMethodIdent(method); writeTrees(args)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case ApplyDynamicImport(flags, className, method, args) =>
           writeTagAndPos(TagApplyDynamicImport)
@@ -381,24 +381,24 @@ object Serializers {
         case ArraySelect(array, index) =>
           writeTagAndPos(TagArraySelect)
           writeTree(array); writeTree(index)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case RecordValue(tpe, elems) =>
           writeTagAndPos(TagRecordValue)
-          writeType(tpe); writeTrees(elems)
+          writeType(tpe, tree); writeTrees(elems)
 
         case RecordSelect(record, field) =>
           writeTagAndPos(TagRecordSelect)
           writeTree(record); writeFieldIdent(field)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case IsInstanceOf(expr, testType) =>
           writeTagAndPos(TagIsInstanceOf)
-          writeTree(expr); writeType(testType)
+          writeTree(expr); writeType(testType, tree)
 
         case AsInstanceOf(expr, tpe) =>
           writeTagAndPos(TagAsInstanceOf)
-          writeTree(expr); writeType(tpe)
+          writeTree(expr); writeType(tpe, tree)
 
         case GetClass(expr) =>
           writeTagAndPos(TagGetClass)
@@ -554,11 +554,11 @@ object Serializers {
         case VarRef(ident) =>
           writeTagAndPos(TagVarRef)
           writeLocalIdent(ident)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case This() =>
           writeTagAndPos(TagThis)
-          writeType(tree.tpe)
+          writeType(tree.tpe, tree)
 
         case Closure(arrow, captureParams, params, restParam, body, captureValues) =>
           writeTagAndPos(TagClosure)
@@ -638,13 +638,13 @@ object Serializers {
           writeInt(MemberFlags.toBits(flags))
           writeFieldIdent(name)
           writeOriginalName(originalName)
-          writeType(ftpe)
+          writeType(ftpe, memberDef)
 
         case JSFieldDef(flags, name, ftpe) =>
           writeByte(TagJSFieldDef)
           writeInt(MemberFlags.toBits(flags))
           writeTree(name)
-          writeType(ftpe)
+          writeType(ftpe, memberDef)
 
         case methodDef: MethodDef =>
           val MethodDef(flags, name, originalName, args, resultType, body) = methodDef
@@ -659,7 +659,7 @@ object Serializers {
           // Write out method def
           writeInt(MemberFlags.toBits(flags)); writeMethodIdent(name)
           writeOriginalName(originalName)
-          writeParamDefs(args); writeType(resultType); writeOptTree(body)
+          writeParamDefs(args); writeType(resultType, memberDef); writeOptTree(body)
           writeInt(OptimizerHints.toBits(methodDef.optimizerHints))
 
           // Jump back and write true length
@@ -813,7 +813,7 @@ object Serializers {
       writePosition(paramDef.pos)
       writeLocalIdent(paramDef.name)
       writeOriginalName(paramDef.originalName)
-      writeType(paramDef.ptpe)
+      writeType(paramDef.ptpe, paramDef)
       buffer.writeBoolean(paramDef.mutable)
     }
 
@@ -827,7 +827,7 @@ object Serializers {
       paramDef.foreach(writeParamDef(_))
     }
 
-    def writeType(tpe: Type): Unit = {
+    def writeType(tpe: Type, ctx: IRNode): Unit = {
       tpe match {
         case AnyType     => buffer.write(TagAnyType)
         case NothingType => buffer.write(TagNothingType)
@@ -858,9 +858,13 @@ object Serializers {
           for (RecordType.Field(name, originalName, tpe, mutable) <- fields) {
             writeName(name)
             writeOriginalName(originalName)
-            writeType(tpe)
+            writeType(tpe, ctx)
             buffer.writeBoolean(mutable)
           }
+
+        case TransientType(value) =>
+          throw new InvalidIRException(ctx,
+              s"Cannot serialize a transient IR type (its value is of class ${value.getClass})")
       }
     }
 

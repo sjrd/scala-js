@@ -33,7 +33,7 @@ object Hashers {
       hasher.mixMethodIdent(name)
       hasher.mixOriginalName(originalName)
       hasher.mixParamDefs(args)
-      hasher.mixType(resultType)
+      hasher.mixType(resultType, methodDef)
       body.foreach(hasher.mixTree)
       hasher.mixInt(OptimizerHints.toBits(methodDef.optimizerHints))
 
@@ -143,7 +143,7 @@ object Hashers {
       mixPos(paramDef.pos)
       mixLocalIdent(paramDef.name)
       mixOriginalName(paramDef.originalName)
-      mixType(paramDef.ptpe)
+      mixType(paramDef.ptpe, paramDef)
       mixBoolean(paramDef.mutable)
     }
 
@@ -157,7 +157,7 @@ object Hashers {
           mixTag(TagVarDef)
           mixLocalIdent(ident)
           mixOriginalName(originalName)
-          mixType(vtpe)
+          mixType(vtpe, tree)
           mixBoolean(mutable)
           mixTree(rhs)
 
@@ -171,7 +171,7 @@ object Hashers {
         case Labeled(label, tpe, body) =>
           mixTag(TagLabeled)
           mixLabelIdent(label)
-          mixType(tpe)
+          mixType(tpe, tree)
           mixTree(body)
 
         case Assign(lhs, rhs) =>
@@ -189,7 +189,7 @@ object Hashers {
           mixTree(cond)
           mixTree(thenp)
           mixTree(elsep)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case While(cond, body) =>
           mixTag(TagWhile)
@@ -214,13 +214,13 @@ object Hashers {
           mixLocalIdent(errVar)
           mixOriginalName(errVarOriginalName)
           mixTree(handler)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case TryFinally(block, finalizer) =>
           mixTag(TagTryFinally)
           mixTree(block)
           mixTree(finalizer)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case Throw(expr) =>
           mixTag(TagThrow)
@@ -234,7 +234,7 @@ object Hashers {
             mixTree(body)
           }
           mixTree(default)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case Debugger() =>
           mixTag(TagDebugger)
@@ -259,13 +259,13 @@ object Hashers {
           mixTree(qualifier)
           mixName(className)
           mixFieldIdent(field)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case SelectStatic(className, field) =>
           mixTag(TagSelectStatic)
           mixName(className)
           mixFieldIdent(field)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case SelectJSNativeMember(className, member) =>
           mixTag(TagSelectJSNativeMember)
@@ -278,7 +278,7 @@ object Hashers {
           mixTree(receiver)
           mixMethodIdent(method)
           mixTrees(args)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case ApplyStatically(flags, receiver, className, method, args) =>
           mixTag(TagApplyStatically)
@@ -287,7 +287,7 @@ object Hashers {
           mixName(className)
           mixMethodIdent(method)
           mixTrees(args)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case ApplyStatic(flags, className, method, args) =>
           mixTag(TagApplyStatic)
@@ -295,7 +295,7 @@ object Hashers {
           mixName(className)
           mixMethodIdent(method)
           mixTrees(args)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case ApplyDynamicImport(flags, className, method, args) =>
           mixTag(TagApplyDynamicImport)
@@ -333,28 +333,28 @@ object Hashers {
           mixTag(TagArraySelect)
           mixTree(array)
           mixTree(index)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case RecordValue(tpe, elems) =>
           mixTag(TagRecordValue)
-          mixType(tpe)
+          mixType(tpe, tree)
           mixTrees(elems)
 
         case RecordSelect(record, field) =>
           mixTag(TagRecordSelect)
           mixTree(record)
           mixFieldIdent(field)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case IsInstanceOf(expr, testType) =>
           mixTag(TagIsInstanceOf)
           mixTree(expr)
-          mixType(testType)
+          mixType(testType, tree)
 
         case AsInstanceOf(expr, tpe) =>
           mixTag(TagAsInstanceOf)
           mixTree(expr)
-          mixType(tpe)
+          mixType(tpe, tree)
 
         case GetClass(expr) =>
           mixTag(TagGetClass)
@@ -525,11 +525,11 @@ object Hashers {
         case VarRef(ident) =>
           mixTag(TagVarRef)
           mixLocalIdent(ident)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case This() =>
           mixTag(TagThis)
-          mixType(tree.tpe)
+          mixType(tree.tpe, tree)
 
         case Closure(arrow, captureParams, params, restParam, body, captureValues) =>
           mixTag(TagClosure)
@@ -599,7 +599,7 @@ object Hashers {
       mixInt(arrayTypeRef.dimensions)
     }
 
-    def mixType(tpe: Type): Unit = tpe match {
+    def mixType(tpe: Type, ctx: IRNode): Unit = tpe match {
       case AnyType     => mixTag(TagAnyType)
       case NothingType => mixTag(TagNothingType)
       case UndefType   => mixTag(TagUndefType)
@@ -628,9 +628,13 @@ object Hashers {
         for (RecordType.Field(name, originalName, tpe, mutable) <- fields) {
           mixName(name)
           mixOriginalName(originalName)
-          mixType(tpe)
+          mixType(tpe, ctx)
           mixBoolean(mutable)
         }
+
+      case TransientType(value) =>
+        throw new InvalidIRException(ctx,
+            s"Cannot hash a transient IR type (its value is of class ${value.getClass})")
     }
 
     def mixLocalIdent(ident: LocalIdent): Unit = {

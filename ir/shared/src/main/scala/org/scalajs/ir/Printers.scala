@@ -1114,6 +1114,9 @@ object Printers {
           print(tpe)
         }
         print(')')
+
+      case TransientType(value) =>
+        value.printIR(this)
     }
 
     def print(ident: LocalIdent): Unit =

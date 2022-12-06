@@ -4689,9 +4689,10 @@ private[optimizer] abstract class OptimizerCore(config: CommonPhaseConfig) {
     // !!! Duplicate code with FunctionEmitter.isNotNull
 
     def isNullableType(tpe: Type): Boolean = tpe match {
-      case NullType    => true
-      case _: PrimType => false
-      case _           => true
+      case NullType                          => true
+      case _: PrimType                       => false
+      case TransientType(NonNullableType(_)) => false
+      case _                                 => true
     }
 
     def isShapeNotNull(tree: Tree): Boolean = tree match {
@@ -5165,6 +5166,11 @@ private[optimizer] object OptimizerCore {
          * other primitive numeric types.
          */
         RefinedType(tpe, isExact = false, isNullable = false)
+
+      case TransientType(NonNullableType(underlying)) =>
+        RefinedType(underlying, isExact = false, isNullable = false)
+      case TransientType(value) =>
+        throw new AssertionError(s"Unexpected TransientType with value of class ${value.getClass}")
     }
 
     val NoRefinedType = RefinedType(NoType)

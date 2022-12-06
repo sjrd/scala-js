@@ -21,6 +21,13 @@ import org.scalajs.ir.Types._
 
 object Transients {
 
+  final case class NonNullableType(underlying: Type) extends TransientType.Value {
+    def printIR(out: IRTreePrinter): Unit = {
+      out.print(underlying)
+      out.print("!")
+    }
+  }
+
   /** Checks that `obj ne null`, then returns `obj`.
    *
    *  If `obj eq null`, throw a `NullPointerException`, or a corresponding
@@ -29,7 +36,9 @@ object Transients {
    *  This node must not be used when NPEs are Unchecked.
    */
   final case class CheckNotNull(obj: Tree) extends Transient.Value {
-    val tpe: Type = if (obj.tpe == NullType) NothingType else obj.tpe
+    val tpe: Type =
+      if (obj.tpe == NullType) NothingType
+      else TransientType(NonNullableType(obj.tpe))
 
     def traverse(traverser: Traverser): Unit =
       traverser.traverse(obj)
@@ -54,7 +63,7 @@ object Transients {
    *  This node should not be used when NPEs are Unchecked.
    */
   final case class AssumeNotNull(obj: Tree) extends Transient.Value {
-    val tpe: Type = obj.tpe
+    val tpe: Type = TransientType(NonNullableType(obj.tpe))
 
     def traverse(traverser: Traverser): Unit =
       traverser.traverse(obj)

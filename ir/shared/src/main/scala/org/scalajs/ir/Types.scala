@@ -155,6 +155,32 @@ object Types {
   /** No type. */
   case object NoType extends PrimTypeWithRef
 
+  /** A transient type for custom purposes.
+   *
+   *  A transient type is never a valid input to the [[Serializers]] nor to the
+   *  linker, but can be used in a transient state for internal purposes.
+   *
+   *  @param value
+   *    The payload of the transient type, without any specified meaning.
+   */
+  final case class TransientType(value: TransientType.Value) extends Type
+
+  object TransientType {
+    trait Value {
+      /** Prints the IR representation of this transient type.
+       *
+       *  This method is called by the IR printers when encountering a
+       *  [[org.scalajs.ir.Types.TransientType TransientType]] node.
+       *
+       *  @param out
+       *    The [[org.scalajs.ir.Printers.IRTreePrinter IRTreePrinter]] to
+       *    which the transient type must be printed. It can be used to print
+       *    raw strings or nested IR types.
+       */
+      def printIR(out: Printers.IRTreePrinter): Unit
+    }
+  }
+
   /** Type reference (allowed for classOf[], is/asInstanceOf[]).
    *
    *  A `TypeRef` has exactly the same level of precision as a JVM type.
@@ -293,7 +319,7 @@ object Types {
     case tpe: RecordType =>
       RecordValue(tpe, tpe.fields.map(f => zeroOf(f.tpe)))
 
-    case NothingType | NoType =>
+    case NothingType | NoType | _:TransientType =>
       throw new IllegalArgumentException(s"cannot generate a zero for $tpe")
   }
 

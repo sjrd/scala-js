@@ -75,6 +75,19 @@ class PrintersTest {
             RecordType.Field("y", NON, AnyType, mutable = true))))
   }
 
+  @Test def printTransientType(): Unit = {
+    class MyTransientType(inner: Type) extends TransientType.Value {
+      def printIR(out: Printers.IRTreePrinter): Unit = {
+        out.print("MyTransientType(")
+        out.print(inner)
+        out.print(")")
+      }
+    }
+
+    assertPrintEquals("MyTransientType(int)",
+        TransientType(new MyTransientType(IntType)))
+  }
+
   @Test def printTypeRef(): Unit = {
     assertPrintEquals("java.lang.Object", ClassRef(ObjectClass))
 

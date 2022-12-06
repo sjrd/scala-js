@@ -3205,9 +3205,10 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
       // !!! Duplicate code with OptimizerCore.isNotNull
 
       def isNullableType(tpe: Type): Boolean = tpe match {
-        case NullType    => true
-        case _: PrimType => false
-        case _           => true
+        case NullType                          => true
+        case _: PrimType                       => false
+        case TransientType(NonNullableType(_)) => false
+        case _                                 => true
       }
 
       def isShapeNotNull(tree: Tree): Boolean = tree match {

@@ -222,7 +222,7 @@ private[emitter] final class SJSGen(
       case StringType  => typeof(expr) === "string"
       case AnyType     => expr !== Null()
 
-      case NoType | NullType | NothingType | _:RecordType =>
+      case NoType | NullType | NothingType | _:RecordType | _:TransientType =>
         throw new AssertionError(s"Unexpected type $tpe in genIsInstanceOf")
     }
   }
@@ -305,7 +305,7 @@ private[emitter] final class SJSGen(
           if (semantics.strictFloats) genCallPolyfillableBuiltin(FroundBuiltin, expr)
           else wg(UnaryOp(irt.JSUnaryOp.+, expr))
 
-        case NoType | NullType | NothingType | _:RecordType =>
+        case NoType | NullType | NothingType | _:RecordType | _:TransientType =>
           throw new AssertionError(s"Unexpected type $tpe in genAsInstanceOf")
       }
     } else {
@@ -330,7 +330,7 @@ private[emitter] final class SJSGen(
         case StringType  => genCallHelper("uT", expr)
         case AnyType     => expr
 
-        case NoType | NullType | NothingType | _:RecordType =>
+        case NoType | NullType | NothingType | _:RecordType | _:TransientType =>
           throw new AssertionError(s"Unexpected type $tpe in genAsInstanceOf")
       }
 
