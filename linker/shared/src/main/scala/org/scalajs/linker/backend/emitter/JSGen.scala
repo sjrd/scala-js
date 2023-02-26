@@ -157,7 +157,7 @@ private[emitter] final class JSGen(val config: Emitter.Config) {
   }
 
   def assignES5ClassMembers(classRef: Tree, members: List[MethodDef])(
-      implicit pos: Position): Tree = {
+      implicit pos: Position): List[Tree] = {
     import TreeDSL._
 
     val stats = for {
@@ -167,7 +167,7 @@ private[emitter] final class JSGen(val config: Emitter.Config) {
       genPropSelect(target, name) := Function(arrow = false, args, restParam, body)
     }
 
-    Block(stats)
+    stats
   }
 
   def genIIFE(captures: List[(ParamDef, Tree)], body: Tree)(

@@ -361,19 +361,21 @@ final class Emitter(config: Emitter.Config) {
 
     val main = List.newBuilder[js.Tree]
 
-    def addToMain(treeWithGlobals: WithGlobals[js.Tree]): Unit =
+    def addOneToMain(treeWithGlobals: WithGlobals[js.Tree]): Unit =
       main += extractWithGlobals(treeWithGlobals)
+
+    def addToMain(treesWithGlobals: WithGlobals[List[js.Tree]]): Unit =
+      main ++= extractWithGlobals(treesWithGlobals)
 
     val (linkedInlineableInit, linkedMethods) =
       classEmitter.extractInlineableInit(linkedClass)(classCache)
 
     // Symbols for private JS fields
     if (kind.isJSClass) {
-      val fieldDefs = classTreeCache.privateJSFields.getOrElseUpdate {
+      addToMain(classTreeCache.privateJSFields.getOrElseUpdate {
         classEmitter.genCreatePrivateJSFieldDefsOfJSClass(linkedClass)(
             moduleContext, classCache)
-      }
-      main ++= extractWithGlobals(fieldDefs)
+      })
     }
 
     // Static-like methods
@@ -390,7 +392,7 @@ final class Emitter(config: Emitter.Config) {
         val methodCache =
           classCache.getStaticLikeMethodCache(namespace, methodDef.methodName)
 
-        addToMain(methodCache.getOrElseUpdate(methodDef.version,
+        addOneToMain(methodCache.getOrElseUpdate(methodDef.version,
             classEmitter.genStaticLikeMethod(className, methodDef)(moduleContext, methodCache)))
       }
     }
@@ -543,7 +545,7 @@ final class Emitter(config: Emitter.Config) {
       }
 
       if (linkedClass.hasRuntimeTypeInfo) {
-        addToMain(classTreeCache.typeData.getOrElseUpdate(
+        addOneToMain(classTreeCache.typeData.getOrElseUpdate(
             classEmitter.genTypeData(linkedClass)(moduleContext, classCache)))
       }
 
@@ -595,7 +597,7 @@ final class Emitter(config: Emitter.Config) {
     private[this] val _memberMethodCache =
       mutable.Map.empty[MethodName, MethodCache[js.MethodDef]]
 
-    private[this] var _constructorCache: Option[MethodCache[js.Tree]] = None
+    private[this] var _constructorCache: Option[MethodCache[List[js.Tree]]] = None
 
     private[this] val _exportedMembersCache =
       mutable.Map.empty[Int, MethodCache[js.Tree]]
@@ -643,9 +645,9 @@ final class Emitter(config: Emitter.Config) {
         .getOrElseUpdate(methodName, new MethodCache)
     }
 
-    def getConstructorCache(): MethodCache[js.Tree] = {
+    def getConstructorCache(): MethodCache[List[js.Tree]] = {
       _constructorCache.getOrElse {
-        val cache = new MethodCache[js.Tree]
+        val cache = new MethodCache[List[js.Tree]]
         _constructorCache = Some(cache)
         cache
       }
@@ -681,7 +683,7 @@ final class Emitter(config: Emitter.Config) {
     }
   }
 
-  private final class MethodCache[T <: js.Tree] extends knowledgeGuardian.KnowledgeAccessor {
+  private final class MethodCache[T] extends knowledgeGuardian.KnowledgeAccessor {
     private[this] var _tree: WithGlobals[T] = null
     private[this] var _lastVersion: Version = Version.Unversioned
     private[this] var _cacheUsed = false
@@ -717,16 +719,16 @@ final class Emitter(config: Emitter.Config) {
   }
 
   private class FullClassCache extends knowledgeGuardian.KnowledgeAccessor {
-    private[this] var _tree: WithGlobals[js.Tree] = null
+    private[this] var _trees: WithGlobals[List[js.Tree]] = null
     private[this] var _lastUseESClass: Boolean = false
-    private[this] var _lastCtor: WithGlobals[js.Tree] = null
+    private[this] var _lastCtor: WithGlobals[List[js.Tree]] = null
     private[this] var _lastMemberMethods: List[WithGlobals[js.MethodDef]] = null
     private[this] var _lastExportedMembers: List[WithGlobals[js.Tree]] = null
     private[this] var _cacheUsed = false
 
     override def invalidate(): Unit = {
       super.invalidate()
-      _tree = null
+      _trees = null
       _lastCtor = null
       _lastMemberMethods = null
       _lastExportedMembers = null
@@ -734,9 +736,9 @@ final class Emitter(config: Emitter.Config) {
 
     def startRun(): Unit = _cacheUsed = false
 
-    def getOrElseUpdate(useESClass: Boolean, ctor: WithGlobals[js.Tree],
+    def getOrElseUpdate(useESClass: Boolean, ctor: WithGlobals[List[js.Tree]],
         memberMethods: List[WithGlobals[js.MethodDef]], exportedMembers: List[WithGlobals[js.Tree]],
-        compute: => WithGlobals[js.Tree]): WithGlobals[js.Tree] = {
+        compute: => WithGlobals[List[js.Tree]]): WithGlobals[List[js.Tree]] = {
 
       @tailrec
       def allSame[A <: AnyRef](xs: List[A], ys: List[A]): Boolean = {
@@ -746,17 +748,17 @@ final class Emitter(config: Emitter.Config) {
         }
       }
 
-      if (_tree == null || (_lastCtor ne ctor) || !allSame(_lastMemberMethods, memberMethods) ||
+      if (_trees == null || (_lastCtor ne ctor) || !allSame(_lastMemberMethods, memberMethods) ||
           !allSame(_lastExportedMembers, exportedMembers)) {
         invalidate()
-        _tree = compute
+        _trees = compute
         _lastCtor = ctor
         _lastMemberMethods = memberMethods
         _lastExportedMembers = exportedMembers
       }
 
       _cacheUsed = true
-      _tree
+      _trees
     }
 
     def cleanAfterRun(): Boolean = {
@@ -863,10 +865,10 @@ object Emitter {
 
   private final class DesugaredClassCache {
     val privateJSFields = new OneTimeCache[WithGlobals[List[js.Tree]]]
-    val instanceTests = new OneTimeCache[WithGlobals[js.Tree]]
+    val instanceTests = new OneTimeCache[WithGlobals[List[js.Tree]]]
     val typeData = new OneTimeCache[WithGlobals[js.Tree]]
     val setTypeData = new OneTimeCache[js.Tree]
-    val moduleAccessor = new OneTimeCache[WithGlobals[js.Tree]]
+    val moduleAccessor = new OneTimeCache[WithGlobals[List[js.Tree]]]
     val staticFields = new OneTimeCache[WithGlobals[List[js.Tree]]]
   }
 
