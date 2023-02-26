@@ -629,6 +629,12 @@ object Printers {
           print(") ")
           printBlock(body)
 
+        case GetterSetterDef(getter, setter) =>
+          print(getter)
+          print(';')
+          println()
+          print(setter)
+
         case Super() =>
           print("super")
 

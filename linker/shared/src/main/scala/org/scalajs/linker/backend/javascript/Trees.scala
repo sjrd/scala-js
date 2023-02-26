@@ -373,6 +373,11 @@ object Trees {
       implicit val pos: Position)
       extends Tree
 
+  /** A pair of `GetterDef` and `SetterDef` under a single `Tree`. */
+  sealed case class GetterSetterDef(getter: GetterDef, setter: SetterDef)(
+      implicit val pos: Position)
+      extends Tree
+
   sealed case class Super()(implicit val pos: Position) extends Tree
 
   // ECMAScript 6 modules

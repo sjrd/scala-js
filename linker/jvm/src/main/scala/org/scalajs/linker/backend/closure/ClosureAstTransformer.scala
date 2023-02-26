@@ -200,8 +200,17 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
     val ClassDef(className, parentClass, members) = classDef
 
     val membersBlock = new Node(Token.CLASS_MEMBERS)
-    for (member <- members)
-      membersBlock.addChildToBack(transformClassMember(member))
+
+    for (member <- members) {
+      member match {
+        case GetterSetterDef(getter, setter) =>
+          membersBlock.addChildToBack(transformClassMember(getter))
+          membersBlock.addChildToBack(transformClassMember(setter))
+        case _ =>
+          membersBlock.addChildToBack(transformClassMember(member))
+      }
+    }
+
     new Node(
         Token.CLASS,
         className.fold(new Node(Token.EMPTY))(transformName(_)),

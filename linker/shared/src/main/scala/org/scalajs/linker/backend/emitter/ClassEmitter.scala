@@ -657,25 +657,30 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     val static = property.flags.namespace.isStatic
 
     genMemberNameTree(property.name).flatMap { propName =>
-      val getterWithGlobals = property.getterBody.fold {
-        WithGlobals[js.Tree](js.Skip())
-      } { body =>
+      val getterWithGlobals = property.getterBody.map { body =>
         for (fun <- desugarToFunction(className, Nil, body, resultType = AnyType))
           yield js.GetterDef(static, propName, fun.body)
       }
 
-      val setterWithGlobals = property.setterArgAndBody.fold {
-        WithGlobals[js.Tree](js.Skip())
-      } { case (arg, body) =>
+      val setterWithGlobals = property.setterArgAndBody.map { case (arg, body) =>
         for (fun <- desugarToFunction(className, arg :: Nil, body, resultType = NoType))
           yield js.SetterDef(static, propName, fun.args.head, fun.body)
       }
 
-      for {
-        getter <- getterWithGlobals
-        setter <- setterWithGlobals
-      } yield {
-        js.Block(getter, setter)
+      (getterWithGlobals, setterWithGlobals) match {
+        case (Some(getter), Some(setter)) =>
+          for {
+            get <- getter
+            set <- setter
+          } yield {
+            js.GetterSetterDef(get, set)
+          }
+        case (Some(getter), None) =>
+          getter
+        case (None, Some(setter)) =>
+          setter
+        case (None, None) =>
+          throw new AssertionError(s"Founda JSPropertyDef without getter nor setter at $pos")
       }
     }
   }
