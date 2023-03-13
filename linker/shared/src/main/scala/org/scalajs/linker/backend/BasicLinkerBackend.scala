@@ -120,15 +120,26 @@ final class BasicLinkerBackend(config: LinkerBackendImpl.Config)
           jsFileWriter.writeASCIIString("'use strict';\n")
           smWriter.nextLine()
 
+          sourceMapTime = 0L
+
           for (printedTree <- cache.printedTrees) {
             jsFileWriter.write(printedTree.jsCode)
+
+            sourceMapTime -= System.nanoTime()
             smWriter.insertFragment(printedTree.sourceMapFragment)
+            sourceMapTime += System.nanoTime()
           }
+
+          logger.debug(s"Source map writing: ${sourceMapTime / 1000000L} ms")
 
           jsFileWriter.write(printedModuleSetCache.footerBytes)
           jsFileWriter.write(("//# sourceMappingURL=" + sourceMapURI + "\n").getBytes(StandardCharsets.UTF_8))
 
+          sourceMapTime = 0L - System.nanoTime()
           smWriter.complete()
+          sourceMapTime += System.nanoTime()
+
+          logger.debug(s"Source map complete: ${sourceMapTime / 1000000L} ms")
 
           cache.recordFinalSizes(jsFileWriter.currentSize, sourceMapWriter.currentSize)
           Some((jsFileWriter.toByteBuffer(), sourceMapWriter.toByteBuffer()))
@@ -136,6 +147,8 @@ final class BasicLinkerBackend(config: LinkerBackendImpl.Config)
           None
         }
       }
+
+      private var sourceMapTime: Long = 0L
 
       private def sizeHintFor(previousSize: Int): Int =
         previousSize + (previousSize / 10)
