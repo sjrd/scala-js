@@ -166,10 +166,10 @@ class ReflectionTest {
     // Consistent with isInterfaceForInstantiatedJSTypes()
     testIsInterface(false, classOf[NativeClass])
     testIsInterface(false, classOf[Array[NativeObject.type]].getComponentType())
-    testIsInterface(false, classOf[NativeTrait])
+    testIsInterface(true, classOf[NativeTrait])
     testIsInterface(false, classOf[NonNativeClass])
     testIsInterface(false, classOf[Array[NonNativeObject.type]].getComponentType())
-    testIsInterface(false, classOf[NonNativeTrait])
+    testIsInterface(true, classOf[NonNativeTrait])
   }
 
   @Test def isInterfaceForInstantiatedJSTypes(): Unit = {
@@ -189,10 +189,10 @@ class ReflectionTest {
     // Consistent with jsTypesKeptOnlyForTheirData_Issue4850()
     testIsInterface(false, classOf[js.Date]) // native class
     testIsInterface(false, classOf[Array[js.Math.type]].getComponentType()) // native object
-    testIsInterface(false, classOf[js.Function0[Any]]) // native trait
+    testIsInterface(true, classOf[js.Function0[Any]]) // native trait
     testIsInterface(false, classOf[InstantiatedNonNativeClass])
     testIsInterface(false, classOf[Array[InstantiatedNonNativeObject.type]].getComponentType())
-    testIsInterface(false, classOf[PseudoInstantiatedNonNativeTrait])
+    testIsInterface(true, classOf[PseudoInstantiatedNonNativeTrait])
   }
 }
 

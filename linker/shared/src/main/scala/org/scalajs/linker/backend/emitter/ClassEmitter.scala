@@ -972,7 +972,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     isInstanceFunWithGlobals.flatMap { isInstanceFun =>
       val allParams = List(
           js.ObjectConstr(List(js.Ident(genName(className)) -> js.IntLiteral(0))),
-          js.BooleanLiteral(kind == ClassKind.Interface),
+          js.BooleanLiteral(kind == ClassKind.Interface || kind == ClassKind.AbstractJSType),
           js.StringLiteral(RuntimeClassNameMapperImpl.map(
               semantics.runtimeClassNameMapper, tree.fullName)),
           ancestorsRecord,
