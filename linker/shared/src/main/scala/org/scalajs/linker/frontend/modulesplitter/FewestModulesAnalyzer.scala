@@ -32,10 +32,10 @@ private[modulesplitter] final class FewestModulesAnalyzer extends ModuleAnalyzer
       // Fast path.
       new SingleModuleAnalysis(info.publicModuleDependencies.head._1)
     } else {
-      val prefix = ModuleIDs.freeInternalPrefix(
-          avoid = info.publicModuleDependencies.keys)
+      val internalModIDGenerator = new InternalModuleIDGenerator(info)
+      val fromDigestGenerator = internalModIDGenerator.makeFromDigestGenerator(Nil)
 
-      val moduleMap = new Tagger(info).tagAll(prefix)
+      val moduleMap = new Tagger(info).tagAll(fromDigestGenerator)
 
       new FullAnalysis(moduleMap)
     }

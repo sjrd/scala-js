@@ -26,7 +26,8 @@ import org.scalajs.linker.standard.ModuleSet.ModuleID
  */
 private[modulesplitter] final class SmallestModulesAnalyzer extends ModuleAnalyzer {
   def analyze(info: ModuleAnalyzer.DependencyInfo): ModuleAnalyzer.Analysis = {
-    val run = new SmallestModulesAnalyzer.Run(info)
+    val internalModIDGenerator = new InternalModuleIDGenerator(info)
+    val run = new SmallestModulesAnalyzer.Run(info, internalModIDGenerator)
     run.analyze()
     run
   }
@@ -34,7 +35,8 @@ private[modulesplitter] final class SmallestModulesAnalyzer extends ModuleAnalyz
 
 private[modulesplitter] object SmallestModulesAnalyzer {
 
-  private final class Run(info: ModuleAnalyzer.DependencyInfo)
+  private final class Run(
+      info: ModuleAnalyzer.DependencyInfo, internalModIDGenerator: InternalModuleIDGenerator)
       extends StrongConnect(info) with ModuleAnalyzer.Analysis {
 
     private[this] val moduleIndexToID = mutable.Map.empty[Int, ModuleID]
@@ -43,8 +45,8 @@ private[modulesplitter] object SmallestModulesAnalyzer {
       moduleIndex(className).map(moduleIndexToID)
 
     protected def emitModule(moduleIndex: Int, classNames: List[ClassName]): Unit = {
-      val repr = ModuleIDs.representativeClass(classNames)
-      val id = ModuleIDs.forClassName(info.publicModuleDependencies.keySet, repr)
+      val repr = internalModIDGenerator.representativeClass(classNames)
+      val id = internalModIDGenerator.forClassName(repr)
       moduleIndexToID(moduleIndex) = id
     }
   }

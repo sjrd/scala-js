@@ -32,19 +32,21 @@ import org.scalajs.linker.standard.ModuleSet.ModuleID
 private final class SmallModulesForAnalyzer(
     packages: List[ClassName]) extends ModuleAnalyzer {
   def analyze(info: ModuleAnalyzer.DependencyInfo): ModuleAnalyzer.Analysis = {
-    val (targetClassToRepr, reprToModuleID) = smallRun(info, packages)
+    val internalModIDGenerator = new InternalModuleIDGenerator(info)
 
-    val prefix = ModuleIDs.freeInternalPrefix(
-        info.publicModuleDependencies.keys ++ reprToModuleID.values)
+    val (targetClassToRepr, reprToModuleID) = smallRun(info, internalModIDGenerator, packages)
+
+    val fromDigestGenerator = internalModIDGenerator.makeFromDigestGenerator(reprToModuleID.values)
 
     val largeModuleMap =
-      new Tagger(info, excludedClasses = targetClassToRepr.keySet).tagAll(prefix)
+      new Tagger(info, excludedClasses = targetClassToRepr.keySet).tagAll(fromDigestGenerator)
 
     new SmallModulesForAnalyzer.Analysis(targetClassToRepr, reprToModuleID, largeModuleMap)
   }
 
-  private def smallRun(info: ModuleAnalyzer.DependencyInfo, packages: List[ClassName]) = {
-    val run = new SmallModulesForAnalyzer.SmallRun(info, packages)
+  private def smallRun(info: ModuleAnalyzer.DependencyInfo,
+      internalModIDGenerator: InternalModuleIDGenerator, packages: List[ClassName]) = {
+    val run = new SmallModulesForAnalyzer.SmallRun(info, internalModIDGenerator, packages)
     run.analyze()
 
     // Only return relevant fields for better GC.
@@ -65,7 +67,9 @@ private object SmallModulesForAnalyzer {
   }
 
   private final class SmallRun(info: ModuleAnalyzer.DependencyInfo,
-      packages: List[ClassName]) extends StrongConnect(info) {
+      internalModIDGenerator: InternalModuleIDGenerator,
+      packages: List[ClassName])
+      extends StrongConnect(info) {
 
     /* We expect this to contain relatively few classes.
      *
@@ -81,8 +85,8 @@ private object SmallModulesForAnalyzer {
       val targetNames = classNames.filter(clazz => packages.exists(inPackage(clazz, _)))
 
       if (targetNames.nonEmpty) {
-        val repr = ModuleIDs.representativeClass(targetNames)
-        val id = ModuleIDs.forClassName(info.publicModuleDependencies.keySet, repr)
+        val repr = internalModIDGenerator.representativeClass(targetNames)
+        val id = internalModIDGenerator.forClassName(repr)
         reprToModuleID(repr) = id
         for (className <- classNames)
           targetClassToRepr(className) = repr

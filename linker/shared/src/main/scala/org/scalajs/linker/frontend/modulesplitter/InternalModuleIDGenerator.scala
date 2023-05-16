@@ -15,8 +15,16 @@ package org.scalajs.linker.frontend.modulesplitter
 import org.scalajs.ir.Names.{ClassName, ObjectClass}
 import org.scalajs.linker.standard.ModuleSet.ModuleID
 
-/** Helpers to create internal ModulesIDs */
-private object ModuleIDs {
+/** Generator for internal module IDs. */
+private[modulesplitter] final class InternalModuleIDGenerator(
+    publicModuleIDs: Iterable[ModuleID]) {
+
+  import InternalModuleIDGenerator._
+
+  def this(info: ModuleAnalyzer.DependencyInfo) =
+    this(info.publicModuleDependencies.keys)
+
+  private val avoidSet: Set[ModuleID] = publicModuleIDs.toSet
 
   /** Picks a representative from a list of classes.
    *
@@ -39,11 +47,11 @@ private object ModuleIDs {
   /** Builds an ID for the class with name [[name]].
    *
    *  The result is guaranteed to be:
-   *  - Different from any ModuleID in [[avoid]].
+   *  - Different from any public module ID.
    *  - Different for each ClassName.
    *  - Deterministic.
    */
-  def forClassName(avoid: Set[ModuleID], name: ClassName): ModuleID = {
+  def forClassName(name: ClassName): ModuleID = {
     /* Build a module ID that doesn't collide with others.
      *
      * We observe:
@@ -56,16 +64,39 @@ private object ModuleIDs {
      * iterate over nodes.
      */
     var moduleID = ModuleID(name.nameString)
-    while (avoid.contains(moduleID))
+    while (avoidSet.contains(moduleID))
       moduleID = ModuleID(moduleID.id + ".")
     moduleID
   }
 
-  /** Creates a prefix that is not a prefix of any of the IDs in [[avoid]] */
-  def freeInternalPrefix(avoid: Iterable[ModuleID]): String = {
-    Iterator
+  /** Creates a digest-based generator whose prefix is not a prefix of any of
+   *  the IDs in [[avoid]] nor of the public module IDs.
+   */
+  def makeFromDigestGenerator(avoid: Iterable[ModuleID]): FromDigestGenerator = {
+    val freeInternalPrefix = Iterator
       .iterate("internal-")(_ + "-")
-      .find(p => !avoid.exists(_.id.startsWith(p)))
+      .find(p => !avoid.exists(_.id.startsWith(p)) && !publicModuleIDs.exists(_.id.startsWith(p)))
       .get
+    new FromDigestGenerator(freeInternalPrefix)
+  }
+}
+
+private[modulesplitter] object InternalModuleIDGenerator {
+  final class FromDigestGenerator private[InternalModuleIDGenerator] (
+      internalModuleIDPrefix: String) {
+
+    def forDigest(digest: Array[Byte]): ModuleID = {
+      @inline def hexDigit(digit: Int): Char =
+        Character.forDigit(digit & 0x0f, 16)
+
+      val id = new java.lang.StringBuilder(internalModuleIDPrefix)
+
+      for (b <- digest) {
+        id.append(hexDigit(b >> 4))
+        id.append(hexDigit(b))
+      }
+
+      ModuleID(id.toString())
+    }
   }
 }
