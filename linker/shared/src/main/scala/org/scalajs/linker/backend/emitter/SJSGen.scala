@@ -32,7 +32,8 @@ import PolyfillableBuiltin._
 private[emitter] final class SJSGen(
     val jsGen: JSGen,
     val nameGen: NameGen,
-    val varGen: VarGen
+    val varGen: VarGen,
+    val nameCompressor: Option[NameCompressor]
 ) {
 
   import jsGen._
@@ -169,8 +170,12 @@ private[emitter] final class SJSGen(
     DotSelect(receiver, Ident(jsName, jsOrigName)(field.pos))
   }
 
-  private def genFieldJSName(className: ClassName, field: irt.FieldIdent): String =
-    genName(className) + "__f_" + genName(field.name)
+  private def genFieldJSName(className: ClassName, field: irt.FieldIdent): String = {
+    nameCompressor match {
+      case None             => genName(className) + "__f_" + genName(field.name)
+      case Some(compressor) => compressor.allocatedFor(className, field.name)
+    }
+  }
 
   def genApply(receiver: Tree, methodName: MethodName, args: List[Tree])(
       implicit pos: Position): Tree = {
@@ -182,8 +187,12 @@ private[emitter] final class SJSGen(
     genApply(receiver, methodName, args.toList)
   }
 
-  def genMethodName(methodName: MethodName): String =
-    genName(methodName)
+  def genMethodName(methodName: MethodName): String = {
+    nameCompressor match {
+      case None             => genName(methodName)
+      case Some(compressor) => compressor.allocatedFor(methodName)
+    }
+  }
 
   def genJSPrivateSelect(receiver: Tree, className: ClassName,
       field: irt.FieldIdent)(

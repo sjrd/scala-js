@@ -43,13 +43,17 @@ final class Emitter[E >: Null <: js.Tree](
 
   private val uncachedKnowledge = new knowledgeGuardian.KnowledgeAccessor {}
 
+  private val nameCompressor: Option[NameCompressor] =
+    if (minify) Some(new NameCompressor(config))
+    else None
+
   private val nameGen: NameGen = new NameGen
 
   private class State(val lastMentionedDangerousGlobalRefs: Set[String]) {
     val sjsGen: SJSGen = {
       val jsGen = new JSGen(config)
       val varGen = new VarGen(jsGen, nameGen, lastMentionedDangerousGlobalRefs)
-      new SJSGen(jsGen, nameGen, varGen)
+      new SJSGen(jsGen, nameGen, varGen, nameCompressor)
     }
 
     val classEmitter: ClassEmitter = new ClassEmitter(sjsGen)
@@ -61,7 +65,7 @@ final class Emitter[E >: Null <: js.Tree](
     val classCaches: mutable.Map[ClassID, ClassCache] = mutable.Map.empty
   }
 
-  private var state: State = new State(Set.empty)
+  private var state: State = null
 
   private def jsGen: JSGen = state.sjsGen.jsGen
   private def sjsGen: SJSGen = state.sjsGen
@@ -82,7 +86,19 @@ final class Emitter[E >: Null <: js.Tree](
   val injectedIRFiles: Seq[IRFile] = PrivateLibHolder.files
 
   def emit(moduleSet: ModuleSet, logger: Logger): Result[E] = {
+    nameCompressor match {
+      case None =>
+        if (state == null)
+          state = new State(Set.empty)
+      case Some(compressor) =>
+        compressor.startRun(moduleSet, logger)
+        state = new State(compressor.dangerousGlobalRefs)
+    }
+
     val WithGlobals(body, globalRefs) = emitInternal(moduleSet, logger)
+
+    if (minify)
+      state = null // let go of all the memory, since we will not use it anyway
 
     moduleKind match {
       case ModuleKind.NoModule =>
@@ -133,7 +149,8 @@ final class Emitter[E >: Null <: js.Tree](
     classCaches.valuesIterator.foreach(_.startRun())
 
     try {
-      emitAvoidGlobalClash(moduleSet, logger, secondAttempt = false)
+      val secondAttemptRightAway = minify
+      emitAvoidGlobalClash(moduleSet, logger, secondAttempt = secondAttemptRightAway)
     } finally {
       // Report caching stats (extracted in EmitterTest).
       logger.debug(
@@ -1082,7 +1099,8 @@ object Emitter {
       val jsHeader: String,
       val internalModulePattern: ModuleID => String,
       val optimizeBracketSelects: Boolean,
-      val trackAllGlobalRefs: Boolean
+      val trackAllGlobalRefs: Boolean,
+      val minify: Boolean
   ) {
     private def this(
         semantics: Semantics,
@@ -1095,7 +1113,9 @@ object Emitter {
           jsHeader = "",
           internalModulePattern = "./" + _.id,
           optimizeBracketSelects = true,
-          trackAllGlobalRefs = false)
+          trackAllGlobalRefs = false,
+          minify = false
+      )
     }
 
     def withSemantics(f: Semantics => Semantics): Config =
@@ -1121,6 +1141,9 @@ object Emitter {
     def withTrackAllGlobalRefs(trackAllGlobalRefs: Boolean): Config =
       copy(trackAllGlobalRefs = trackAllGlobalRefs)
 
+    def withMinify(minify: Boolean): Config =
+      copy(minify = minify)
+
     private def copy(
         semantics: Semantics = semantics,
         moduleKind: ModuleKind = moduleKind,
@@ -1128,9 +1151,12 @@ object Emitter {
         jsHeader: String = jsHeader,
         internalModulePattern: ModuleID => String = internalModulePattern,
         optimizeBracketSelects: Boolean = optimizeBracketSelects,
-        trackAllGlobalRefs: Boolean = trackAllGlobalRefs): Config = {
+        trackAllGlobalRefs: Boolean = trackAllGlobalRefs,
+        minify: Boolean = minify
+    ): Config = {
       new Config(semantics, moduleKind, esFeatures, jsHeader,
-          internalModulePattern, optimizeBracketSelects, trackAllGlobalRefs)
+          internalModulePattern, optimizeBracketSelects, trackAllGlobalRefs,
+          minify)
     }
   }
 
