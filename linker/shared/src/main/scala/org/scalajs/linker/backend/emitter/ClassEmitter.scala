@@ -355,7 +355,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     } yield {
       val field = anyField.asInstanceOf[FieldDef]
       implicit val pos = field.pos
-      js.Assign(genSelect(js.This(), field.name, field.originalName),
+      js.Assign(genSelectWithOrigName(js.This(), field.name, field.originalName),
           genZeroOf(field.ftpe))
     }
   }
@@ -472,7 +472,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     for {
       methodFun <- desugarToFunction(className, method.args, method.body.get, method.resultType)
     } yield {
-      val jsMethodName = genMemberMethodIdent(method.name, method.originalName)
+      val jsMethodName = genMethodIdentWithOrigName(method.name, method.originalName)
 
       if (useESClass) {
         js.MethodDef(static = false, jsMethodName, methodFun.args, methodFun.restParam, methodFun.body)
@@ -662,13 +662,6 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
   private def genMemberFieldIdent(ident: FieldIdent,
       originalName: OriginalName): js.Ident = {
     val jsName = genName(ident.name)
-    js.Ident(jsName, genOriginalName(ident.name, originalName, jsName))(
-        ident.pos)
-  }
-
-  private def genMemberMethodIdent(ident: MethodIdent,
-      originalName: OriginalName): js.Ident = {
-    val jsName = genMethodName(ident.name)
     js.Ident(jsName, genOriginalName(ident.name, originalName, jsName))(
         ident.pos)
   }

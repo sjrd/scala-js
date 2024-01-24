@@ -45,9 +45,11 @@ final class BasicLinkerBackend(config: LinkerBackendImpl.Config)
     val emitterConfig = Emitter.Config(config.commonConfig.coreSpec)
       .withJSHeader(config.jsHeader)
       .withInternalModulePattern(m => OutputPatternsImpl.moduleName(config.outputPatterns, m.id))
+      .withMinify(config.minify)
 
     val postTransformer =
-      if (config.sourceMap) PostTransformerWithSourceMap
+      if (config.minify) Emitter.PostTransformer.Identity
+      else if (config.sourceMap) PostTransformerWithSourceMap
       else PostTransformerWithoutSourceMap
 
     new Emitter(emitterConfig, postTransformer)
@@ -82,13 +84,14 @@ final class BasicLinkerBackend(config: LinkerBackendImpl.Config)
     val skipContentCheck = !isFirstRun
     isFirstRun = false
 
-    val allChanged =
+    val allChanged0 =
       printedModuleSetCache.updateGlobal(emitterResult.header, emitterResult.footer)
+    val allChanged = allChanged0 || config.minify
 
     val writer = new OutputWriter(output, config, skipContentCheck) {
       protected def writeModuleWithoutSourceMap(moduleID: ModuleID, force: Boolean): Option[ByteBuffer] = {
         val cache = printedModuleSetCache.getModuleCache(moduleID)
-        val (printedTrees, changed) = emitterResult.body(moduleID)
+        val (trees, changed) = emitterResult.body(moduleID)
 
         if (force || changed || allChanged) {
           rewrittenModules.incrementAndGet()
@@ -98,8 +101,15 @@ final class BasicLinkerBackend(config: LinkerBackendImpl.Config)
           jsFileWriter.write(printedModuleSetCache.headerBytes)
           jsFileWriter.writeASCIIString("'use strict';\n")
 
-          for (printedTree <- printedTrees)
-            jsFileWriter.write(printedTree.jsCode)
+          if (config.minify) {
+            val printer = new Printers.JSTreePrinter(jsFileWriter)
+            for (tree <- trees)
+              printer.printStat(tree)
+          } else {
+            val printedTrees = (trees: List[js.Tree]).asInstanceOf[List[js.PrintedTree]]
+            for (printedTree <- printedTrees)
+              jsFileWriter.write(printedTree.jsCode)
+          }
 
           jsFileWriter.write(printedModuleSetCache.footerBytes)
 
@@ -112,7 +122,7 @@ final class BasicLinkerBackend(config: LinkerBackendImpl.Config)
 
       protected def writeModuleWithSourceMap(moduleID: ModuleID, force: Boolean): Option[(ByteBuffer, ByteBuffer)] = {
         val cache = printedModuleSetCache.getModuleCache(moduleID)
-        val (printedTrees, changed) = emitterResult.body(moduleID)
+        val (trees, changed) = emitterResult.body(moduleID)
 
         if (force || changed || allChanged) {
           rewrittenModules.incrementAndGet()
@@ -133,9 +143,16 @@ final class BasicLinkerBackend(config: LinkerBackendImpl.Config)
           jsFileWriter.writeASCIIString("'use strict';\n")
           smWriter.nextLine()
 
-          for (printedTree <- printedTrees) {
-            jsFileWriter.write(printedTree.jsCode)
-            smWriter.insertFragment(printedTree.sourceMapFragment)
+          if (config.minify) {
+            val printer = new Printers.JSTreePrinterWithSourceMap(jsFileWriter, smWriter, initIndent = 0)
+            for (tree <- trees)
+              printer.printStat(tree)
+          } else {
+            val printedTrees = (trees: List[js.Tree]).asInstanceOf[List[js.PrintedTree]]
+            for (printedTree <- printedTrees) {
+              jsFileWriter.write(printedTree.jsCode)
+              smWriter.insertFragment(printedTree.sourceMapFragment)
+            }
           }
 
           jsFileWriter.write(printedModuleSetCache.footerBytes)
@@ -248,7 +265,7 @@ private object BasicLinkerBackend {
         val jsCodeWriter = new ByteArrayWriter()
         val printer = new Printers.JSTreePrinter(jsCodeWriter, indent)
 
-        trees.map(printer.printStat(_))
+        trees.foreach(printer.printStat(_))
 
         js.PrintedTree(jsCodeWriter.toByteArray(), SourceMapWriter.Fragment.Empty) :: Nil
       }
@@ -264,7 +281,7 @@ private object BasicLinkerBackend {
         val smFragmentBuilder = new SourceMapWriter.FragmentBuilder()
         val printer = new Printers.JSTreePrinterWithSourceMap(jsCodeWriter, smFragmentBuilder, indent)
 
-        trees.map(printer.printStat(_))
+        trees.foreach(printer.printStat(_))
         smFragmentBuilder.complete()
 
         js.PrintedTree(jsCodeWriter.toByteArray(), smFragmentBuilder.result()) :: Nil

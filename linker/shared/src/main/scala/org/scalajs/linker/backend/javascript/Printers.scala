@@ -747,9 +747,13 @@ object Printers {
     protected def print(ident: Ident): Unit =
       printEscapeJS(ident.name)
 
+    protected def print(ident: DelayedIdent): Unit =
+      printEscapeJS(ident.resolveName())
+
     private final def print(propName: PropertyName): Unit = propName match {
-      case lit: StringLiteral => print(lit: Tree)
-      case ident: Ident       => print(ident)
+      case lit: StringLiteral  => print(lit: Tree)
+      case ident: Ident        => print(ident)
+      case ident: DelayedIdent => print(ident)
 
       case ComputedName(tree) =>
         print("[")
@@ -795,6 +799,14 @@ object Printers {
       if (ident.pos.isDefined)
         sourceMap.startIdentNode(column, ident.pos, ident.originalName)
       super.print(ident)
+      if (ident.pos.isDefined)
+        sourceMap.endNode(column)
+    }
+
+    override protected def print(ident: DelayedIdent): Unit = {
+      if (ident.pos.isDefined)
+        sourceMap.startIdentNode(column, ident.pos, ident.originalName)
+      printEscapeJS(ident.resolveName())
       if (ident.pos.isDefined)
         sourceMap.endNode(column)
     }

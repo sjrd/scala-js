@@ -32,7 +32,8 @@ import PolyfillableBuiltin._
 private[emitter] final class SJSGen(
     val jsGen: JSGen,
     val nameGen: NameGen,
-    val varGen: VarGen
+    val varGen: VarGen,
+    val nameCompressor: Option[NameCompressor]
 ) {
 
   import jsGen._
@@ -151,20 +152,41 @@ private[emitter] final class SJSGen(
 
   def genSelect(receiver: Tree, field: irt.FieldIdent)(
       implicit pos: Position): Tree = {
-    DotSelect(receiver, Ident(genName(field.name))(field.pos))
+    DotSelect(receiver, genFieldIdent(field.name)(field.pos))
   }
 
-  def genSelect(receiver: Tree, field: irt.FieldIdent,
+  def genSelectWithOrigName(receiver: Tree, field: irt.FieldIdent,
       originalName: OriginalName)(
       implicit pos: Position): Tree = {
-    val jsName = genName(field.name)
-    val jsOrigName = genOriginalName(field.name, originalName, jsName)
-    DotSelect(receiver, Ident(jsName, jsOrigName)(field.pos))
+    DotSelect(receiver, genFieldIdentWithOrigName(field.name, originalName)(field.pos))
+  }
+
+  private def genFieldIdent(fieldName: FieldName)(
+      implicit pos: Position): MaybeDelayedIdent = {
+    nameCompressor match {
+      case None =>
+        Ident(genName(fieldName))
+      case Some(compressor) =>
+        DelayedIdent(compressor.genResolverFor(fieldName))
+    }
+  }
+
+  private def genFieldIdentWithOrigName(fieldName: FieldName,
+      originalName: OriginalName)(
+      implicit pos: Position): MaybeDelayedIdent = {
+    nameCompressor match {
+      case None =>
+        val jsName = genName(fieldName)
+        val jsOrigName = genOriginalName(fieldName, originalName, jsName)
+        Ident(jsName, jsOrigName)
+      case Some(compressor) =>
+        DelayedIdent(compressor.genResolverFor(fieldName), originalName)
+    }
   }
 
   def genApply(receiver: Tree, methodName: MethodName, args: List[Tree])(
       implicit pos: Position): Tree = {
-    Apply(DotSelect(receiver, Ident(genMethodName(methodName))), args)
+    Apply(DotSelect(receiver, genMethodIdent(methodName)), args)
   }
 
   def genApply(receiver: Tree, methodName: MethodName, args: Tree*)(
@@ -172,8 +194,61 @@ private[emitter] final class SJSGen(
     genApply(receiver, methodName, args.toList)
   }
 
-  def genMethodName(methodName: MethodName): String =
-    genName(methodName)
+  def genMethodIdent(methodIdent: irt.MethodIdent): MaybeDelayedIdent =
+    genMethodIdent(methodIdent.name)(methodIdent.pos)
+
+  def genMethodIdentWithOrigName(methodIdent: irt.MethodIdent,
+      originalName: OriginalName): MaybeDelayedIdent = {
+    genMethodIdentWithOrigName(methodIdent.name, originalName)(methodIdent.pos)
+  }
+
+  def genMethodIdent(methodName: MethodName)(implicit pos: Position): MaybeDelayedIdent = {
+    nameCompressor match {
+      case None             => Ident(genName(methodName))
+      case Some(compressor) => DelayedIdent(compressor.genResolverFor(methodName))
+    }
+  }
+
+  def genMethodIdentWithOrigName(methodName: MethodName, originalName: OriginalName)(
+      implicit pos: Position): MaybeDelayedIdent = {
+    nameCompressor match {
+      case None =>
+        val jsName = genName(methodName)
+        val jsOrigName = genOriginalName(methodName, originalName, jsName)
+        Ident(jsName, jsOrigName)
+      case Some(compressor) =>
+        DelayedIdent(compressor.genResolverFor(methodName), originalName)
+    }
+  }
+
+  def genArrayClassPropApply(receiver: Tree, prop: ArrayClassProperty, args: Tree*)(
+      implicit pos: Position): Tree = {
+    genArrayClassPropApply(receiver, prop, args.toList)
+  }
+
+  def genArrayClassPropApply(receiver: Tree, prop: ArrayClassProperty, args: List[Tree])(
+      implicit pos: Position): Tree = {
+    Apply(genArrayClassPropSelect(receiver, prop), args)
+  }
+
+  def genArrayClassPropSelect(qualifier: Tree, prop: ArrayClassProperty)(
+      implicit pos: Position): Tree = {
+    DotSelect(qualifier, genArrayClassProperty(prop))
+  }
+
+  def genArrayClassProperty(prop: ArrayClassProperty)(implicit pos: Position): MaybeDelayedIdent = {
+    nameCompressor match {
+      case None             => Ident(prop.nonMinifiedName)
+      case Some(compressor) => DelayedIdent(compressor.genResolverFor(prop))
+    }
+  }
+
+  def genArrayClassPropertyWithOrigName(prop: ArrayClassProperty)(implicit pos: Position): MaybeDelayedIdent = {
+    nameCompressor match {
+      case None             => Ident(prop.nonMinifiedName)
+      case Some(compressor) => DelayedIdent(compressor.genResolverFor(prop), prop.originalName)
+    }
+  }
 
   def genJSPrivateSelect(receiver: Tree, field: irt.FieldIdent)(
       implicit moduleContext: ModuleContext, globalKnowledge: GlobalKnowledge,

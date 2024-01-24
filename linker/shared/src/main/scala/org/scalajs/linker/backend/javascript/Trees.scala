@@ -50,15 +50,25 @@ object Trees {
     def pos: Position
   }
 
+  sealed trait MaybeDelayedIdent extends PropertyName {
+    def resolveName(): String
+  }
+
   sealed case class Ident(name: String, originalName: OriginalName)(
-      implicit val pos: Position) extends PropertyName {
-    require(Ident.isValidJSIdentifierName(name),
-        s"'$name' is not a valid JS identifier name")
+      implicit val pos: Position) extends MaybeDelayedIdent {
+    Ident.requireValidJSIdentifierName(name)
+
+    def resolveName(): String = name
   }
 
   object Ident {
     def apply(name: String)(implicit pos: Position): Ident =
       new Ident(name, NoOriginalName)
+
+    def requireValidJSIdentifierName(name: String): Unit = {
+      require(isValidJSIdentifierName(name),
+          s"'$name' is not a valid JS identifier name")
+    }
 
     /** Tests whether the given string is a valid `IdentifierName` for the
      *  ECMAScript language specification.
@@ -85,6 +95,22 @@ object Trees {
       true
       // scalastyle:on return
     }
+  }
+
+  sealed case class DelayedIdent(makeName: () => String, originalName: OriginalName)(
+      implicit val pos: Position)
+      extends MaybeDelayedIdent {
+
+    def resolveName(): String = {
+      val name = makeName()
+      Ident.requireValidJSIdentifierName(name)
+      name
+    }
+  }
+
+  object DelayedIdent {
+    def apply(makeName: () => String)(implicit pos: Position): DelayedIdent =
+      new DelayedIdent(makeName, NoOriginalName)
   }
 
   sealed case class ComputedName(tree: Tree) extends PropertyName {
@@ -231,7 +257,7 @@ object Trees {
       implicit val pos: Position)
       extends Tree
 
-  sealed case class DotSelect(qualifier: Tree, item: Ident)(
+  sealed case class DotSelect(qualifier: Tree, item: MaybeDelayedIdent)(
       implicit val pos: Position)
       extends Tree
 

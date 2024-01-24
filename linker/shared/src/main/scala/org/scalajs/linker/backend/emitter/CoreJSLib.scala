@@ -877,7 +877,7 @@ private[emitter] object CoreJSLib {
 
           if (implementedInObject) {
             val staticObjectCall: Tree = {
-              val fun = globalVar(VarField.c, ObjectClass).prototype DOT genMethodName(methodName)
+              val fun = globalVar(VarField.c, ObjectClass).prototype DOT genMethodIdent(methodName)
               Return(Apply(fun DOT "call", instance :: args))
             }
 
@@ -1131,7 +1131,7 @@ private[emitter] object CoreJSLib {
       ) :::
       condDefs(esVersion >= ESVersion.ES2015 && nullPointers != CheckedBehavior.Unchecked)(
         defineFunction5(VarField.systemArraycopy) { (src, srcPos, dest, destPos, length) =>
-          Apply(src DOT "copyTo", List(srcPos, dest, destPos, length))
+          genArrayClassPropApply(src, ArrayClassProperty.copyTo, srcPos, dest, destPos, length)
         }
       ) :::
 
@@ -1155,7 +1155,8 @@ private[emitter] object CoreJSLib {
                     srcPos, dest.u.length, destPos, length)
               },
               For(let(i, 0), i < length, i := ((i + 1) | 0), {
-                Apply(dest DOT "set", List((destPos + i) | 0, BracketSelect(srcArray, (srcPos + i) | 0)))
+                genArrayClassPropApply(dest, ArrayClassProperty.set,
+                    (destPos + i) | 0, BracketSelect(srcArray, (srcPos + i) | 0))
               })
             )
           })
@@ -1172,7 +1173,7 @@ private[emitter] object CoreJSLib {
               If(srcData && genIdentBracketSelect(srcData, "isArrayClass"), {
                 // Fast path: the values are array of the same type
                 if (esVersion >= ESVersion.ES2015 && nullPointers == CheckedBehavior.Unchecked)
-                  Apply(src DOT "copyTo", List(srcPos, dest, destPos, length))
+                  genArrayClassPropApply(src, ArrayClassProperty.copyTo, srcPos, dest, destPos, length)
                 else
                   genCallHelper(VarField.systemArraycopy, src, srcPos, dest, destPos, length)
               }, {
@@ -1444,14 +1445,17 @@ private[emitter] object CoreJSLib {
                 genCallHelper(VarField.throwArrayIndexOutOfBoundsException, i))
           }
 
+          val getName = genArrayClassPropertyWithOrigName(ArrayClassProperty.get)
+          val setName = genArrayClassPropertyWithOrigName(ArrayClassProperty.set)
+
           List(
-              MethodDef(static = false, Ident("get"), paramList(i), None, {
+              MethodDef(static = false, getName, paramList(i), None, {
                 Block(
                     boundsCheck,
                     Return(BracketSelect(This().u, i))
                 )
               }),
-              MethodDef(static = false, Ident("set"), paramList(i, v), None, {
+              MethodDef(static = false, setName, paramList(i, v), None, {
                 Block(
                     boundsCheck,
                     BracketSelect(This().u, i) := v
@@ -1465,8 +1469,10 @@ private[emitter] object CoreJSLib {
           val i = varRef("i")
           val v = varRef("v")
 
+          val setName = genArrayClassPropertyWithOrigName(ArrayClassProperty.set)
+
           List(
-            MethodDef(static = false, Ident("set"), paramList(i, v), None, {
+            MethodDef(static = false, setName, paramList(i, v), None, {
               BracketSelect(This().u, i) := v
             })
           )
@@ -1479,7 +1485,10 @@ private[emitter] object CoreJSLib {
           val dest = varRef("dest")
           val destPos = varRef("destPos")
           val length = varRef("length")
-          val methodDef = MethodDef(static = false, Ident("copyTo"),
+
+          val copyToName = genArrayClassPropertyWithOrigName(ArrayClassProperty.copyTo)
+
+          val methodDef = MethodDef(static = false, copyToName,
               paramList(srcPos, dest, destPos, length), None, {
             if (isTypedArray) {
               Block(
@@ -1504,7 +1513,7 @@ private[emitter] object CoreJSLib {
           Nil
         }
 
-        val clone = MethodDef(static = false, Ident(genMethodName(cloneMethodName)), Nil, None, {
+        val clone = MethodDef(static = false, genMethodIdent(cloneMethodName), Nil, None, {
           Return(New(ArrayClass,
               Apply(genIdentBracketSelect(This().u, "slice"), Nil) :: Nil))
         })
@@ -1770,6 +1779,8 @@ private[emitter] object CoreJSLib {
               val i = varRef("i")
               val v = varRef("v")
 
+              val setName = genArrayClassPropertyWithOrigName(ArrayClassProperty.set)
+
               val boundsCheck = condTree(arrayIndexOutOfBounds != CheckedBehavior.Unchecked) {
                 If((i < 0) || (i >= This().u.length),
                     genCallHelper(VarField.throwArrayIndexOutOfBoundsException, i))
@@ -1782,7 +1793,7 @@ private[emitter] object CoreJSLib {
               }
 
               List(
-                MethodDef(static = false, Ident("set"), paramList(i, v), None, {
+                MethodDef(static = false, setName, paramList(i, v), None, {
                   Block(
                       boundsCheck,
                       storeCheck,
@@ -1799,7 +1810,10 @@ private[emitter] object CoreJSLib {
               val dest = varRef("dest")
               val destPos = varRef("destPos")
               val length = varRef("length")
-              val methodDef = MethodDef(static = false, Ident("copyTo"),
+
+              val copyToName = genArrayClassPropertyWithOrigName(ArrayClassProperty.copyTo)
+
+              val methodDef = MethodDef(static = false, copyToName,
                   paramList(srcPos, dest, destPos, length), None, {
                 genCallHelper(VarField.arraycopyGeneric, This().u, srcPos,
                     dest.u, destPos, length)
@@ -1809,7 +1823,7 @@ private[emitter] object CoreJSLib {
               Nil
             }
 
-            val clone = MethodDef(static = false, Ident(genMethodName(cloneMethodName)), Nil, None, {
+            val clone = MethodDef(static = false, genMethodIdent(cloneMethodName), Nil, None, {
               Return(New(ArrayClass,
                   Apply(genIdentBracketSelect(This().u, "slice"), Nil) :: Nil))
             })
@@ -2235,5 +2249,10 @@ private[emitter] object CoreJSLib {
     private def double(d: Double): DoubleLiteral = DoubleLiteral(d)
 
     private def bigInt(i: Long): BigIntLiteral = BigIntLiteral(i)
+
+    // cannot extend AnyVal because this is not a static class
+    private implicit class CustomTreeOps(private val self: Tree) {
+      def u: Tree = genArrayClassPropSelect(self, ArrayClassProperty.u)
+    }
   }
 }
