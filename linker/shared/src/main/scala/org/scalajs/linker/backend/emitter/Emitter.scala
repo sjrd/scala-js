@@ -181,7 +181,9 @@ final class Emitter[E >: Null <: js.Tree](
     } else {
       assert(!secondAttempt,
           "Uh oh! The second attempt gave a different set of dangerous " +
-          "global refs than the first one.")
+          "global refs than the first one.\n" +
+          "Before:" + state.lastMentionedDangerousGlobalRefs.toList.sorted.mkString("\n  ", "\n  ", "\n") +
+          "After:" + mentionedDangerousGlobalRefs.toList.sorted.mkString("\n  ", "\n  ", ""))
 
       // !!! This log message is tested in EmitterTest
       logger.debug(

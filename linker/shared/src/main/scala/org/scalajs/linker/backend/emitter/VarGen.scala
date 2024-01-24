@@ -292,7 +292,7 @@ private[emitter] final class VarGen(jsGen: JSGen, nameGen: NameGen,
                       Assign(VarRef(ident), VarRef(x))
                   }),
                   "configurable" -> BooleanLiteral(true)
-              ))
+              ), keepOnlyTrackedGlobalRefs = true)
             } else {
               WithGlobals(Assign(genBracketSelect(exportsVarRef, name), VarRef(ident)))
             }

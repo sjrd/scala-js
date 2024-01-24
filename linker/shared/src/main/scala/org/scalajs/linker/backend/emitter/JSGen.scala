@@ -126,12 +126,12 @@ private[emitter] final class JSGen(val config: Emitter.Config) {
     Function(esFeatures.esVersion >= ESVersion.ES2015, args, restParam, body)
   }
 
-  def genDefineProperty(obj: Tree, prop: Tree, descriptor: List[(String, Tree)])(
+  def genDefineProperty(obj: Tree, prop: Tree, descriptor: List[(String, Tree)], keepOnlyTrackedGlobalRefs: Boolean)(
       implicit pos: Position): WithGlobals[Tree] = {
     val descriptorTree =
         ObjectConstr(descriptor.map(x => StringLiteral(x._1) -> x._2))
 
-    globalRef("Object").map { objRef =>
+    maybeTrackedGlobalRef("Object", keepOnlyTrackedGlobalRefs).map { objRef =>
       Apply(genIdentBracketSelect(objRef, "defineProperty"),
           List(obj, prop, descriptorTree))
     }
@@ -145,6 +145,14 @@ private[emitter] final class JSGen(val config: Emitter.Config) {
 
     if (trackAllGlobalRefs) globalRef(name)
     else WithGlobals(VarRef(Ident(name)))
+  }
+
+  def maybeTrackedGlobalRef(name: String, keepOnlyTrackedGlobalRefs: Boolean)(
+      implicit pos: Position): WithGlobals[VarRef] = {
+    if (keepOnlyTrackedGlobalRefs && !trackAllGlobalRefs)
+      untrackedGlobalRef(name)
+    else
+      globalRef(name)
   }
 
   def genPropSelect(qual: Tree, item: PropertyName)(

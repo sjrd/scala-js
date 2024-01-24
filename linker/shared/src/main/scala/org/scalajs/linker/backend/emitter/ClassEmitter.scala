@@ -400,7 +400,8 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
         val args =
           if (semantics.productionMode) Nil
           else js.StringLiteral(description) :: Nil
-        genCallPolyfillableBuiltin(PolyfillableBuiltin.PrivateSymbolBuiltin, args: _*)
+        genCallPolyfillableBuiltin(PolyfillableBuiltin.PrivateSymbolBuiltin, args,
+            keepOnlyTrackedGlobalRefs = true)
       }
 
       symbolValueWithGlobals.flatMap { symbolValue =>
@@ -594,7 +595,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
           setter.map("set" -> _).toList :::
           List("configurable" -> js.BooleanLiteral(true))
       )
-      tree <- genDefineProperty(targetObject, propName, descriptor)
+      tree <- genDefineProperty(targetObject, propName, descriptor, keepOnlyTrackedGlobalRefs = true)
     } yield {
       tree
     }
@@ -1115,7 +1116,8 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
                     js.Return(globalVar(VarField.t, varScope))
                   }),
                   "configurable" -> js.BooleanLiteral(true)
-              )
+              ),
+              keepOnlyTrackedGlobalRefs = true
           )
         }
     }

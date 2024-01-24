@@ -2180,7 +2180,8 @@ private[emitter] object CoreJSLib {
 
     private def genCallPolyfillableBuiltin(builtin: PolyfillableBuiltin,
         args: Tree*): Tree = {
-      extractWithGlobals(sjsGen.genCallPolyfillableBuiltin(builtin, args: _*))
+      extractWithGlobals(sjsGen.genCallPolyfillableBuiltin(builtin, args.toList,
+          keepOnlyTrackedGlobalRefs = true))
     }
 
     private def maybeWrapInUBE(behavior: CheckedBehavior, exception: Tree): Tree = {

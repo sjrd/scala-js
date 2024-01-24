@@ -315,8 +315,10 @@ private[emitter] final class SJSGen(
         case StringType                    => wg(expr || StringLiteral(""))
 
         case FloatType =>
-          if (semantics.strictFloats) genCallPolyfillableBuiltin(FroundBuiltin, expr)
-          else wg(UnaryOp(irt.JSUnaryOp.+, expr))
+          if (semantics.strictFloats)
+            genCallPolyfillableBuiltin(FroundBuiltin, List(expr), keepOnlyTrackedGlobalRefs = false)
+          else
+            wg(UnaryOp(irt.JSUnaryOp.+, expr))
 
         case NoType | NullType | NothingType | _:RecordType =>
           throw new AssertionError(s"Unexpected type $tpe in genAsInstanceOf")
@@ -405,16 +407,16 @@ private[emitter] final class SJSGen(
     Apply(globalVar(helperName, CoreVar), args.toList)
   }
 
-  def genCallPolyfillableBuiltin(builtin: PolyfillableBuiltin, args: Tree*)(
+  def genCallPolyfillableBuiltin(builtin: PolyfillableBuiltin, args: List[Tree], keepOnlyTrackedGlobalRefs: Boolean)(
       implicit moduleContext: ModuleContext, globalKnowledge: GlobalKnowledge,
       pos: Position): WithGlobals[Tree] = {
     if (esFeatures.esVersion >= builtin.availableInESVersion) {
       builtin match {
         case builtin: GlobalVarBuiltin =>
-          for (global <- globalRef(builtin.globalVar)) yield
+          for (global <- maybeTrackedGlobalRef(builtin.globalVar, keepOnlyTrackedGlobalRefs)) yield
             Apply(global, args.toList)
         case builtin: NamespacedBuiltin =>
-          for (namespace <- globalRef(builtin.namespaceGlobalVar)) yield
+          for (namespace <- maybeTrackedGlobalRef(builtin.namespaceGlobalVar, keepOnlyTrackedGlobalRefs)) yield
             Apply(genIdentBracketSelect(namespace, builtin.builtinName), args.toList)
       }
     } else {

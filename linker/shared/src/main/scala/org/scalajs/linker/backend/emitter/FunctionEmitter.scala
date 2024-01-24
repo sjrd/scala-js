@@ -847,7 +847,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                     )
 
                     extractWithGlobals(
-                        genDefineProperty(js.This(), transformExprNoChar(newName), descriptor))
+                        genDefineProperty(js.This(), transformExprNoChar(newName), descriptor,
+                            keepOnlyTrackedGlobalRefs = false))
                   }
               }
             }
@@ -3242,7 +3243,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
     private def genCallPolyfillableBuiltin(
         builtin: PolyfillableBuiltin, args: js.Tree*)(
         implicit pos: Position): js.Tree = {
-      extractWithGlobals(sjsGen.genCallPolyfillableBuiltin(builtin, args: _*))
+      extractWithGlobals(sjsGen.genCallPolyfillableBuiltin(builtin, args.toList,
+          keepOnlyTrackedGlobalRefs = false))
     }
 
     private def genFround(arg: js.Tree)(implicit pos: Position): js.Tree =
