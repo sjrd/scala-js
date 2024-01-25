@@ -17,6 +17,7 @@ import scala.annotation.{switch, tailrec}
 import java.util.Comparator
 
 import scala.collection.mutable
+import scala.reflect.ClassTag
 
 import org.scalajs.ir.Names._
 import org.scalajs.linker.standard.ModuleSet
@@ -26,6 +27,7 @@ private[emitter] final class NameCompressor(config: Emitter.Config) {
   import NameCompressor._
 
   private val entries: EntryMap = mutable.AnyRefMap.empty
+  private val ancestorEntries: AncestorEntryMap = mutable.AnyRefMap.empty
 
   private var namesAllocated: Boolean = false
 
@@ -40,6 +42,10 @@ private[emitter] final class NameCompressor(config: Emitter.Config) {
       allocatePropertyNames(entries, propertyNamesToAvoid)
     }
 
+    logger.time("Name compressor: Allocate ancestor names") {
+      allocatePropertyNames(ancestorEntries, BasePropertyNamesToAvoid)
+    }
+
     namesAllocated = true
   }
 
@@ -51,6 +57,9 @@ private[emitter] final class NameCompressor(config: Emitter.Config) {
 
   def genResolverFor(prop: ArrayClassProperty): () => String =
     entries.getOrElseUpdate(prop, new ArrayClassPropEntry(prop)).genResolver()
+
+  def genResolverForAncestor(ancestor: ClassName): () => String =
+    ancestorEntries.getOrElseUpdate(ancestor, new AncestorNameEntry(ancestor)).genResolver()
 
   /** Collects the property names to avoid for Scala instance members.
    *
@@ -98,11 +107,11 @@ private[emitter] object NameCompressor {
   private val BasePropertyNamesToAvoid: Set[String] =
     NameGen.ReservedJSIdentifierNames + "then"
 
-  private def allocatePropertyNames(entries: EntryMap,
-      namesToAvoid: collection.Set[String]): Unit = {
-    val comparator: Comparator[PropertyNameEntry] =
-      Comparator.comparingInt[PropertyNameEntry](_.occurrences).reversed() // by decreasing order of occurrences
-        .thenComparing(Comparator.naturalOrder[PropertyNameEntry]()) // tie-break
+  private def allocatePropertyNames[K <: AnyRef, E <: BaseEntry with Comparable[E]: ClassTag](
+      entries: mutable.AnyRefMap[K, E], namesToAvoid: collection.Set[String]): Unit = {
+    val comparator: Comparator[E] =
+      Comparator.comparingInt[E](_.occurrences).reversed() // by decreasing order of occurrences
+        .thenComparing(Comparator.naturalOrder[E]()) // tie-break
 
     val orderedEntries = entries.values.toArray
     java.util.Arrays.sort(orderedEntries, comparator)
@@ -116,7 +125,9 @@ private[emitter] object NameCompressor {
   /** Keys of this map are `FieldName | MethodName | ArrayClassProperty`. */
   private type EntryMap = mutable.AnyRefMap[AnyRef, PropertyNameEntry]
 
-  private sealed abstract class PropertyNameEntry extends Comparable[PropertyNameEntry] {
+  private type AncestorEntryMap = mutable.AnyRefMap[ClassName, AncestorNameEntry]
+
+  private sealed abstract class BaseEntry {
     var occurrences: Int = 0
     var allocatedName: String = null
 
@@ -136,6 +147,10 @@ private[emitter] object NameCompressor {
       incOccurrences()
       resolver
     }
+  }
+
+  private sealed abstract class PropertyNameEntry
+      extends BaseEntry with Comparable[PropertyNameEntry] {
 
     def compareTo(that: PropertyNameEntry): Int = (this, that) match {
       case (x: FieldNameEntry, y: FieldNameEntry) =>
@@ -170,6 +185,15 @@ private[emitter] object NameCompressor {
   private final class ArrayClassPropEntry(val property: ArrayClassProperty)
       extends PropertyNameEntry {
     override def toString(): String = s"ArrayClassPropEntry(${property.nonMinifiedName})"
+  }
+
+  private final class AncestorNameEntry(val ancestor: ClassName)
+      extends BaseEntry with Comparable[AncestorNameEntry] {
+
+    def compareTo(that: AncestorNameEntry): Int =
+      this.ancestor.compareTo(that.ancestor)
+
+    override def toString(): String = s"AncestorNameEntry(${ancestor.nameString})"
   }
 
   // private[emitter] for tests
