@@ -709,7 +709,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
           !(!(
               genIsScalaJSObject(obj) &&
               genIsClassNameInAncestors(className,
-                  obj DOT "$classData" DOT "ancestors")
+                  obj DOT cpn.classData DOT cpn.ancestors)
           ))
         }
 
@@ -785,9 +785,9 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
       globalFunctionDef(VarField.isArrayOf, className, List(objParam, depthParam), None, {
         js.Return(!(!({
           genIsScalaJSObject(obj) &&
-          ((obj DOT "$classData" DOT "arrayDepth") === depth) &&
+          ((obj DOT cpn.classData DOT cpn.arrayDepth) === depth) &&
           genIsClassNameInAncestors(className,
-              obj DOT "$classData" DOT "arrayBase" DOT "ancestors")
+              obj DOT cpn.classData DOT cpn.arrayBase DOT cpn.ancestors)
         })))
       })
     }
@@ -818,7 +818,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
 
   private def genIsScalaJSObject(obj: js.Tree)(implicit pos: Position): js.Tree = {
     import TreeDSL._
-    obj && (obj DOT "$classData")
+    obj && (obj DOT cpn.classData)
   }
 
   private def genIsClassNameInAncestors(className: ClassName,
@@ -919,7 +919,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
       val prunedParams =
         allParams.reverse.dropWhile(_.isInstanceOf[js.Undefined]).reverse
 
-      val typeData = js.Apply(js.New(globalVar(VarField.TypeData, CoreVar), Nil) DOT "initClass",
+      val typeData = js.Apply(js.New(globalVar(VarField.TypeData, CoreVar), Nil) DOT cpn.initClass,
           prunedParams)
 
       globalVarDef(VarField.d, className, typeData)
@@ -931,7 +931,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
       globalKnowledge: GlobalKnowledge, pos: Position): js.Tree = {
     import TreeDSL._
 
-    globalVar(VarField.c, className).prototype DOT "$classData" := globalVar(VarField.d, className)
+    globalVar(VarField.c, className).prototype DOT cpn.classData := globalVar(VarField.d, className)
   }
 
   def genModuleAccessor(className: ClassName, isJSClass: Boolean)(
