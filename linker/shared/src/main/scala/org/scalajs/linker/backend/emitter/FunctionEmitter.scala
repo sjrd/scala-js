@@ -628,12 +628,12 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                 }
 
                 if (checked) {
-                  js.Apply(js.DotSelect(genArray, js.Ident("set")),
+                  js.Apply(js.DotSelect(genArray, js.Ident(cpn.set)),
                       List(genIndex, genRhs))
                 } else {
                   js.Assign(
                       js.BracketSelect(
-                          js.DotSelect(genArray, js.Ident("u"))(lhs.pos),
+                          js.DotSelect(genArray, js.Ident(cpn.u))(lhs.pos),
                           genIndex)(lhs.pos),
                       genRhs)
                 }
@@ -2651,16 +2651,16 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
         case ArrayLength(array) =>
           genIdentBracketSelect(js.DotSelect(transformExprNoChar(checkNotNull(array)),
-              js.Ident("u")), "length")
+              js.Ident(cpn.u)), "length")
 
         case ArraySelect(array, index) =>
           val newArray = transformExprNoChar(checkNotNull(array))
           val newIndex = transformExprNoChar(index)
           semantics.arrayIndexOutOfBounds match {
             case CheckedBehavior.Compliant | CheckedBehavior.Fatal =>
-              js.Apply(js.DotSelect(newArray, js.Ident("get")), List(newIndex))
+              js.Apply(js.DotSelect(newArray, js.Ident(cpn.get)), List(newIndex))
             case CheckedBehavior.Unchecked =>
-              js.BracketSelect(js.DotSelect(newArray, js.Ident("u")), newIndex)
+              js.BracketSelect(js.DotSelect(newArray, js.Ident(cpn.u)), newIndex)
           }
 
         case tree: RecordSelect =>
@@ -2736,7 +2736,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           js.DotSelect(
               genSelect(transformExprNoChar(checkNotNull(runtimeClass)),
                   ClassClass, FieldIdent(dataFieldName)),
-              js.Ident("zero"))
+              js.Ident(cpn.zero))
 
         case Transient(NativeArrayWrapper(elemClass, nativeArray)) =>
           val newNativeArray = transformExprNoChar(nativeArray)
@@ -2750,8 +2750,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                   transformExprNoChar(checkNotNull(elemClass)),
                   ClassClass, FieldIdent(dataFieldName))
               val arrayClassData = js.Apply(
-                  js.DotSelect(elemClassData, js.Ident("getArrayOf")), Nil)
-              js.Apply(arrayClassData DOT "wrapArray", newNativeArray :: Nil)
+                  js.DotSelect(elemClassData, js.Ident(cpn.getArrayOf)), Nil)
+              js.Apply(arrayClassData DOT cpn.wrapArray, newNativeArray :: Nil)
           }
 
         case Transient(ObjectClassName(obj)) =>
