@@ -562,6 +562,7 @@ private[emitter] object CoreJSLib {
         extractWithGlobals(globalClassDef(VarField.Char, CoreVar, None, ctor :: toStr :: Nil))
       } else {
         defineFunction(VarField.Char, ctor.args, ctor.body) :::
+        setPrototypeVar(globalVar(VarField.Char, CoreVar).prototype) :::
         assignES5ClassMembers(globalVar(VarField.Char, CoreVar), List(toStr))
       }
     }
@@ -1527,8 +1528,8 @@ private[emitter] object CoreJSLib {
           val clsDef = {
             extractWithGlobals(globalFunctionDef(VarField.ac, componentTypeRef,
                 ctor.args, ctor.restParam, ctor.body)) :::
-            (ArrayClass.prototype := New(globalVar(VarField.h, ObjectClass), Nil)) ::
-            (ArrayClass.prototype DOT "constructor" := ArrayClass) ::
+            genAssignPrototype(ArrayClass, New(globalVar(VarField.h, ObjectClass), Nil)) ::
+            (prototypeFor(ArrayClass) DOT "constructor" := ArrayClass) ::
             assignES5ClassMembers(ArrayClass, members)
           }
 
@@ -1536,7 +1537,7 @@ private[emitter] object CoreJSLib {
             case _: ClassRef =>
               clsDef :::
               extractWithGlobals(globalFunctionDef(VarField.ah, ObjectClass, Nil, None, Skip())) :::
-              (globalVar(VarField.ah, ObjectClass).prototype := ArrayClass.prototype) :: Nil
+              (globalVar(VarField.ah, ObjectClass).prototype := prototypeFor(ArrayClass)) :: Nil
             case _: PrimRef =>
               clsDef
           }
@@ -1696,7 +1697,6 @@ private[emitter] object CoreJSLib {
         val name = varRef("name")
 
         Block(
-            arrayClass.prototype DOT classData := This(),
             const(name, str("[") + (componentData DOT cpn.arrayEncodedName)),
             privateFieldSet(cpn.constr, arrayClass),
             if (globalKnowledge.isParentDataAccessed)
@@ -1728,6 +1728,7 @@ private[emitter] object CoreJSLib {
         MethodDef(static = false, Ident(cpn.initSpecializedArray),
             paramList(componentData, arrayClass, typedArrayClass, isAssignableFromFun), None, {
           Block(
+              arrayClass.prototype DOT classData := This(),
               initArrayCommonBody(arrayClass, componentData, componentData, 1),
               const(self, This()), // capture `this` for use in arrow fun
               privateFieldSet(cpn.isAssignableFromFun, isAssignableFromFun || {
@@ -1831,13 +1832,16 @@ private[emitter] object CoreJSLib {
             val members = set ::: copyTo ::: clone :: Nil
 
             if (useClassesForRegularClasses) {
-              ClassDef(Some(ArrayClass.ident), Some(globalVar(VarField.ac, ObjectClass)),
-                  ctor :: members)
+              Block(
+                  ClassDef(Some(ArrayClass.ident), Some(globalVar(VarField.ac, ObjectClass)),
+                      ctor :: members) ::
+                  setPrototypeVar(ArrayClass.prototype)
+              )
             } else {
               Block(
                 FunctionDef(ArrayClass.ident, ctor.args, ctor.restParam, ctor.body) ::
-                (ArrayClass.prototype := New(globalVar(VarField.ah, ObjectClass), Nil)) ::
-                (ArrayClass.prototype DOT "constructor" := ArrayClass) ::
+                genAssignPrototype(ArrayClass, New(globalVar(VarField.ah, ObjectClass), Nil), localDecl = true) ::
+                (prototypeFor(ArrayClass) DOT "constructor" := ArrayClass) ::
                 assignES5ClassMembers(ArrayClass, members)
               )
             }
@@ -1847,6 +1851,7 @@ private[emitter] object CoreJSLib {
               ArrayClassDef,
               const(arrayBase, (componentData DOT cpn.arrayBase) || componentData),
               const(arrayDepth, (componentData DOT cpn.arrayDepth) + 1),
+              prototypeFor(ArrayClass) DOT classData := This(),
               initArrayCommonBody(ArrayClass, componentData, arrayBase, arrayDepth),
               const(isAssignableFromFun, {
                 genArrowFunction(paramList(that), {
@@ -1998,6 +2003,7 @@ private[emitter] object CoreJSLib {
         extractWithGlobals(globalClassDef(VarField.TypeData, CoreVar, None, ctor :: members))
       } else {
         defineFunction(VarField.TypeData, ctor.args, ctor.body) :::
+        setPrototypeVar(globalVar(VarField.TypeData, CoreVar).prototype) :::
         assignES5ClassMembers(globalVar(VarField.TypeData, CoreVar), members)
       }
     }
@@ -2157,7 +2163,7 @@ private[emitter] object CoreJSLib {
       for {
         MethodDef(static, name, args, restParam, body) <- members
       } yield {
-        val target = if (static) classRef else classRef.prototype
+        val target = if (static) classRef else prototypeFor(classRef)
         genPropSelect(target, name) := Function(arrow = false, args, restParam, body)
       }
     }

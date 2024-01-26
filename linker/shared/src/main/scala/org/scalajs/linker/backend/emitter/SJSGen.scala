@@ -145,6 +145,38 @@ private[emitter] final class SJSGen(
     val newArrayOfThisClass = "newArrayOfThisClass"
   }
 
+  /* This is a `val` because it is used at the top of every file, outside of
+   * any cache. This is how we preserve its identity across runs.
+   */
+  val declarePrototypeVar: List[Tree] = {
+    implicit val pos = Position.NoPosition
+    if (minify) VarDef(fileLevelVarIdent(VarField.p), None) :: Nil
+    else Nil
+  }
+
+  def prototypeFor(classRef: Tree)(implicit pos: Position): Tree = {
+    import TreeDSL._
+    if (minify) fileLevelVar(VarField.p)
+    else classRef.prototype
+  }
+
+  def genAssignPrototype(classRef: Tree, value: Tree, localDecl: Boolean = false)(implicit pos: Position): Tree = {
+    import TreeDSL._
+    val assign = classRef.prototype := value
+    if (!minify)
+      assign
+    else if (localDecl)
+      VarDef(fileLevelVarIdent(VarField.p), Some(assign))
+    else
+      fileLevelVar(VarField.p) := assign
+  }
+
+  def setPrototypeVar(rhs: Tree)(implicit pos: Position): List[Tree] = {
+    import TreeDSL._
+    if (minify) (fileLevelVar(VarField.p) := rhs) :: Nil
+    else Nil
+  }
+
   def genZeroOf(tpe: Type)(
       implicit moduleContext: ModuleContext, globalKnowledge: GlobalKnowledge,
       pos: Position): Tree = {

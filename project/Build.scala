@@ -2005,10 +2005,10 @@ object Build {
               ))
             } else {
               Some(ExpectedSizes(
-                  fastLink = 494000 to 495000,
-                  fullLink = 337000 to 338000,
-                  fastLinkGz = 69000 to 70000,
-                  fullLinkGz = 50000 to 51000,
+                  fastLink = 453000 to 454000,
+                  fullLink = 305000 to 306000,
+                  fastLinkGz = 65000 to 66000,
+                  fullLinkGz = 47000 to 48000,
               ))
             }
 
@@ -2022,10 +2022,10 @@ object Build {
               ))
             } else {
               Some(ExpectedSizes(
-                  fastLink = 347000 to 348000,
-                  fullLink = 307000 to 308000,
-                  fastLinkGz = 54000 to 55000,
-                  fullLinkGz = 49000 to 50000,
+                  fastLink = 324000 to 325000,
+                  fullLink = 284000 to 285000,
+                  fastLinkGz = 51000 to 52000,
+                  fullLinkGz = 47000 to 48000,
               ))
             }
 
