@@ -97,8 +97,10 @@ final class Emitter[E >: Null <: js.Tree](
 
     val WithGlobals(body, globalRefs) = emitInternal(moduleSet, logger)
 
-    if (minify)
+    for (compressor <- nameCompressor) {
       state = null // let go of all the memory, since we will not use it anyway
+      compressor.endRun(logger)
+    }
 
     moduleKind match {
       case ModuleKind.NoModule =>

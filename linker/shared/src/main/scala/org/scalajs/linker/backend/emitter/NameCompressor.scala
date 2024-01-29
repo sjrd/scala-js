@@ -14,7 +14,10 @@ package org.scalajs.linker.backend.emitter
 
 import scala.annotation.{switch, tailrec}
 
+import java.util.Comparator
+
 import scala.collection.mutable
+import scala.reflect.ClassTag
 
 import org.scalajs.ir._
 import org.scalajs.ir.Names._
@@ -64,36 +67,45 @@ private[emitter] final class NameCompressor(val config: Emitter.Config) {
     }
   }
 
+  def endRun(logger: Logger): Unit = {
+    var atLeastOneNotUsed = false
+    for (entry <- entries.valuesIterator ++ ancestorEntries.valuesIterator) {
+      if (!entry.checkWasActuallyUsed(logger))
+        atLeastOneNotUsed = true
+    }
+    if (atLeastOneNotUsed)
+      throw new AssertionError("There was at least one unused name allocated by the name compressor")
+  }
+
   def dangerousGlobalRefs: Set[String] =
     _dangerousGlobalRefs
 
   def allocatedFor(className: ClassName, fieldName: FieldName): String =
-    entries((className, fieldName)).allocatedName
+    entries((className, fieldName)).useAllocatedName()
 
   def allocatedFor(methodName: MethodName): String =
-    entries(methodName).allocatedName
+    entries(methodName).useAllocatedName()
 
   def allocatedForAncestor(ancestor: ClassName): String =
-    ancestorEntries(ancestor).allocatedName
+    ancestorEntries(ancestor).useAllocatedName()
 
-  private def allocatePropertyNames(namesToAvoid: collection.Set[String]): Unit = {
-    val orderedEntries = entries.values.toArray
-    java.util.Arrays.sort(orderedEntries, PropertyNameEntryComparator)
+  private def allocatePropertyNames(namesToAvoid: collection.Set[String]): Unit =
+    allocateNamesGeneric(entries, PropertyNameEntryComparator, namesToAvoid)
+
+  private def allocateAncestorNames(): Unit =
+    allocateNamesGeneric(ancestorEntries, AncestorNameEntryComparator, BasePropertyNamesToAvoid)
+
+  private def allocateNamesGeneric[K <: AnyRef, E <: BaseEntry](
+      map: mutable.AnyRefMap[K, E], comparator: Comparator[E],
+      namesToAvoid: collection.Set[String])(
+      implicit ct: ClassTag[E]): Unit = {
+    val orderedEntries = map.values.toArray
+    java.util.Arrays.sort(orderedEntries, comparator)
 
     val generator = new NameGenerator(namesToAvoid)
 
     for (entry <- orderedEntries)
-      entry.allocatedName = generator.nextString()
-  }
-
-  private def allocateAncestorNames(): Unit = {
-    val orderedEntries = ancestorEntries.values.toArray
-    java.util.Arrays.sort(orderedEntries, AncestorNameEntryComparator)
-
-    val generator = new NameGenerator(BasePropertyNamesToAvoid)
-
-    for (entry <- orderedEntries)
-      entry.allocatedName = generator.nextString()
+      entry.setAllocatedName(generator.nextString())
   }
 }
 
@@ -107,24 +119,50 @@ private[emitter] object NameCompressor {
   private val BasePropertyNamesToAvoid: Set[String] =
     NameGen.ReservedJSIdentifierNames + "then"
 
+  private sealed abstract class BaseEntry {
+    private var _occurrences: Int = 0
+    private var allocatedName: String = null
+    private var actuallyUsed: Boolean = false
+
+    def incOccurrences(): Unit =
+      _occurrences += 1
+
+    def occurrences: Int = _occurrences
+
+    def setAllocatedName(name: String): Unit =
+      allocatedName = name
+
+    def useAllocatedName(): String = {
+      actuallyUsed = true
+      allocatedName
+    }
+
+    def checkWasActuallyUsed(logger: Logger): Boolean = {
+      if (!actuallyUsed) {
+        logger.error(
+            s"The name compressor allocated the name $allocatedName for $this " +
+            s"based on a count of $occurrences occurrences but it was never used")
+      }
+      actuallyUsed
+    }
+  }
+
   /** Keys of this map are `(ClassName, FieldName) | MethodName`. */
   private type EntryMap = mutable.AnyRefMap[AnyRef, PropertyNameEntry]
 
-  private sealed abstract class PropertyNameEntry {
-    var occurrences: Int = 0
-    var allocatedName: String = null
-
-    def incOccurrences(): Unit =
-      occurrences += 1
-  }
+  private sealed abstract class PropertyNameEntry extends BaseEntry
 
   private final class FieldNameEntry(val className: ClassName, val fieldName: FieldName)
-      extends PropertyNameEntry
+      extends PropertyNameEntry {
+    override def toString(): String = s"FieldNameEntry(${className.nameString}, ${fieldName.nameString})"
+  }
 
   private final class MethodNameEntry(val methodName: MethodName)
-      extends PropertyNameEntry
+      extends PropertyNameEntry {
+    override def toString(): String = s"MethodNameEntry(${methodName.nameString})"
+  }
 
-  private object PropertyNameEntryComparator extends java.util.Comparator[PropertyNameEntry] {
+  private object PropertyNameEntryComparator extends Comparator[PropertyNameEntry] {
     def compare(x: PropertyNameEntry, y: PropertyNameEntry): Int = {
       if (x.occurrences != y.occurrences) y.occurrences - x.occurrences // higher count comes first
       else tieBreak(x, y)
@@ -148,15 +186,11 @@ private[emitter] object NameCompressor {
     }
   }
 
-  private final class AncestorNameEntry(val ancestor: ClassName) {
-    var occurrences: Int = 0
-    var allocatedName: String = null
-
-    def incOccurrences(): Unit =
-      occurrences += 1
+  private final class AncestorNameEntry(val ancestor: ClassName) extends BaseEntry {
+    override def toString(): String = s"AncestorNameEntry(${ancestor.nameString})"
   }
 
-  private object AncestorNameEntryComparator extends java.util.Comparator[AncestorNameEntry] {
+  private object AncestorNameEntryComparator extends Comparator[AncestorNameEntry] {
     def compare(x: AncestorNameEntry, y: AncestorNameEntry): Int =
       if (x.occurrences != y.occurrences) y.occurrences - x.occurrences // higher count comes first
       else x.ancestor.compareTo(y.ancestor) // tie break for stability
