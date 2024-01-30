@@ -1637,10 +1637,15 @@ private[emitter] object CoreJSLib {
 
       val initClass = {
         val internalNameObj = varRef("internalNameObj")
-        val isInterface = varRef("isInterface")
+
+        /* This is either:
+         * - an int: 1 means isInterface; 2 means isJSType; 0 otherwise
+         * - a Scala class constructor: means 0 + assign `kindOrCtor.prototype.$classData = this;`
+         */
+        val kindOrCtor = varRef("kindOrCtor")
+
         val fullName = varRef("fullName")
         val ancestors = varRef("ancestors")
-        val isJSType = varRef("isJSType")
         val parentData = varRef("parentData")
         val isInstance = varRef("isInstance")
         val internalName = varRef("internalName")
@@ -1648,8 +1653,8 @@ private[emitter] object CoreJSLib {
         val depth = varRef("depth")
         val obj = varRef("obj")
         MethodDef(static = false, Ident(cpn.initClass),
-            paramList(internalNameObj, isInterface, fullName, ancestors,
-                isJSType, parentData, isInstance), None, {
+            paramList(internalNameObj, kindOrCtor, fullName, ancestors,
+                parentData, isInstance), None, {
           Block(
               const(internalName, genCallHelper(VarField.propertyName, internalNameObj)),
               if (globalKnowledge.isParentDataAccessed)
@@ -1663,14 +1668,17 @@ private[emitter] object CoreJSLib {
                   Return(!(!(BracketSelect(that DOT cpn.ancestors, internalName))))
                 })
               }),
-              privateFieldSet(cpn.isJSType, !(!isJSType)),
+              privateFieldSet(cpn.isJSType, kindOrCtor === 2),
               publicFieldSet(cpn.name, fullName),
-              publicFieldSet(cpn.isInterface, isInterface),
+              publicFieldSet(cpn.isInterface, kindOrCtor === 1),
               publicFieldSet(cpn.isInstance, isInstance || {
                 genArrowFunction(paramList(obj), {
                   Return(!(!(obj && (obj DOT classData) &&
                       BracketSelect(obj DOT classData DOT cpn.ancestors, internalName))))
                 })
+              }),
+              If(typeof(kindOrCtor) !== str("number"), {
+                kindOrCtor.prototype DOT cpn.classData := This()
               }),
               Return(This())
           )

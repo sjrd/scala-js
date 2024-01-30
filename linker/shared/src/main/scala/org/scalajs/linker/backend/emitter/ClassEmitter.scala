@@ -841,7 +841,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
 
   def genTypeData(className: ClassName, kind: ClassKind,
       superClass: Option[ClassIdent], ancestors: List[ClassName],
-      jsNativeLoadSpec: Option[JSNativeLoadSpec])(
+      jsNativeLoadSpec: Option[JSNativeLoadSpec], assignClassData: Boolean)(
       implicit moduleContext: ModuleContext,
       globalKnowledge: GlobalKnowledge, pos: Position): WithGlobals[List[js.Tree]] = {
     import TreeDSL._
@@ -851,9 +851,12 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     val isJSType =
       kind.isJSType
 
-    val isJSTypeParam =
-      if (isJSType) js.BooleanLiteral(true)
-      else js.Undefined()
+    val kindOrCtorParam = {
+      if (isJSType) js.IntLiteral(2)
+      else if (kind == ClassKind.Interface) js.IntLiteral(1)
+      else if (assignClassData) globalVar(VarField.c, className)
+      else js.IntLiteral(0)
+    }
 
     val parentData = if (globalKnowledge.isParentDataAccessed) {
       superClass.fold[js.Tree] {
@@ -921,11 +924,10 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     isInstanceFunWithGlobals.flatMap { isInstanceFun =>
       val allParams = List(
           js.ObjectConstr(List(js.Ident(genAncestorName(className)) -> js.IntLiteral(0))),
-          js.BooleanLiteral(kind == ClassKind.Interface),
+          kindOrCtorParam,
           js.StringLiteral(RuntimeClassNameMapperImpl.map(
               semantics.runtimeClassNameMapper, className.nameString)),
           ancestorsRecord,
-          isJSTypeParam,
           parentData,
           isInstanceFun
       )
