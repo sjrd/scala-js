@@ -1084,6 +1084,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
               case Transient(AssumeNotNull(obj)) =>
                 Transient(AssumeNotNull(rec(obj)))
+              case Transient(Cast(expr, tpe)) =>
+                Transient(Cast(rec(expr), tpe))
               case Transient(ZeroOf(runtimeClass)) =>
                 Transient(ZeroOf(rec(runtimeClass)))
               case Transient(ObjectClassName(obj)) =>
@@ -1282,6 +1284,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         // Transients preserving pureness (modulo NPE)
         case Transient(AssumeNotNull(obj)) =>
           test(obj)
+        case Transient(Cast(expr, _)) =>
+          test(expr)
         case Transient(ZeroOf(runtimeClass)) =>
           test(runtimeClass) // ZeroOf *assumes* that `runtimeClass ne null`
         case Transient(ObjectClassName(obj)) =>
@@ -1822,6 +1826,11 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case Transient(AssumeNotNull(obj)) =>
           unnest(obj) { (newObj, env) =>
             redo(Transient(AssumeNotNull(newObj)))(env)
+          }
+
+        case Transient(Cast(expr, tpe)) =>
+          unnest(expr) { (newExpr, env) =>
+            redo(Transient(Cast(newExpr, tpe)))(env)
           }
 
         case Transient(ZeroOf(runtimeClass)) =>
@@ -2731,6 +2740,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           genCallHelper(VarField.n, transformExpr(obj, preserveChar = true))
         case Transient(AssumeNotNull(obj)) =>
           transformExpr(obj, preserveChar = true)
+        case Transient(Cast(expr, _)) =>
+          transformExpr(expr, preserveChar = true)
 
         case Transient(ZeroOf(runtimeClass)) =>
           js.DotSelect(

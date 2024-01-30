@@ -70,6 +70,23 @@ object Transients {
     }
   }
 
+  final case class Cast(expr: Tree, val tpe: Type) extends Transient.Value {
+    def traverse(traverser: Traverser): Unit =
+      traverser.traverse(expr)
+
+    def transform(transformer: Transformer, isStat: Boolean)(
+        implicit pos: Position): Tree = {
+      Transient(Cast(transformer.transformExpr(expr), tpe))
+    }
+
+    def printIR(out: IRTreePrinter): Unit = {
+      out.print(expr)
+      out.print(".as![")
+      out.print(tpe)
+      out.print("]")
+    }
+  }
+
   /** Intrinsic for `System.arraycopy`.
    *
    *  This node *assumes* that `src` and `dest` are non-null. It is the

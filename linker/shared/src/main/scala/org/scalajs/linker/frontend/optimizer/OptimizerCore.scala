@@ -4418,10 +4418,47 @@ private[optimizer] abstract class OptimizerCore(
 
   private def foldAsInstanceOf(arg: PreTransform, tpe: Type)(
       implicit pos: Position): PreTransform = {
-    if (isSubtype(arg.tpe.base, tpe))
-      arg
-    else
+    def default(arg: PreTransform): PreTransform =
       AsInstanceOf(finishTransformExpr(arg), tpe).toPreTransform
+
+    def cast(arg: PreTransform, newTpe: RefinedType): PreTransform = arg match {
+      case PreTransBlock(bindingsAndStats, result) =>
+        PreTransBlock(bindingsAndStats, cast(result, newTpe).asInstanceOf[PreTransResult])
+
+      case PreTransLocalDef(localDef) =>
+        val refinedLocalDef = localDef.withRefinedType(newTpe)
+        if (refinedLocalDef ne localDef)
+          PreTransLocalDef(refinedLocalDef)
+        else
+          default(arg)
+
+      case _:PreTransUnaryOp | _:PreTransBinaryOp =>
+        /* These already have the best possible type, so if we get there the
+         * cast is always failing and we don't care that we generate bad code.
+         */
+        default(arg)
+
+      case _:PreTransTree | _:PreTransRecordTree | _:PreTransJSBinaryOp =>
+        // Not much we can do about those, so use the default
+        default(arg)
+    }
+
+    if (isSubtype(arg.tpe.base, tpe)) {
+      arg
+    } else if (semantics.asInstanceOfs == CheckedBehavior.Unchecked) {
+      tpe match {
+        case _:ClassType | _:ArrayType =>
+          val castTpe = RefinedType(tpe, isExact = false,
+              isNullable = arg.tpe.isNullable, arg.tpe.allocationSite)
+          cast(arg, castTpe)
+
+        case _ =>
+          // Need to keep AsInstanceOf because it is a real unboxing operation
+          default(arg)
+      }
+    } else {
+      default(arg)
+    }
   }
 
   private def foldJSSelect(qualifier: Tree, item: Tree)(
@@ -4904,23 +4941,9 @@ private[optimizer] abstract class OptimizerCore(
            */
 
           val refinedType = computeRefinedType()
-          val newLocalDef = if (refinedType == value.tpe) {
-            localDef
-          } else {
-            /* Only adjust if the replacement if ReplaceWithThis or
-             * ReplaceWithVarRef, because other types have nothing to gain
-             * (e.g., ReplaceWithConstant) or we want to keep them unwrapped
-             * because they are examined in optimizations (notably all the
-             * types with virtualized objects).
-             */
-            localDef.replacement match {
-              case _:ReplaceWithThis | _:ReplaceWithVarRef =>
-                LocalDef(refinedType, mutable = false,
-                    ReplaceWithOtherLocalDef(localDef))
-              case _ =>
-                localDef
-            }
-          }
+          val newLocalDef =
+            if (refinedType == value.tpe) localDef
+            else localDef.withRefinedType(refinedType)
           buildInner(newLocalDef, cont)
 
         case PreTransTree(literal: Literal, _) =>
@@ -5257,7 +5280,11 @@ private[optimizer] object OptimizerCore {
          * notably because it allows us to run the ClassDefChecker after the
          * optimizer.
          */
-        localDef.newReplacement
+        val underlying = localDef.newReplacement
+        if (underlying.tpe == tpe.base)
+          underlying
+        else
+          Transient(Cast(underlying, tpe.base))
 
       case ReplaceWithConstant(value) =>
         value
@@ -5303,6 +5330,21 @@ private[optimizer] object OptimizerCore {
              _:ReplaceWithThis | _:ReplaceWithConstant =>
           false
       })
+    }
+
+    def withRefinedType(refinedType: RefinedType): LocalDef = {
+      /* Only adjust if the replacement if ReplaceWithThis or
+       * ReplaceWithVarRef, because other types have nothing to gain
+       * (e.g., ReplaceWithConstant) or we want to keep them unwrapped
+       * because they are examined in optimizations (notably all the
+       * types with virtualized objects).
+       */
+      replacement match {
+        case _:ReplaceWithThis | _:ReplaceWithVarRef =>
+          LocalDef(refinedType, mutable, ReplaceWithOtherLocalDef(this))
+        case _ =>
+          this
+      }
     }
   }
 
