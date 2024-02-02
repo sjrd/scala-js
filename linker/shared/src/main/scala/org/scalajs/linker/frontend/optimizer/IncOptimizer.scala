@@ -17,6 +17,7 @@ import scala.annotation.{switch, tailrec}
 import scala.collection.mutable
 
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 import org.scalajs.ir._
 import org.scalajs.ir.Names._
@@ -92,6 +93,15 @@ final class IncOptimizer private[optimizer] (config: CommonPhaseConfig, collOps:
       /* PROCESS PASS */
       processAllTaggedMethods(logger)
     }
+
+    val throwableClass = classes(ThrowableClass)
+    val failedElidableCtors = classes.valuesIterator.map(c => c -> c.countOfFailedElidableConstructors.get())
+      .filter(_._2 != 0)
+      .filter(!_._1.parentChain.contains(throwableClass))
+      .toList
+      .sortBy(_._2)
+    for ((cls, count) <- failedElidableCtors)
+      println(s"$count:  ${cls.className.nameString}")
 
     val groupedTopLevelExports = unit.topLevelExports.groupBy(_.owningClass)
 
@@ -270,6 +280,13 @@ final class IncOptimizer private[optimizer] (config: CommonPhaseConfig, collOps:
    */
   private def updateElidableConstructors(): Unit = {
     import ElidableConstructorsInfo._
+
+    for (cls <- classes.valuesIterator) {
+      if (cls.className.nameString.startsWith("scala.reflect.")) {
+        println(cls.className.nameString)
+        println(cls.elidableConstructorsInfo)
+      }
+    }
 
     /* Invariant: when something is in the stack, its
      * elidableConstructorsInfo was set to NotElidable.
@@ -601,9 +618,12 @@ final class IncOptimizer private[optimizer] (config: CommonPhaseConfig, collOps:
       subclasses = collOps.finishAdd(subclassAcc)
     }
 
+    val countOfFailedElidableConstructors = new AtomicInteger(0)
     def askHasElidableConstructors(asker: Processable): Boolean = {
       hasElidableConstructorsAskers.put(asker, ())
       asker.registerTo(this)
+      if (!hasElidableConstructors)
+        countOfFailedElidableConstructors.incrementAndGet()
       hasElidableConstructors
     }
 
