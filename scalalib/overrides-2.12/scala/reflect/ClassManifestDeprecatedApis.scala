@@ -153,20 +153,20 @@ trait ClassManifestDeprecatedApis[T] extends OptManifest[T] {
  *  Hence we've introduced this design decision as the lesser of two evils.
  */
 object ClassManifestFactory {
-  val Byte    = ManifestFactory.Byte
-  val Short   = ManifestFactory.Short
-  val Char    = ManifestFactory.Char
-  val Int     = ManifestFactory.Int
-  val Long    = ManifestFactory.Long
-  val Float   = ManifestFactory.Float
-  val Double  = ManifestFactory.Double
-  val Boolean = ManifestFactory.Boolean
-  val Unit    = ManifestFactory.Unit
-  val Any     = ManifestFactory.Any
-  val Object  = ManifestFactory.Object
-  val AnyVal  = ManifestFactory.AnyVal
-  val Nothing = ManifestFactory.Nothing
-  val Null    = ManifestFactory.Null
+  def Byte    = ManifestFactory.Byte
+  def Short   = ManifestFactory.Short
+  def Char    = ManifestFactory.Char
+  def Int     = ManifestFactory.Int
+  def Long    = ManifestFactory.Long
+  def Float   = ManifestFactory.Float
+  def Double  = ManifestFactory.Double
+  def Boolean = ManifestFactory.Boolean
+  def Unit    = ManifestFactory.Unit
+  def Any     = ManifestFactory.Any
+  def Object  = ManifestFactory.Object
+  def AnyVal  = ManifestFactory.AnyVal
+  def Nothing = ManifestFactory.Nothing
+  def Null    = ManifestFactory.Null
 
   def fromClass[T](clazz: jClass[T]): ClassManifest[T] = clazz match {
     case java.lang.Byte.TYPE      => Byte.asInstanceOf[ClassManifest[T]]
