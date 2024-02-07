@@ -21,6 +21,7 @@ object HelloWorld {
       sayHelloFromTypedJQuery()
     } else {
       println("Hello world!")
+      println(scala.Nil)
     }
   }
 

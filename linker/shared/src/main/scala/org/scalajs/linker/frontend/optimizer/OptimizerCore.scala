@@ -72,6 +72,13 @@ private[optimizer] abstract class OptimizerCore(
    */
   protected def hasElidableConstructors(className: ClassName): Boolean
 
+  /** Returns the inlineable field bodies of this module class.
+   *
+   *  If the class is not a module class, or if it does not have inlineable
+   *  accessors, the resulting `InlineableFieldBodies` is always empty.
+   */
+  protected def inlineableFieldBodies(className: ClassName): InlineableFieldBodies
+
   /** Tests whether the given class is inlineable.
    *
    *  @return
@@ -1171,14 +1178,62 @@ private[optimizer] abstract class OptimizerCore(
     }
   }
 
+  private def fieldBodyToTree(fieldBody: InlineableFieldBodies.FieldBody)(implicit pos: Position): Tree = {
+    import InlineableFieldBodies.FieldBody
+
+    fieldBody match {
+      case FieldBody.Literal(literal) =>
+        // explicit copy for the position
+        literal match {
+          case literal: Undefined      => literal.copy()
+          case literal: Null           => literal.copy()
+          case literal: BooleanLiteral => literal.copy()
+          case literal: CharLiteral    => literal.copy()
+          case literal: ByteLiteral    => literal.copy()
+          case literal: ShortLiteral   => literal.copy()
+          case literal: IntLiteral     => literal.copy()
+          case literal: LongLiteral    => literal.copy()
+          case literal: FloatLiteral   => literal.copy()
+          case literal: DoubleLiteral  => literal.copy()
+          case literal: StringLiteral  => literal.copy()
+          case literal: ClassOf        => literal.copy()
+        }
+      case FieldBody.LoadModule(moduleClassName) =>
+        LoadModule(moduleClassName)
+      case FieldBody.ModuleSelect(qualifier, className, fieldName, tpe) =>
+        Select(fieldBodyToTree(qualifier), className, FieldIdent(fieldName))(tpe)
+      case FieldBody.ModuleGetter(qualifier, methodName, tpe) =>
+        Apply(ApplyFlags.empty, fieldBodyToTree(qualifier), MethodIdent(methodName), Nil)(tpe)
+    }
+  }
+
   private def pretransformSelectCommon(tree: Select, isLhsOfAssign: Boolean)(
       cont: PreTransCont)(
       implicit scope: Scope): TailRec[Tree] = {
     val Select(qualifier, className, field) = tree
-    pretransformExpr(qualifier) { preTransQual =>
-      pretransformSelectCommon(tree.tpe, preTransQual, className, field,
-          isLhsOfAssign)(cont)(scope, tree.pos)
+
+    def default: TailRec[Tree] = {
+      pretransformExpr(qualifier) { preTransQual =>
+        pretransformSelectCommon(tree.tpe, preTransQual, className, field,
+            isLhsOfAssign)(cont)(scope, tree.pos)
+      }
     }
+
+    /*qualifier match {
+      case LoadModule(moduleClassName) if !isLhsOfAssign =>
+        println(tree)
+        inlineableFieldBodies(moduleClassName).fieldBodies.get((className, field.name)) match {
+          case None =>
+            default
+          case Some(fieldBody) =>
+            println(s"replacing ${tree.show} by $fieldBody")
+            pretransformExpr(fieldBodyToTree(fieldBody)(tree.pos))(cont)
+        }
+
+      case _ =>
+        default
+    }*/
+    default
   }
 
   private def pretransformSelectCommon(expectedType: Type,
@@ -1224,22 +1279,41 @@ private[optimizer] abstract class OptimizerCore(
         cont(PreTransLit(IntLiteral(resultValue)))
 
       case _ =>
-        resolveLocalDef(preTransQual) match {
-          case PreTransRecordTree(newQual, origType, cancelFun) =>
-            val recordType = newQual.tpe.asInstanceOf[RecordType]
-            val recordField = recordType.findField(field.name)
-            val sel = RecordSelect(newQual, field)(recordField.tpe)
-            sel.tpe match {
-              case _: RecordType =>
-                cont(PreTransRecordTree(sel, RefinedType(expectedType), cancelFun))
-              case _ =>
-                cont(PreTransTree(sel, RefinedType(sel.tpe)))
-            }
+        def default: TailRec[Tree] = {
+          resolveLocalDef(preTransQual) match {
+            case PreTransRecordTree(newQual, origType, cancelFun) =>
+              val recordType = newQual.tpe.asInstanceOf[RecordType]
+              val recordField = recordType.findField(field.name)
+              val sel = RecordSelect(newQual, field)(recordField.tpe)
+              sel.tpe match {
+                case _: RecordType =>
+                  cont(PreTransRecordTree(sel, RefinedType(expectedType), cancelFun))
+                case _ =>
+                  cont(PreTransTree(sel, RefinedType(sel.tpe)))
+              }
 
-          case PreTransTree(newQual, newQualType) =>
-            val newQual1 = maybeAssumeNotNull(newQual, newQualType)
-            cont(PreTransTree(Select(newQual1, className, field)(expectedType),
-                RefinedType(expectedType)))
+            case PreTransTree(newQual, newQualType) =>
+              val newQual1 = maybeAssumeNotNull(newQual, newQualType)
+              cont(PreTransTree(Select(newQual1, className, field)(expectedType),
+                  RefinedType(expectedType)))
+          }
+        }
+
+        preTransQual.tpe match {
+          case RefinedType(ClassType(qualClassName), _, /* isNullable = */ false) if !isLhsOfAssign =>
+            inlineableFieldBodies(qualClassName).fieldBodies.get((className, field.name)) match {
+              case None =>
+                default
+              case Some(fieldBody) =>
+                val qualSideEffects = finishTransformStat(preTransQual)
+                val fieldBodyTree = fieldBodyToTree(fieldBody)
+                //println(s"replacing ${preTransQual}.${field.name} by $fieldBodyTree")
+                pretransformExpr(fieldBodyTree) { preTransFieldBody =>
+                  cont(PreTransBlock(qualSideEffects, preTransFieldBody))
+                }
+            }
+          case _ =>
+            default
         }
     }
   }
@@ -5138,6 +5212,41 @@ private[optimizer] object OptimizerCore {
         .map(f => s"${f._1.nameString}::${f._2.name.name.nameString}: ${f._2.ftpe}")
         .mkString("InlineableClassStructure(", ", ", ")")
     }
+  }
+
+  final class InlineableFieldBodies(
+    val fieldBodies: Map[(ClassName, FieldName), InlineableFieldBodies.FieldBody]
+  ) {
+    override def equals(that: Any): Boolean = that match {
+      case that: InlineableFieldBodies =>
+        this.fieldBodies == that.fieldBodies
+      case _ =>
+        false
+    }
+
+    override def hashCode(): Int = fieldBodies.##
+
+    override def toString(): String = {
+      fieldBodies
+        .map(f => s"${f._1._1.nameString}::${f._1._2.nameString}: ${f._2}")
+        .mkString("InlineableFieldBodies(", ", ", ")")
+    }
+  }
+
+  object InlineableFieldBodies {
+    sealed abstract class FieldBody
+
+    object FieldBody {
+      final case class Literal(literal: Trees.Literal) extends FieldBody
+      final case class LoadModule(moduleClassName: ClassName) extends FieldBody
+
+      final case class ModuleSelect(qualifier: LoadModule, className: ClassName, fieldName: FieldName, tpe: Type)
+          extends FieldBody
+
+      final case class ModuleGetter(qualifier: LoadModule, methodName: MethodName, tpe: Type) extends FieldBody
+    }
+
+    val Empty: InlineableFieldBodies = new InlineableFieldBodies(Map.empty)
   }
 
   private final val MaxRollbacksPerMethod = 256
