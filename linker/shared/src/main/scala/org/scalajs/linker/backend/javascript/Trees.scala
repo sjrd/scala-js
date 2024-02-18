@@ -33,7 +33,7 @@ object Trees {
 
     def show: String = {
       val writer = new ByteArrayWriter()
-      val printer = new Printers.JSTreePrinter(writer)
+      val printer = new Printers.JSTreeShowPrinter(writer)
       printer.printTree(this, isStat = true)
       new String(writer.toByteArray(), StandardCharsets.US_ASCII)
     }

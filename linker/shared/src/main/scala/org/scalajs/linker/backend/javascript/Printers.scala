@@ -842,4 +842,10 @@ object Printers {
     }
   }
 
+  /** A printer that shows `Tree`s for debugging, not for pretty-printing. */
+  class JSTreeShowPrinter(_out: ByteArrayWriter, initIndent: Int = 0)
+      extends JSTreePrinter(_out, initIndent) {
+    override protected def print(ident: DelayedIdent): Unit =
+      print("<delayedIdent>")
+  }
 }

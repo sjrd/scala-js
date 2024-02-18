@@ -159,6 +159,13 @@ class PrintersTest {
     )
   }
 
+  @Test def delayedIdentPrintVShow(): Unit = {
+    val tree = DotSelect(VarRef("x"), DelayedIdent(() => "foo"))
+
+    assertPrintEquals("x.foo;", tree)
+    assertEquals("x.<delayedIdent>;", tree.show)
+  }
+
   @Test def showPrintedTree(): Unit = {
     val tree = PrintedTree("test".getBytes(UTF_8), SourceMapWriter.Fragment.Empty)
 
