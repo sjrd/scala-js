@@ -830,7 +830,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
 
   def genTypeData(className: ClassName, kind: ClassKind,
       superClass: Option[ClassIdent], ancestors: List[ClassName],
-      jsNativeLoadSpec: Option[JSNativeLoadSpec])(
+      jsNativeLoadSpec: Option[JSNativeLoadSpec], assignClassData: Boolean)(
       implicit moduleContext: ModuleContext,
       globalKnowledge: GlobalKnowledge, pos: Position): WithGlobals[List[js.Tree]] = {
     import TreeDSL._
@@ -840,9 +840,10 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     val isJSType =
       kind.isJSType
 
-    val kindParam = {
+    val kindOrCtorParam = {
       if (isJSType) js.IntLiteral(2)
       else if (kind == ClassKind.Interface) js.IntLiteral(1)
+      else if (assignClassData) globalVar(VarField.c, className)
       else js.IntLiteral(0)
     }
 
@@ -911,7 +912,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
 
     isInstanceFunWithGlobals.flatMap { isInstanceFun =>
       val allParams = List(
-          kindParam,
+          kindOrCtorParam,
           js.StringLiteral(RuntimeClassNameMapperImpl.map(
               semantics.runtimeClassNameMapper, className.nameString)),
           ancestorsRecord
@@ -925,14 +926,6 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
 
       globalVarDef(VarField.d, className, typeData)
     }
-  }
-
-  def genSetTypeData(className: ClassName)(
-      implicit moduleContext: ModuleContext,
-      globalKnowledge: GlobalKnowledge, pos: Position): js.Tree = {
-    import TreeDSL._
-
-    globalVar(VarField.c, className).prototype DOT cpn.classData := globalVar(VarField.d, className)
   }
 
   def genModuleAccessor(className: ClassName, isJSClass: Boolean)(

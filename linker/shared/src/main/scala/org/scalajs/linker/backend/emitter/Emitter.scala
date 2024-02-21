@@ -432,10 +432,11 @@ final class Emitter[E >: Null <: js.Tree](
       x._1
     }
 
-    val classTreeCache =
-      extractChanged(classCache.getCache(linkedClass.version))
-
     val kind = linkedClass.kind
+    val assignClassData = kind.isClass && linkedClass.hasInstances
+
+    val classTreeCache =
+      extractChanged(classCache.getCache(linkedClass.version, assignClassData))
 
     // Global ref management
 
@@ -723,15 +724,9 @@ final class Emitter[E >: Null <: js.Tree](
               kind, // invalidated by class version
               linkedClass.superClass, // invalidated by class version
               linkedClass.ancestors, // invalidated by overall class cache (identity)
-              linkedClass.jsNativeLoadSpec // invalidated by class version
+              linkedClass.jsNativeLoadSpec, // invalidated by class version
+              assignClassData // invalidated directly (it is an input of classCache.getCache)
             )(moduleContext, classCache, linkedClass.pos).map(postTransform(_, 0))))
-      }
-
-      if (linkedClass.hasInstances && kind.isClass && linkedClass.hasRuntimeTypeInfo) {
-        main ++= classTreeCache.setTypeData.getOrElseUpdate({
-          val tree = classEmitter.genSetTypeData(className)(moduleContext, classCache, linkedClass.pos)
-          postTransform(tree, 0)
-        })
       }
     }
 
@@ -889,6 +884,7 @@ final class Emitter[E >: Null <: js.Tree](
   private final class ClassCache extends knowledgeGuardian.KnowledgeAccessor {
     private[this] var _cache: DesugaredClassCache[List[E]] = null
     private[this] var _lastVersion: Version = Version.Unversioned
+    private[this] var _lastAssignClassData: Boolean = false
     private[this] var _cacheUsed = false
 
     private[this] val _methodCaches =
@@ -921,13 +917,19 @@ final class Emitter[E >: Null <: js.Tree](
       _fullClassChangeTracker.foreach(_.startRun())
     }
 
-    def getCache(version: Version): (DesugaredClassCache[List[E]], Boolean) = {
+    def getCache(version: Version, assignClassData: Boolean): (DesugaredClassCache[List[E]], Boolean) = {
       _cacheUsed = true
       if (_cache == null || !_lastVersion.sameVersion(version)) {
         invalidate()
         statsClassesInvalidated += 1
         _lastVersion = version
+        _lastAssignClassData = assignClassData
         _cache = new DesugaredClassCache[List[E]]
+        (_cache, true)
+      } else if (_lastAssignClassData != assignClassData) {
+        // Keep most of the cache; only invalidate its `typeData` subcache
+        _cache.typeData.invalidate()
+        _lastAssignClassData = assignClassData
         (_cache, true)
       } else {
         statsClassesReused += 1
@@ -1223,6 +1225,8 @@ object Emitter {
         value = v
       value
     }
+    def invalidate(): Unit =
+      value = null
   }
 
   private case class ClassID(
