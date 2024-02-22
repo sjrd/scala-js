@@ -14,7 +14,7 @@ package org.scalajs.linker.backend.javascript
 
 import java.nio.charset.StandardCharsets
 
-import scala.annotation.switch
+import scala.annotation.{switch, tailrec}
 
 // Unimport default print and println to avoid invoking them by mistake
 import scala.Predef.{print => _, println => _, _}
@@ -126,8 +126,29 @@ object Printers {
 
       case _ =>
         printIndent()
-        printTree(tree, isStat = true)
+        if (textuallyStartsWithObjectLiteral(tree)) {
+          print('(')
+          printTree(tree, isStat = false)
+          print(");")
+        } else {
+          printTree(tree, isStat = true)
+        }
         println()
+    }
+
+    /** Tests whether the printed form of `tree` will textually start with an object literal.
+     *
+     *  If it does, it must be surrounded in parens when printed in statement position.
+     */
+    @tailrec
+    private def textuallyStartsWithObjectLiteral(tree: Tree): Boolean = tree match {
+      // ordered by decreasing likelihood of appearance as statement (guesstimate)
+      case Apply(fun, _)          => textuallyStartsWithObjectLiteral(fun)
+      case Assign(lhs, _)         => textuallyStartsWithObjectLiteral(lhs)
+      case DotSelect(qual, _)     => textuallyStartsWithObjectLiteral(qual)
+      case BracketSelect(qual, _) => textuallyStartsWithObjectLiteral(qual)
+      case ObjectConstr(_)        => true
+      case _                      => false
     }
 
     private def print(tree: Tree): Unit =
@@ -491,14 +512,11 @@ object Printers {
           printSeparatorIfStat()
 
         case ObjectConstr(Nil) =>
-          if (isStat)
-            print("({});") // force expression position for the object literal
-          else
-            print("{}")
+          assert(!isStat, s"ObjectConstr at ${tree.pos} should not be printed in statement position")
+          print("{}")
 
         case ObjectConstr(fields) =>
-          if (isStat)
-            print('(') // force expression position for the object literal
+          assert(!isStat, s"ObjectConstr at ${tree.pos} should not be printed in statement position")
           print('{')
           indent()
           println()
@@ -518,8 +536,6 @@ object Printers {
           undent()
           printIndent()
           print('}')
-          if (isStat)
-            print(");")
 
         // Literals
 
