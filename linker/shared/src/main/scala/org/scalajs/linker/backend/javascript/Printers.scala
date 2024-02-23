@@ -185,6 +185,17 @@ object Printers {
           // VarDef is an "expr" in a "For" / "ForIn" tree
           printSeparatorIfStat()
 
+        case MultiVarDef(names) =>
+          print("var ")
+          print(names.head)
+          var rest = names.tail
+          while (rest.nonEmpty) {
+            print(", ")
+            print(rest.head)
+            rest = rest.tail
+          }
+          print(';')
+
         case Let(ident, mutable, optRhs) =>
           print(if (mutable) "let " else "const ")
           print(ident)
@@ -215,10 +226,15 @@ object Printers {
           printBlock(body)
 
         case Assign(lhs, rhs) =>
+          if (!isStat)
+            print('(')
           print(lhs)
           print(" = ")
           print(rhs)
-          printSeparatorIfStat()
+          if (isStat)
+            print(';')
+          else
+            print(')')
 
         case Return(expr) =>
           print("return ")

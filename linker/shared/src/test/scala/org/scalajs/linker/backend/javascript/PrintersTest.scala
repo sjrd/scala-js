@@ -103,7 +103,7 @@ class PrintersTest {
   @Test def printFor(): Unit = {
     assertPrintEquals(
       """
-        |for (let x = 1; (x < 15); x = (x + 1)) {
+        |for (let x = 1; (x < 15); (x = (x + 1))) {
         |}
       """,
       For(Let("x", true, Some(IntLiteral(1))),

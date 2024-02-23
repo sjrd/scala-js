@@ -132,6 +132,11 @@ object Trees {
     def mutable: Boolean = true
   }
 
+  sealed case class MultiVarDef(names: List[Ident])(implicit val pos: Position)
+      extends Tree {
+    require(names.nonEmpty, s"names cannot be empty in MultiVarDef")
+  }
+
   /** ES6 let or const (depending on the mutable flag). */
   sealed case class Let(name: Ident, mutable: Boolean, rhs: Option[Tree])(
       implicit val pos: Position)

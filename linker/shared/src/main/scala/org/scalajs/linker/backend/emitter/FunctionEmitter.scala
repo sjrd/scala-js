@@ -249,7 +249,7 @@ import Transients._
 private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
   import FunctionEmitter._
   import sjsGen._
-  import jsGen._
+  import jsGen.{genConst => _, genLet => _, genEmptyMutableLet => _, genEmptyImmutableLet => _, _}
   import config._
   import nameGen._
   import varGen._
@@ -364,6 +364,15 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
     private val globalVarNames = mutable.Set.empty[String]
     private val localVarNames = mutable.Set.empty[String]
+
+    /** Whether we are collecting local `var`s to declare them all at the top. */
+    private val declareAllLocalVarsAtTheTop = minify && !useLets
+
+    /** Set of local `var`s to declare at the top; only used if `declareAllLocalVarsAtTheTop` is true.
+     *
+     *  This is initialized/reset in `desugarToFunctionInternal`.
+     */
+    private var localVarsToDeclare: mutable.AnyRefMap[String, js.Ident] = null
 
     private lazy val localVarAllocs = mutable.Map.empty[LocalName, String]
 
@@ -511,6 +520,10 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         isStat: Boolean, env0: Env)(
         implicit pos: Position): js.Function = {
 
+      val savedLocalVarsToDeclare = localVarsToDeclare
+      if (declareAllLocalVarsAtTheTop)
+        localVarsToDeclare = mutable.AnyRefMap.empty
+
       val env = env0.withParams(params ++ restParam)
 
       val newBody = if (isStat) {
@@ -531,12 +544,22 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case other                                        => other
       }
 
+      def prependLocalVarDefs(body: js.Tree): js.Tree = {
+        if (!declareAllLocalVarsAtTheTop || localVarsToDeclare.isEmpty) {
+          body
+        } else {
+          // sort for stability
+          val sortedIdents = localVarsToDeclare.toList.sortBy(_._1).map(_._2)
+          js.Block(js.MultiVarDef(sortedIdents), body)
+        }
+      }
+
       val actualArrowFun = arrow && esFeatures.useECMAScript2015Semantics
       val jsParams = params.map(transformParamDef(_))
 
-      if (es2015) {
+      val result = if (es2015) {
         val jsRestParam = restParam.map(transformParamDef(_))
-        js.Function(actualArrowFun, jsParams, jsRestParam, cleanedNewBody)
+        js.Function(actualArrowFun, jsParams, jsRestParam, prependLocalVarDefs(cleanedNewBody))
       } else {
         val patchedBody = restParam.fold {
           cleanedNewBody
@@ -544,7 +567,30 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           js.Block(makeExtractRestParam(restParam, jsParams.size), cleanedNewBody)
         }
 
-        js.Function(actualArrowFun, jsParams, None, patchedBody)
+        js.Function(actualArrowFun, jsParams, None, prependLocalVarDefs(patchedBody))
+      }
+
+      localVarsToDeclare = savedLocalVarsToDeclare
+
+      result
+    }
+
+    private def genLet(name: js.Ident, mutable: Boolean, rhs: js.Tree)(
+        implicit pos: Position): js.Tree = {
+      if (declareAllLocalVarsAtTheTop) {
+        localVarsToDeclare += name.name -> name
+        js.Assign(js.VarRef(name)(name.pos), rhs)
+      } else {
+        jsGen.genLet(name, mutable, rhs)
+      }
+    }
+
+    private def genEmptyMutableLet(name: js.Ident)(implicit pos: Position): js.Tree = {
+      if (declareAllLocalVarsAtTheTop) {
+        localVarsToDeclare += name.name -> name
+        js.Skip()
+      } else {
+        jsGen.genEmptyMutableLet(name)
       }
     }
 
@@ -605,91 +651,6 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case Skip() =>
           js.Skip()
 
-        case Assign(lhs, rhs) =>
-          lhs match {
-            case Select(qualifier, field) =>
-              unnest(checkNotNull(qualifier), rhs) { (newQualifier, newRhs, env0) =>
-                implicit val env = env0
-                js.Assign(
-                    genSelect(transformExprNoChar(newQualifier), field)(lhs.pos),
-                    transformExpr(newRhs, lhs.tpe))
-              }
-
-            case ArraySelect(array, index) =>
-              unnest(checkNotNull(array), index, rhs) { (newArray, newIndex, newRhs, env0) =>
-                implicit val env = env0
-                val genArray = transformExprNoChar(newArray)
-                val genIndex = transformExprNoChar(newIndex)
-                val genRhs = transformExpr(newRhs, lhs.tpe)
-
-                /* We need to use a checked 'set' if at least one of the following applies:
-                 * - Array index out of bounds are checked, or
-                 * - Array stores are checked and the array is an array of reference types.
-                 */
-                val checked = {
-                  (semantics.arrayIndexOutOfBounds != CheckedBehavior.Unchecked) ||
-                  ((semantics.arrayStores != CheckedBehavior.Unchecked) && RefArray.is(array.tpe))
-                }
-
-                if (checked) {
-                  genArrayClassPropApply(genArray, ArrayClassProperty.set, genIndex, genRhs)
-                } else {
-                  js.Assign(
-                      js.BracketSelect(
-                          genArrayClassPropSelect(genArray, ArrayClassProperty.u)(lhs.pos),
-                          genIndex)(lhs.pos),
-                      genRhs)
-                }
-              }
-
-            case lhs: RecordSelect =>
-              val newLhs = Transient(JSVarRef(makeRecordFieldIdentForVarRef(lhs),
-                  mutable = true)(lhs.tpe))
-              pushLhsInto(Lhs.Assign(newLhs), rhs, tailPosLabels)
-
-            case JSPrivateSelect(qualifier, field) =>
-              unnest(qualifier, rhs) { (newQualifier, newRhs, env0) =>
-                implicit val env = env0
-                js.Assign(
-                    genJSPrivateSelect(transformExprNoChar(newQualifier), field)(
-                        moduleContext, globalKnowledge, lhs.pos),
-                    transformExprNoChar(newRhs))
-              }
-
-            case JSSelect(qualifier, item) =>
-              unnest(qualifier, item, rhs) {
-                (newQualifier, newItem, newRhs, env0) =>
-                  implicit val env = env0
-                  js.Assign(
-                      genBracketSelect(transformExprNoChar(newQualifier),
-                          transformExprNoChar(newItem))(lhs.pos),
-                      transformExprNoChar(newRhs))
-              }
-
-            case JSSuperSelect(superClass, qualifier, item) =>
-              unnest(superClass, qualifier, item, rhs) {
-                (newSuperClass, newQualifier, newItem, newRhs, env0) =>
-                  implicit val env = env0
-                  genCallHelper(VarField.superSet, transformExprNoChar(newSuperClass),
-                      transformExprNoChar(newQualifier), transformExprNoChar(item),
-                      transformExprNoChar(rhs))
-              }
-
-            case SelectStatic(item) =>
-              if (needToUseGloballyMutableVarSetter(item.name)) {
-                unnest(rhs) { (rhs, env0) =>
-                  implicit val env = env0
-                  js.Apply(globalVar(VarField.u, item.name), transformExpr(rhs, lhs.tpe) :: Nil)
-                }
-              } else {
-                // Assign normally.
-                pushLhsInto(Lhs.Assign(lhs), rhs, tailPosLabels)
-              }
-
-            case _:VarRef | _:JSGlobalRef =>
-              pushLhsInto(Lhs.Assign(lhs), rhs, tailPosLabels)
-          }
-
         case StoreModule() =>
           val enclosingClassName = env.enclosingClassName.getOrElse {
             throw new AssertionError(
@@ -747,8 +708,14 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           unnest(obj) { (newObj, env0) =>
             implicit val env = env0
 
-            val lhs = genEmptyImmutableLet(
-                transformLocalVarIdent(keyVar, keyVarOriginalName))
+            val lhsIdent = transformLocalVarIdent(keyVar, keyVarOriginalName)
+            val lhs = if (!declareAllLocalVarsAtTheTop) {
+              jsGen.genEmptyImmutableLet(lhsIdent)
+            } else {
+              localVarsToDeclare += lhsIdent.name -> lhsIdent
+              js.VarRef(lhsIdent)
+            }
+
             val bodyEnv = env
               .withDef(keyVar, mutable = false)
               .withInLoopForVarCapture(true)
@@ -1321,6 +1288,12 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case Transient(ArrayToTypedArray(expr, primRef)) =>
           allowUnpure && testNPE(expr)
 
+        // Assignments, with side effects
+        case Assign(lhs, rhs) =>
+          allowSideEffects && test(lhs) && test(rhs)
+        case VarDef(_, _, _, _, rhs) =>
+          allowSideEffects && declareAllLocalVarsAtTheTop && test(rhs)
+
         // Scala expressions that can always have side-effects
         case New(className, constr, args) =>
           allowSideEffects && (args forall test)
@@ -1587,8 +1560,10 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case _ if isExpression(rhs) =>
           lhs match {
             case Lhs.Discard =>
-              if (isSideEffectFreeExpression(rhs)) js.Skip()
-              else transformExpr(rhs, preserveChar = true)
+              rhs match {
+                case _ if isSideEffectFreeExpression(rhs) => js.Skip()
+                case _                                    => transformExpr(rhs, preserveChar = true)
+              }
             case Lhs.VarDef(name, tpe, mutable) =>
               doVarDef(name, tpe, mutable, rhs)
             case Lhs.Assign(lhs) =>
@@ -1630,6 +1605,47 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
             case Lhs.ReturnFromFunction | Lhs.Throw =>
               throw new AssertionError("Cannot return or throw a record value.")
+          }
+
+        // Assignments
+
+        case VarDef(_, _, _, _, r) =>
+          transformExprNoChar(r)
+
+        case Assign(l, r) =>
+          assert(lhs == Lhs.Discard, s"Unexpected Assign node with a non-Discard lhs at ${rhs.pos}")
+
+          l match {
+            case Select(qualifier, field) =>
+              unnest(checkNotNull(qualifier), r) { (newQualifier, newRhs, env) =>
+                redo(Assign(Select(newQualifier, field)(l.tpe)(l.pos), newRhs))(env)
+              }
+
+            case ArraySelect(array, index) =>
+              unnest(checkNotNull(array), index, r) { (newArray, newIndex, newRhs, env) =>
+                redo(Assign(ArraySelect(newArray, newIndex)(l.tpe)(l.pos), newRhs))(env)
+              }
+
+            case JSPrivateSelect(qualifier, field) =>
+              unnest(qualifier, r) { (newQualifier, newRhs, env) =>
+                redo(Assign(JSPrivateSelect(newQualifier, field)(l.pos), newRhs))(env)
+              }
+
+            case JSSelect(qualifier, item) =>
+              unnest(qualifier, item, r) { (newQualifier, newItem, newRhs, env) =>
+                redo(Assign(JSSelect(newQualifier, newItem)(l.pos), newRhs))(env)
+              }
+
+            case JSSuperSelect(superClass, qualifier, item) =>
+              unnest(superClass, qualifier, item, r) {
+                (newSuperClass, newQualifier, newItem, newRhs, env) =>
+                  redo(Assign(JSSuperSelect(newSuperClass, newQualifier, newItem)(l.pos), newRhs))(env)
+              }
+
+            case _:RecordSelect | _:SelectStatic | _:VarRef | _:JSGlobalRef =>
+              unnest(r) { (newRhs, env) =>
+                redo(Assign(l, newRhs))(env)
+              }
           }
 
         // Control flow constructs
@@ -2191,6 +2207,74 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case Block(stats :+ expr) =>
           val (newStats, newEnv) = transformBlockStats(stats)
           js.Block(newStats :+ transformExpr(expr, tree.tpe)(newEnv))
+
+        // Assignments
+
+        case VarDef(_, _, _, _, rhs) =>
+          transformExpr(rhs, preserveChar = false)
+
+        case Assign(lhs, rhs) =>
+          lhs match {
+            case Select(qualifier, field) =>
+              js.Assign(
+                  genSelect(transformExprNoChar(checkNotNull(qualifier)), field)(lhs.pos),
+                  transformExpr(rhs, lhs.tpe))
+
+            case ArraySelect(array, index) =>
+              val genArray = transformExprNoChar(checkNotNull(array))
+              val genIndex = transformExprNoChar(index)
+              val genRhs = transformExpr(rhs, lhs.tpe)
+
+              /* We need to use a checked 'set' if at least one of the following applies:
+               * - Array index out of bounds are checked, or
+               * - Array stores are checked and the array is an array of reference types.
+               */
+              val checked = {
+                (semantics.arrayIndexOutOfBounds != CheckedBehavior.Unchecked) ||
+                ((semantics.arrayStores != CheckedBehavior.Unchecked) && RefArray.is(array.tpe))
+              }
+
+              if (checked) {
+                genArrayClassPropApply(genArray, ArrayClassProperty.set, genIndex, genRhs)
+              } else {
+                js.Assign(
+                    js.BracketSelect(
+                        genArrayClassPropSelect(genArray, ArrayClassProperty.u)(lhs.pos),
+                        genIndex)(lhs.pos),
+                    genRhs)
+              }
+
+            case lhs: RecordSelect =>
+              val newLhs = Transient(JSVarRef(makeRecordFieldIdentForVarRef(lhs),
+                  mutable = true)(lhs.tpe))
+              doAssign(newLhs, rhs)
+
+            case JSPrivateSelect(qualifier, field) =>
+              js.Assign(
+                  genJSPrivateSelect(transformExprNoChar(qualifier), field)(
+                      moduleContext, globalKnowledge, lhs.pos),
+                  transformExprNoChar(rhs))
+
+            case JSSelect(qualifier, item) =>
+              js.Assign(
+                  genBracketSelect(transformExprNoChar(qualifier),
+                      transformExprNoChar(item))(lhs.pos),
+                  transformExprNoChar(rhs))
+
+            case JSSuperSelect(superClass, qualifier, item) =>
+              genCallHelper(VarField.superSet, transformExprNoChar(superClass),
+                  transformExprNoChar(qualifier), transformExprNoChar(item),
+                  transformExprNoChar(rhs))
+
+            case SelectStatic(item) =>
+              if (needToUseGloballyMutableVarSetter(item.name))
+                js.Apply(globalVar(VarField.u, item.name), transformExpr(rhs, lhs.tpe) :: Nil)
+              else
+                doAssign(lhs, rhs) // Assign normally.
+
+            case _:VarRef | _:JSGlobalRef =>
+              doAssign(lhs, rhs)
+          }
 
         // Note that these work even if thenp/elsep is not a BooleanType
         case If(cond, BooleanLiteral(true), elsep) =>
