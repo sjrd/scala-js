@@ -182,6 +182,7 @@ object VarGen {
     case object makeExportedDef extends JSHelperFunctionID
     case object makeExportedDefRest extends JSHelperFunctionID
 
+    case object appendCodePoint extends JSHelperFunctionID
     case object stringLength extends JSHelperFunctionID
     case object stringCharAt extends JSHelperFunctionID
     case object jsValueToString extends JSHelperFunctionID // for actual toString() call

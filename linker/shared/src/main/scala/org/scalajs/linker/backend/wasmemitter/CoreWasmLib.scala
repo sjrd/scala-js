@@ -430,6 +430,7 @@ object CoreWasmLib {
       List(RefType.any)
     )
 
+    addHelperImport(genFunctionID.appendCodePoint, List(RefType.any, Int32), List(RefType.any))
     addHelperImport(genFunctionID.stringLength, List(RefType.any), List(Int32))
     addHelperImport(genFunctionID.stringCharAt, List(RefType.any, Int32), List(Int32))
     addHelperImport(genFunctionID.jsValueToString, List(RefType.any), List(RefType.any))
@@ -612,7 +613,7 @@ object CoreWasmLib {
 
       fb += LocalGet(offsetParam)
       fb += LocalGet(sizeParam)
-      fb += ArrayNewData(genTypeID.i16Array, genDataID.string)
+      fb += ArrayNewData(genTypeID.i8Array, genDataID.string)
       fb += Call(genFunctionID.createStringFromData)
       fb += LocalTee(str)
       fb += ArraySet(genTypeID.anyArray)
@@ -623,17 +624,28 @@ object CoreWasmLib {
     fb.buildAndAddToModule()
   }
 
-  /** `createStringFromData: (ref array u16) -> (ref any)` (representing a `string`). */
+  /** `createStringFromData: (ref array i8) -> (ref any)` (representing a `string`).
+   *
+   *  This function implements a WTF-8 decoder.
+   *
+   *  @see [[https://simonsapin.github.io/wtf-8/#decoding-wtf-8]]
+   */
   private def genCreateStringFromData()(implicit ctx: WasmContext): Unit = {
-    val dataType = RefType(genTypeID.i16Array)
-
     val fb = newFunctionBuilder(genFunctionID.createStringFromData)
-    val dataParam = fb.addParam("data", dataType)
+    val dataParam = fb.addParam("data", RefType(genTypeID.i8Array))
     fb.setResultType(RefType.any)
 
     val lenLocal = fb.addLocal("len", Int32)
     val iLocal = fb.addLocal("i", Int32)
-    val resultLocal = fb.addLocal("result", RefType.any)
+    val leadingByteLocal = fb.addLocal("leadingByte", Int32)
+
+    // block type consuming the result and producing the result string
+    val stringToStringBlockType =
+      fb.sigToBlockType(FunctionType(List(RefType.any), List(RefType.any)))
+
+    // block type with two results: the decoded code point and the consume byte length
+    val codePointAndByteLengthBlockType =
+      fb.sigToBlockType(FunctionType(Nil, List(Int32, Int32)))
 
     // len := data.length
     fb += LocalGet(dataParam)
@@ -644,40 +656,109 @@ object CoreWasmLib {
     fb += I32Const(0)
     fb += LocalSet(iLocal)
 
-    // result := ""
+    // put "" on the stack
     fb += GlobalGet(genGlobalID.emptyString)
-    fb += LocalSet(resultLocal)
 
-    fb.loop() { labelLoop =>
-      // if i == len
+    // loop invariant: stack = [result]
+    fb.loop(stringToStringBlockType) { labelLoop =>
+      // if i != len
       fb += LocalGet(iLocal)
       fb += LocalGet(lenLocal)
-      fb += I32Eq
-      fb.ifThen() {
-        // then return result
-        fb += LocalGet(resultLocal)
-        fb += Return
+      fb += I32Ne
+      fb.ifThen(stringToStringBlockType) {
+        // leadingByte := data(i)
+        fb += LocalGet(dataParam)
+        fb += LocalGet(iLocal)
+        fb += ArrayGetU(genTypeID.i8Array)
+        fb += LocalTee(leadingByteLocal)
+
+        // val (codePoint, byteLength) = { big if..then..else } (as a pair on the stack)
+
+        def genDecodeBranch(masksAndShifts: (Int, Int)*): Unit = {
+          // decode the code point and leave it on the stack
+          for (((mask, shift), offset) <- masksAndShifts.zipWithIndex) {
+            // load byte at given offset; reuse `leadingByte` for `offset = 0`
+            if (offset == 0) {
+              fb += LocalGet(leadingByteLocal)
+            } else {
+              fb += LocalGet(dataParam)
+              fb += LocalGet(iLocal)
+              fb += I32Const(offset)
+              fb += I32Add
+              fb += ArrayGetU(genTypeID.i8Array)
+            }
+
+            // apply mask if not -1
+            if (mask != -1) {
+              fb += I32Const(mask)
+              fb += I32And
+            }
+
+            // apply shift if non-zero
+            if (shift != 0) {
+              fb += I32Const(shift)
+              fb += I32Shl
+            }
+
+            // if not the first element, combine with a binary or
+            if (offset != 0)
+              fb += I32Or
+          }
+
+          // push the byte length on the stack
+          fb += I32Const(masksAndShifts.size)
+        }
+
+        // if (leadingByte & 0x80) == 0
+        fb += I32Const(0x80)
+        fb += I32And
+        fb += I32Eqz
+        fb.ifThenElse(codePointAndByteLengthBlockType) {
+          // then it is a 1-byte code point
+          genDecodeBranch((-1, 0))
+        } {
+          // if leadingByte <= 0xdf
+          fb += LocalGet(leadingByteLocal)
+          fb += I32Const(0xdf)
+          fb += I32LeU
+          fb.ifThenElse(codePointAndByteLengthBlockType) {
+            // then it is a 2-byte code point
+            genDecodeBranch((0x1f, 6), (0x3f, 0))
+          } {
+            // if leadingByte <= 0xef
+            fb += LocalGet(leadingByteLocal)
+            fb += I32Const(0xef)
+            fb += I32LeU
+            fb.ifThenElse(codePointAndByteLengthBlockType) {
+              // then it is a 3-byte code point
+              genDecodeBranch((0x0f, 12), (0x3f, 6), (0x3f, 0))
+            } {
+              // else, it is a 4-byte code point
+              genDecodeBranch((0x07, 18), (0x3f, 12), (0x3f, 6), (0x3f, 0))
+            }
+          }
+        }
+
+        // stack = [result, codePoint, byteLength]
+
+        // i := byteLength + i
+        fb += LocalGet(iLocal)
+        fb += I32Add
+        fb += LocalSet(iLocal)
+
+        // stack = [result, codePoint]
+
+        // result := appendCodePoint(result, codePoint)
+        fb += Call(genFunctionID.appendCodePoint)
+
+        // stack = [result], as required for the loop invariant
+
+        // loop back to the beginning
+        fb += Br(labelLoop)
       }
 
-      // result := concat(result, charToString(data(i)))
-      fb += LocalGet(resultLocal)
-      fb += LocalGet(dataParam)
-      fb += LocalGet(iLocal)
-      fb += ArrayGetU(genTypeID.i16Array)
-      fb += Call(genFunctionID.charToString)
-      fb += Call(genFunctionID.stringConcat)
-      fb += LocalSet(resultLocal)
-
-      // i := i - 1
-      fb += LocalGet(iLocal)
-      fb += I32Const(1)
-      fb += I32Add
-      fb += LocalSet(iLocal)
-
-      // loop back to the beginning
-      fb += Br(labelLoop)
+      // else end the loop; stack = [result], as expected
     } // end loop $loop
-    fb += Unreachable
 
     fb.buildAndAddToModule()
   }

@@ -136,16 +136,41 @@ final class WasmContext(
         data
 
       case None =>
-        val bytes = str.toCharArray.flatMap { char =>
-          Array((char & 0xFF).toByte, (char >> 8).toByte)
-        }
         val offset = stringPool.size
-        val data = StringData(nextConstantStringIndex, offset)
+        val bytes = encodeStringWTF8ToBuf(str, stringPool)
+        val byteLen = stringPool.size - offset
+        val data = StringData(nextConstantStringIndex, offset, byteLen)
         constantStringGlobals(str) = data
-
-        stringPool ++= bytes
         nextConstantStringIndex += 1
         data
+    }
+  }
+
+  private def encodeStringWTF8ToBuf(str: String, buf: mutable.ArrayBuffer[Byte]): Unit = {
+    // https://simonsapin.github.io/wtf-8/#encoding-wtf-8
+
+    val len = str.length()
+    var strIndex = 0
+
+    while (strIndex != len) {
+      val cp = str.codePointAt(strIndex)
+      strIndex += Character.charCount(cp)
+
+      if (cp <= 0x7f) {
+        buf += cp.toByte
+      } else if (cp <= 0x7ff) {
+        buf += (0xc0 | (cp >>> 6)).toByte
+        buf += (0x80 | (cp & 0x3f)).toByte
+      } else if (cp <= 0xffff) {
+        buf += (0xe0 | (cp >>> 12)).toByte
+        buf += (0x80 | ((cp >>> 6) & 0x3f)).toByte
+        buf += (0x80 | (cp & 0x3f)).toByte
+      } else {
+        buf += (0xf0 | (cp >>> 18)).toByte
+        buf += (0x80 | ((cp >>> 12) & 0x3f)).toByte
+        buf += (0x80 | ((cp >>> 6) & 0x3f)).toByte
+        buf += (0x80 | (cp & 0x3f)).toByte
+      }
     }
   }
 
@@ -156,7 +181,7 @@ final class WasmContext(
     val data = addConstantStringGlobal(str)
     List(
       wa.I32Const(data.offset),
-      wa.I32Const(str.length()),
+      wa.I32Const(data.byteLen),
       wa.I32Const(data.constantStringIndex)
     )
   }
@@ -199,7 +224,7 @@ final class WasmContext(
 }
 
 object WasmContext {
-  final case class StringData(constantStringIndex: Int, offset: Int)
+  final case class StringData(constantStringIndex: Int, offset: Int, byteLen: Int)
 
   final class ClassInfo(
       val name: ClassName,

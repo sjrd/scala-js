@@ -133,6 +133,7 @@ const scalaJSHelpers = {
 
   // Strings
   emptyString: "",
+  appendCodePoint: (s, cp) => s + String.fromCodePoint(cp),
   stringLength: (s) => s.length,
   stringCharAt: (s, i) => s.charCodeAt(i),
   jsValueToString: (x) => (x === void 0) ? "undefined" : x.toString(),
