@@ -119,13 +119,20 @@ object TypeTransformer {
   }
 
   def transformClassType(className: ClassName)(implicit ctx: WasmContext): watpe.RefType = {
-    val info = ctx.getClassInfo(className)
-    if (info.isAncestorOfHijackedClass)
-      watpe.RefType.anyref
-    else if (info.isInterface)
-      watpe.RefType.nullable(genTypeID.ObjectStruct)
-    else
-      watpe.RefType.nullable(genTypeID.forClass(className))
+    ctx.getClassInfoOption(className) match {
+      case Some(info) =>
+        if (info.isAncestorOfHijackedClass)
+          watpe.RefType.anyref
+        else if (!info.hasInstances)
+          watpe.RefType.nullref
+        else if (info.isInterface)
+          watpe.RefType.nullable(genTypeID.ObjectStruct)
+        else
+          watpe.RefType.nullable(genTypeID.forClass(className))
+
+      case None =>
+        watpe.RefType.nullref
+    }
   }
 
   def transformPrimType(tpe: PrimType): watpe.Type = {
