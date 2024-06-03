@@ -1425,20 +1425,55 @@ private class FunctionEmitter private (
   }
 
   private def genEq(binary: BinaryOp): Type = {
-    // TODO Optimize this when the operands have a better type than `any`
-    genTree(binary.lhs, AnyType)
-    genTree(binary.rhs, AnyType)
-
-    markPosition(binary)
-
-    fb += wa.Call(genFunctionID.is)
-
-    if (binary.op == BinaryOp.!==) {
-      fb += wa.I32Const(1)
-      fb += wa.I32Xor
+    def maybeGenInvert(): Unit = {
+      if (binary.op == BinaryOp.!==) {
+        fb += wa.I32Const(1)
+        fb += wa.I32Xor
+      }
     }
 
-    BooleanType
+    val lhsType = binary.lhs.tpe
+    val rhsType = binary.rhs.tpe
+
+    if (lhsType == NothingType) {
+      genTree(binary.lhs, NothingType)
+      NothingType
+    } else if (rhsType == NothingType) {
+      genTree(binary.lhs, NoType)
+      genTree(binary.rhs, NothingType)
+      NothingType
+    } else if (rhsType == NullType) {
+      /* Note that the optimizer normalizes Literals on the right of `===`,
+       * so testing for the `lhsType == NullType` is not as useful.
+       */
+      genTree(binary.lhs, AnyType)
+      genTree(binary.rhs, NoType) // no-op if it is actually a Null() literal
+      markPosition(binary)
+      fb += wa.RefIsNull
+      maybeGenInvert()
+      BooleanType
+    } else {
+      val lhsWasmType = transformSingleType(lhsType)
+      val rhsWasmType = transformSingleType(rhsType)
+
+      (lhsWasmType, rhsWasmType) match {
+        case (watpe.RefType(_, lhsHeapType), watpe.RefType(_, rhsHeapType))
+            if lhsHeapType != watpe.HeapType.Any && rhsHeapType != watpe.HeapType.Any =>
+          genTree(binary.lhs, lhsType)
+          genTree(binary.rhs, rhsType)
+          markPosition(binary)
+          fb += wa.RefEq
+
+        case _ =>
+          genTree(binary.lhs, AnyType)
+          genTree(binary.rhs, AnyType)
+          markPosition(binary)
+          fb += wa.Call(genFunctionID.is)
+      }
+
+      maybeGenInvert()
+      BooleanType
+    }
   }
 
   private def genElementaryBinaryOp(binary: BinaryOp): Type = {
