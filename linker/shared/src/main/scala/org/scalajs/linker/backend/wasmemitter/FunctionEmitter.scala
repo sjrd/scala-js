@@ -2934,6 +2934,13 @@ private class FunctionEmitter private (
         fb += value.wasmInstr
         value.tpe
 
+      case WasmTransients.WasmNanoTime() =>
+        fb += wa.Call(genFunctionID.getHighPrecisionTime)
+        fb += wa.F64Const(1000000.0)
+        fb += wa.F64Mul
+        fb += wa.I64TruncSatF64S
+        LongType
+
       case other =>
         throw new AssertionError(s"Unknown transient: $other")
     }

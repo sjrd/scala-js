@@ -206,4 +206,20 @@ object WasmTransients {
         DoubleType
     }
   }
+
+  /** Intrinsic for `System.nanoTime()`. */
+  final case class WasmNanoTime() extends Transient.Value {
+    val tpe: Type = LongType
+
+    def traverse(traverser: Traverser): Unit = ()
+
+    def transform(transformer: Transformer, isStat: Boolean)(
+        implicit pos: Position): Tree = {
+      Transient(WasmNanoTime())
+    }
+
+    def printIR(out: IRTreePrinter): Unit = {
+      out.print("$nanoTime()")
+    }
+  }
 }

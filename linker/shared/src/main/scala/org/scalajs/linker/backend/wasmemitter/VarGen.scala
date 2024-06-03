@@ -275,6 +275,8 @@ object VarGen {
     case object jsSuperSet extends JSHelperFunctionID
     case object jsSuperCall extends JSHelperFunctionID
 
+    case object getHighPrecisionTime extends JSHelperFunctionID
+
     // Wasm internal helpers
 
     case object createStringFromData extends FunctionID

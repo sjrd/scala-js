@@ -21,6 +21,11 @@ object HelloWorld {
       sayHelloFromTypedJQuery()
     } else {
       println("Hello world!")
+      println(System.nanoTime())
+      println(System.nanoTime())
+      val t = System.nanoTime()
+      val u = System.nanoTime()
+      println(u - t)
     }
   }
 

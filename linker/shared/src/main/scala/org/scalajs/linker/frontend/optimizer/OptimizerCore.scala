@@ -3172,6 +3172,11 @@ private[optimizer] abstract class OptimizerCore(
             default
         }
 
+      // java.lang.System
+
+      case SystemNanoTime =>
+        contTree(Transient(WasmNanoTime()))
+
       // java.lang.reflect.Array
 
       case ArrayNewInstance =>
@@ -6595,7 +6600,9 @@ private[optimizer] object OptimizerCore {
     final val ClassGetComponentType = GenericArrayBuilderResult + 1
     final val ClassGetName = ClassGetComponentType + 1
 
-    final val ArrayNewInstance = ClassGetName + 1
+    final val SystemNanoTime = ClassGetName + 1
+
+    final val ArrayNewInstance = SystemNanoTime + 1
 
     final val ObjectLiteral = ArrayNewInstance + 1
 
@@ -6729,6 +6736,9 @@ private[optimizer] object OptimizerCore {
             m("min", List(D, D), D) -> MathMinDouble,
             m("max", List(F, F), F) -> MathMaxFloat,
             m("max", List(D, D), D) -> MathMaxDouble
+        ),
+        ClassName("java.lang.System$") -> List(
+            m("nanoTime", Nil, J) -> SystemNanoTime
         )
     )
     // scalastyle:on line.size.limit

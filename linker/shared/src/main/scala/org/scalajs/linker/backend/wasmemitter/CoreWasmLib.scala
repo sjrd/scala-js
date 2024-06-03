@@ -574,6 +574,8 @@ object CoreWasmLib {
       List(anyref, anyref, anyref, anyref),
       List(anyref)
     )
+
+    addHelperImport(genFunctionID.getHighPrecisionTime, Nil, List(Float64))
   }
 
   /** Generates all the non-type definitions of the core Wasm lib. */

@@ -314,6 +314,9 @@ const scalaJSHelpers = {
   jsSuperCall: (superClass, receiver, method, args) => {
     return superClass.prototype[method].apply(receiver, args);
   },
+
+  // Intrinsics
+  getHighPrecisionTime: () => performance.now(),
 }
 
 export function load(wasmFileURL, importedModules, exportSetters) {
