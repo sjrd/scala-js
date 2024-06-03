@@ -648,12 +648,20 @@ private class FunctionEmitter private (
         }
         val receiverClassInfo = ctx.getClassInfo(receiverClassName)
 
-        val canUseStaticallyResolved = {
+        /* Hijacked classes do not receive tables at all, and `Apply`s on array
+         * types are considered to be statically resolved by the `Analyzer`.
+         * Therefore, if the receiver's static type is a prim type, hijacked
+         * class or array type, we must use static dispatch instead.
+         *
+         * This never happens when we use the optimizer, since it already turns
+         * any such `Apply` into an `ApplyStatically` (when it does not inline
+         * it altogether).
+         */
+        val useStaticDispatch = {
           receiverClassInfo.kind == ClassKind.HijackedClass ||
-          t.receiver.tpe.isInstanceOf[ArrayType] ||
-          receiverClassInfo.resolvedMethodInfos.get(t.method.name).exists(_.isEffectivelyFinal)
+          t.receiver.tpe.isInstanceOf[ArrayType]
         }
-        if (canUseStaticallyResolved) {
+        if (useStaticDispatch) {
           genApplyStatically(
             ApplyStatically(t.flags, t.receiver, receiverClassName, t.method, t.args)(
               t.tpe
@@ -709,10 +717,13 @@ private class FunctionEmitter private (
     // done
   }
 
-  /** Generates the code an `Apply` call that requires dynamic dispatch.
+  /** Generates the code of an `Apply` call that requires dynamic dispatch.
    *
    *  In that case, there is always at least a vtable/itable-based dispatch. It may also contain
    *  primitive-based dispatch if the receiver's type is an ancestor of a hijacked class.
+   *
+   *  This method must not be used when the receiver's type is a primitive type,
+   *  an array type or when it is exactly a hijacked class type.
    */
   private def genApplyWithDispatch(t: Apply,
       receiverClassInfo: WasmContext.ClassInfo): Type = {
