@@ -158,9 +158,6 @@ object Preprocessor {
           case None             => Map.empty
         }
 
-        for (methodName <- classConcretePublicMethodNames)
-          inherited.get(methodName).foreach(_.markOverridden())
-
         classConcretePublicMethodNames.foldLeft(inherited) { (prev, methodName) =>
           prev.updated(methodName, new ConcreteMethodInfo(className, methodName))
         }
