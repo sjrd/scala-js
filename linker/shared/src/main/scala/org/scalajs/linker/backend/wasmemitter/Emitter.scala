@@ -35,6 +35,8 @@ import org.scalajs.linker.backend.webassembly.{Modules => wamod}
 import org.scalajs.linker.backend.webassembly.{Identitities => wanme}
 import org.scalajs.linker.backend.webassembly.{Types => watpe}
 
+import org.scalajs.linker.backend.javascript.{Trees => js}
+
 import org.scalajs.logging.Logger
 
 import SpecialNames._
@@ -98,7 +100,8 @@ final class Emitter(config: Emitter.Config) {
 
     val jsFileContentInfo = new JSFileContentInfo(
       globalRefsRead = ctx.globalRefsRead.toList,
-      globalRefsWritten = ctx.globalRefsWritten.toList
+      globalRefsWritten = ctx.globalRefsWritten.toList,
+      customJSHelpers = ctx.customJSHelpers.toList
     )
 
     (wasmModule, jsFileContentInfo)
@@ -359,6 +362,11 @@ final class Emitter(config: Emitter.Config) {
     }
     val globalRefWritersDict = js.ObjectConstr(globalRefWritersItems)
 
+    val customJSHelpersItems = for ((id, jsFunction) <- info.customJSHelpers) yield {
+      js.StringLiteral(id.importName) -> jsFunction
+    }
+    val customJSHelpersDict = js.ObjectConstr(customJSHelpersItems)
+
     val loadFunIdent = js.Ident("__load")
     val loaderImport = js.Import(
       List(js.ExportName("load") -> loadFunIdent),
@@ -372,7 +380,8 @@ final class Emitter(config: Emitter.Config) {
         importedModulesDict,
         exportSettersDict,
         globalRefReadersDict,
-        globalRefWritersDict
+        globalRefWritersDict,
+        customJSHelpersDict
       )
     )
 
@@ -432,7 +441,8 @@ object Emitter {
 
   private final class JSFileContentInfo(
       val globalRefsRead: List[String],
-      val globalRefsWritten: List[String]
+      val globalRefsWritten: List[String],
+      val customJSHelpers: List[(WasmContext.CustomJSHelperFunctionID, js.Function)]
   )
 
   final class Result(

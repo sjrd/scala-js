@@ -306,7 +306,9 @@ const scalaJSHelpers = {
   },
 }
 
-export async function load(wasmFileURL, importedModules, exportSetters, globalRefReaders, globalRefWriters) {
+export async function load(wasmFileURL, importedModules, exportSetters,
+    globalRefReaders, globalRefWriters, customJSHelpers) {
+
   const myScalaJSHelpers = { ...scalaJSHelpers, idHashCodeMap: new WeakMap() };
   const importsObj = {
     "__scalaJSHelpers": myScalaJSHelpers,
@@ -314,6 +316,7 @@ export async function load(wasmFileURL, importedModules, exportSetters, globalRe
     "__scalaJSExportSetters": exportSetters,
     "__scalaJSGlobalRead": globalRefReaders,
     "__scalaJSGlobalWrite": globalRefWriters,
+    "__scalaJSCustomHelpers": customJSHelpers,
   };
   const resolvedURL = new URL(wasmFileURL, import.meta.url);
   if (resolvedURL.protocol === 'file:') {
