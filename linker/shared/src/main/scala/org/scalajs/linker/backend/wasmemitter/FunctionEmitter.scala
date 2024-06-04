@@ -586,11 +586,10 @@ private class FunctionEmitter private (
         fb += wa.Call(genFunctionID.jsSuperSelectSet)
 
       case JSGlobalRef(name) =>
-        markPosition(tree)
-        fb ++= ctx.stringPool.getConstantStringInstr(name)
+        ctx.globalRefsWritten += name
         genTree(rhs, AnyType)
         markPosition(tree)
-        fb += wa.Call(genFunctionID.jsGlobalRefSet)
+        fb += wa.Call(genFunctionID.forJSGlobalRefWrite(name))
 
       case VarRef(LocalIdent(name)) =>
         genTree(rhs, lhs.tpe)
@@ -2522,9 +2521,9 @@ private class FunctionEmitter private (
   private def genJSGlobalRef(tree: JSGlobalRef): Type = {
     val JSGlobalRef(name) = tree
 
+    ctx.globalRefsRead += name
     markPosition(tree)
-    fb ++= ctx.stringPool.getConstantStringInstr(name)
-    fb += wa.Call(genFunctionID.jsGlobalRefGet)
+    fb += wa.Call(genFunctionID.forJSGlobalRefRead(name))
     AnyType
   }
 

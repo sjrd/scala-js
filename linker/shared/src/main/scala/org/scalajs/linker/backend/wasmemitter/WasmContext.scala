@@ -48,6 +48,9 @@ final class WasmContext(
   private val tableFunctionTypes = mutable.HashMap.empty[MethodName, wanme.TypeID]
   private val closureDataTypes = LinkedHashMap.empty[List[Type], wanme.TypeID]
 
+  val globalRefsRead = mutable.LinkedHashSet.empty[String]
+  val globalRefsWritten = mutable.LinkedHashSet.empty[String]
+
   val moduleBuilder: ModuleBuilder = {
     new ModuleBuilder(new ModuleBuilder.FunctionTypeProvider {
       def functionTypeToTypeID(sig: watpe.FunctionType): wanme.TypeID = {

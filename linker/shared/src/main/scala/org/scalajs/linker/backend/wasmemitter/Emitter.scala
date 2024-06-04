@@ -52,14 +52,14 @@ final class Emitter(config: Emitter.Config) {
   val injectedIRFiles: Seq[IRFile] = PrivateLibHolder.files
 
   def emit(module: ModuleSet.Module, logger: Logger): Result = {
-    val wasmModule = emitWasmModule(module)
+    val (wasmModule, jsFileContentInfo) = emitWasmModule(module)
     val loaderContent = LoaderContent.bytesContent
-    val jsFileContent = buildJSFileContent(module)
+    val jsFileContent = buildJSFileContent(module, jsFileContentInfo)
 
     new Result(wasmModule, loaderContent, jsFileContent)
   }
 
-  private def emitWasmModule(module: ModuleSet.Module): wamod.Module = {
+  private def emitWasmModule(module: ModuleSet.Module): (wamod.Module, JSFileContentInfo) = {
     // Inject the derived linked classes
     val allClasses =
       DerivedClasses.deriveClasses(module.classDefs) ::: module.classDefs
@@ -87,13 +87,21 @@ final class Emitter(config: Emitter.Config) {
 
     genStartFunction(sortedClasses, moduleInitializers, topLevelExports)
 
-    /* Gen the string pool and the declarative elements at the very end, since
-     * they depend on what instructions where produced by all the preceding codegen.
+    /* Gen declarations that depend on what instructions where produced by all
+     * the preceding codegen.
      */
+    genCustomJSHelperImports()
     ctx.stringPool.genPool()
     genDeclarativeElements()
 
-    ctx.moduleBuilder.build()
+    val wasmModule = ctx.moduleBuilder.build()
+
+    val jsFileContentInfo = new JSFileContentInfo(
+      globalRefsRead = ctx.globalRefsRead.toList,
+      globalRefsWritten = ctx.globalRefsWritten.toList
+    )
+
+    (wasmModule, jsFileContentInfo)
   }
 
   private def genExternalModuleImports(module: ModuleSet.Module)(
@@ -110,6 +118,38 @@ final class Emitter(config: Emitter.Config) {
           "__scalaJSImports",
           moduleName,
           wamod.ImportDesc.Global(id, origName, isMutable = false, watpe.RefType.anyref)
+        )
+      )
+    }
+  }
+
+  private def genCustomJSHelperImports()(
+      implicit ctx: WasmContext): Unit = {
+
+    for (name <- ctx.globalRefsRead) {
+      ctx.moduleBuilder.addImport(
+        wamod.Import(
+          "__scalaJSGlobalRead",
+          name,
+          wamod.ImportDesc.Func(
+            genFunctionID.forJSGlobalRefRead(name),
+            OriginalName(name),
+            ctx.moduleBuilder.functionTypeToTypeID(watpe.FunctionType(Nil, List(watpe.RefType.anyref)))
+          )
+        )
+      )
+    }
+
+    for (name <- ctx.globalRefsWritten) {
+      ctx.moduleBuilder.addImport(
+        wamod.Import(
+          "__scalaJSGlobalWrite",
+          name,
+          wamod.ImportDesc.Func(
+            genFunctionID.forJSGlobalRefWrite(name),
+            OriginalName(name),
+            ctx.moduleBuilder.functionTypeToTypeID(watpe.FunctionType(List(watpe.RefType.anyref), Nil))
+          )
         )
       )
     }
@@ -266,7 +306,9 @@ final class Emitter(config: Emitter.Config) {
     }
   }
 
-  private def buildJSFileContent(module: ModuleSet.Module): Array[Byte] = {
+  private def buildJSFileContent(module: ModuleSet.Module,
+      info: JSFileContentInfo): Array[Byte] = {
+
     implicit val noPos = Position.NoPosition
 
     // Sort for stability
@@ -300,6 +342,23 @@ final class Emitter(config: Emitter.Config) {
 
     val exportSettersDict = js.ObjectConstr(exportSettersItems)
 
+    val globalRefReadersItems = for (name <- info.globalRefsRead) yield {
+      val getterFun = js.Function(arrow = true, Nil, None, {
+        js.Return(js.VarRef(js.Ident(name)))
+      })
+      js.StringLiteral(name) -> getterFun
+    }
+    val globalRefReadersDict = js.ObjectConstr(globalRefReadersItems)
+
+    val globalRefWritersItems = for (name <- info.globalRefsWritten) yield {
+      val paramIdent = js.Ident(if (name == "x") "y" else "x")
+      val setterFun = js.Function(arrow = true, List(js.ParamDef(paramIdent)), None, {
+        js.Return(js.Assign(js.VarRef(js.Ident(name)), js.VarRef(paramIdent)))
+      })
+      js.StringLiteral(name) -> setterFun
+    }
+    val globalRefWritersDict = js.ObjectConstr(globalRefWritersItems)
+
     val loadFunIdent = js.Ident("__load")
     val loaderImport = js.Import(
       List(js.ExportName("load") -> loadFunIdent),
@@ -311,7 +370,9 @@ final class Emitter(config: Emitter.Config) {
       List(
         js.StringLiteral(config.internalWasmFileURIPattern(module.id)),
         importedModulesDict,
-        exportSettersDict
+        exportSettersDict,
+        globalRefReadersDict,
+        globalRefWritersDict
       )
     )
 
@@ -368,6 +429,11 @@ object Emitter {
     def apply(coreSpec: CoreSpec, loaderModuleName: String): Config =
       new Config(coreSpec, loaderModuleName)
   }
+
+  private final class JSFileContentInfo(
+      val globalRefsRead: List[String],
+      val globalRefsWritten: List[String]
+  )
 
   final class Result(
       val wasmModule: wamod.Module,

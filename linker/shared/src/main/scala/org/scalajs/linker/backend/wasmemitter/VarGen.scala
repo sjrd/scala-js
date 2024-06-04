@@ -84,6 +84,9 @@ object VarGen {
     final case class superArgs(className: ClassName) extends FunctionID
     final case class postSuperStats(className: ClassName) extends FunctionID
 
+    final case class forJSGlobalRefRead(name: String) extends FunctionID
+    final case class forJSGlobalRefWrite(name: String) extends FunctionID
+
     case object start extends FunctionID
 
     // JS helpers
