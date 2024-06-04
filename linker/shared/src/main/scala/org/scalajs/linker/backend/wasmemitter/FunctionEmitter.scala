@@ -586,9 +586,10 @@ private class FunctionEmitter private (
         fb += wa.Call(genFunctionID.jsSuperSet)
 
       case assign: JSGlobalRef =>
-        fb ++= ctx.getConstantStringInstr(assign.name)
+        ctx.globalRefsWritten += assign.name
         genTree(t.rhs, AnyType)
-        fb += wa.Call(genFunctionID.jsGlobalRefSet)
+        markPosition(t)
+        fb += wa.Call(genFunctionID.forJSGlobalRefWrite(assign.name))
 
       case ref: VarRef =>
         genAssignToStorage(ref.tpe, lookupLocal(ref.ident.name), t.rhs)
@@ -2476,9 +2477,9 @@ private class FunctionEmitter private (
   }
 
   private def genJSGlobalRef(tree: JSGlobalRef): Type = {
+    ctx.globalRefsRead += tree.name
     markPosition(tree)
-    fb ++= ctx.getConstantStringInstr(tree.name)
-    fb += wa.Call(genFunctionID.jsGlobalRefGet)
+    fb += wa.Call(genFunctionID.forJSGlobalRefRead(tree.name))
     AnyType
   }
 
