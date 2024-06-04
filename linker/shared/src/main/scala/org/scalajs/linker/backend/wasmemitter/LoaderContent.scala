@@ -319,7 +319,7 @@ const scalaJSHelpers = {
   getHighPrecisionTime: () => performance.now(),
 }
 
-export function load(wasmFileURL, importedModules, exportSetters, globalRefReaders, globalRefWriters) {
+export function load(wasmFileURL, importedModules, exportSetters, globalRefReaders, globalRefWriters, customJSHelpers) {
   const myScalaJSHelpers = { ...scalaJSHelpers, idHashCodeMap: new WeakMap() };
   const importsObj = {
     "__scalaJSHelpers": myScalaJSHelpers,
@@ -327,6 +327,7 @@ export function load(wasmFileURL, importedModules, exportSetters, globalRefReade
     "__scalaJSExportSetters": exportSetters,
     "__scalaJSGlobalRead": globalRefReaders,
     "__scalaJSGlobalWrite": globalRefWriters,
+    "__scalaJSCustomHelpers": customJSHelpers,
   };
   const resolvedURL = new URL(wasmFileURL, import.meta.url);
   let wasmModulePromise;

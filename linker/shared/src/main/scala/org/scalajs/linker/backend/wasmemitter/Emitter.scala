@@ -31,6 +31,8 @@ import org.scalajs.linker.backend.webassembly.{Instructions => wa}
 import org.scalajs.linker.backend.webassembly.{Modules => wamod}
 import org.scalajs.linker.backend.webassembly.{Types => watpe}
 
+import org.scalajs.linker.backend.javascript.{Trees => js}
+
 import org.scalajs.logging.Logger
 
 import SpecialNames._
@@ -124,8 +126,9 @@ final class Emitter(config: Emitter.Config) {
     val wasmModule = ctx.moduleBuilder.build()
 
     val loaderContent = LoaderContent.bytesContent
-    val jsFileContent =
-      buildJSFileContent(module, module.id.id + ".wasm", allImportedModules, ctx.globalRefsRead, ctx.globalRefsWritten)
+    val jsFileContent = buildJSFileContent(module, module.id.id + ".wasm",
+        allImportedModules, ctx.globalRefsRead, ctx.globalRefsWritten,
+        ctx.customJSHelpers.toList)
 
     new Result(wasmModule, loaderContent, jsFileContent)
   }
@@ -351,7 +354,8 @@ final class Emitter(config: Emitter.Config) {
 
   private def buildJSFileContent(module: ModuleSet.Module,
       wasmFileName: String, importedModules: List[String],
-      globalRefsRead: Iterable[String], globalRefsWritten: Iterable[String]): String = {
+      globalRefsRead: Iterable[String], globalRefsWritten: Iterable[String],
+      customJSHelpers: List[(WasmContext.CustomJSHelperFunctionID, js.Function)]): String = {
     val (moduleImports, importedModulesItems) = (for {
       (moduleName, idx) <- importedModules.zipWithIndex
     } yield {
@@ -377,6 +381,9 @@ final class Emitter(config: Emitter.Config) {
     val globalRefWriters = (for (name <- globalRefsWritten.toList) yield {
       s"  $name: (___x) => void ($name = ___x),"
     })
+    val customJSHelpersStrs = for ((id, jsFunction) <- customJSHelpers) yield {
+      s"  '${id.importName}': ${jsFunction.show.trim().stripSuffix(";")},"
+    }
 
     s"""
       |${moduleImports.mkString("\n")}
@@ -393,6 +400,8 @@ final class Emitter(config: Emitter.Config) {
       |${globalRefReaders.mkString("\n")}
       |}, {
       |${globalRefWriters.mkString("\n")}
+      |}, {
+      |${customJSHelpersStrs.mkString("\n")}
       |});
     """.stripMargin.trim() + "\n"
   }
