@@ -30,6 +30,8 @@ import org.scalajs.linker.backend.webassembly.{Identitities => wanme}
 import org.scalajs.linker.backend.webassembly.{Types => watpe}
 import org.scalajs.linker.backend.webassembly.Types.{FunctionType => Sig}
 
+import org.scalajs.linker.backend.javascript.{Trees => js}
+
 import EmbeddedConstants._
 import SWasmGen._
 import VarGen._
@@ -2351,20 +2353,72 @@ private class FunctionEmitter private (
   }
 
   private def genJSFunctionApply(tree: JSFunctionApply): Type = {
+    implicit val pos = tree.pos
+
+    val argCount = tree.args.size
+    val fParamDef = js.ParamDef(js.Ident("f"))
+    val argsParamDefs = (0 until argCount).map(i => js.ParamDef(js.Ident("x" + i))).toList
+    val allParamDefs = fParamDef :: argsParamDefs
+    val helperFun = js.Function(arrow = true, allParamDefs, None, {
+      js.Return(js.Apply(fParamDef.ref, argsParamDefs.zip(tree.args).map {
+        case (argParamDef, _: JSSpread) => js.Spread(argParamDef.ref)
+        case (argParamDef, _: Tree)     => argParamDef.ref
+      }))
+    })
+
+    val wasmFunType = watpe.FunctionType(allParamDefs.map(_ => watpe.RefType.anyref), List(watpe.RefType.anyref))
+    val helperID = ctx.addCustomJSHelper(helperFun, wasmFunType)
+
     genTree(tree.fun, AnyType)
-    genJSArgsArray(tree.args)
+    genJSArgsFlat(tree.args)
     markPosition(tree)
-    fb += wa.Call(genFunctionID.jsFunctionApply)
+    fb += wa.Call(helperID)
     AnyType
   }
 
   private def genJSMethodApply(tree: JSMethodApply): Type = {
-    genTree(tree.receiver, AnyType)
-    genTree(tree.method, AnyType)
-    genJSArgsArray(tree.args)
-    markPosition(tree)
-    fb += wa.Call(genFunctionID.jsMethodApply)
+    tree.method match {
+      case StringLiteral(methodName) =>
+        implicit val pos = tree.pos
+
+        val argCount = tree.args.size
+        val receiverParamDef = js.ParamDef(js.Ident("o"))
+        val argsParamDefs = (0 until argCount).map(i => js.ParamDef(js.Ident("x" + i))).toList
+        val allParamDefs = receiverParamDef :: argsParamDefs
+        val helperFun = js.Function(arrow = true, allParamDefs, None, {
+          val methodSelect =
+            if (js.Ident.isValidJSIdentifierName(methodName)) js.DotSelect(receiverParamDef.ref, js.Ident(methodName))
+            else js.BracketSelect(receiverParamDef.ref, js.StringLiteral(methodName))
+          js.Return(js.Apply(methodSelect, argsParamDefs.zip(tree.args).map {
+            case (argParamDef, _: JSSpread) => js.Spread(argParamDef.ref)
+            case (argParamDef, _: Tree)     => argParamDef.ref
+          }))
+        })
+
+        val wasmFunType = watpe.FunctionType(allParamDefs.map(_ => watpe.RefType.anyref), List(watpe.RefType.anyref))
+        val helperID = ctx.addCustomJSHelper(helperFun, wasmFunType)
+
+        genTree(tree.receiver, AnyType)
+        genJSArgsFlat(tree.args)
+        markPosition(tree)
+        fb += wa.Call(helperID)
+
+      case _ =>
+        genTree(tree.receiver, AnyType)
+        genTree(tree.method, AnyType)
+        genJSArgsArray(tree.args)
+        markPosition(tree)
+        fb += wa.Call(genFunctionID.jsMethodApply)
+    }
+
     AnyType
+  }
+
+  private def genJSArgsFlat(args: List[TreeOrJSSpread]): Unit = {
+    args.foreach {
+      case JSSpread(arg) => genTree(arg, AnyType)
+      case arg: Tree     => genTree(arg, AnyType)
+    }
   }
 
   private def genJSImportCall(tree: JSImportCall): Type = {
@@ -2685,9 +2739,32 @@ private class FunctionEmitter private (
     implicit val pos = tree.pos
     implicit val ctx = this.ctx
 
-    val hasThis = !tree.arrow
-    val hasRestParam = tree.restParam.isDefined
     val dataStructTypeID = ctx.getClosureDataStructType(tree.captureParams.map(_.ptpe))
+
+    val fParamDef = js.ParamDef(js.Ident("f"))
+    val dataParamDef = js.ParamDef(js.Ident("d"))
+    val helperFun = js.Function(arrow = true, List(fParamDef, dataParamDef), None, {
+      js.Return {
+        val argCount = tree.params.size
+        val argsParamDefs = (0 until argCount).map(i => js.ParamDef(js.Ident("x" + i))).toList
+        val restParamDef = tree.restParam.map(_ => js.ParamDef(js.Ident("r")))
+        js.Function(arrow = tree.arrow, argsParamDefs, restParamDef, {
+          js.Return(js.Apply(
+              fParamDef.ref,
+              dataParamDef ::
+              (if (tree.arrow) Nil else List(js.This())) :::
+              argsParamDefs.map(_.ref) :::
+              restParamDef.map(_.ref).toList
+          ))
+        })
+      }
+    })
+
+    val wasmFunType = watpe.FunctionType(
+      List(watpe.RefType.func, watpe.RefType(dataStructTypeID)),
+      List(watpe.RefType.any)
+    )
+    val helperID = ctx.addCustomJSHelper(helperFun, wasmFunType)
 
     // Define the function where captures are reified as a `__captureData` argument.
     val closureFuncOrigName = genInnerFuncOriginalName()
@@ -2697,7 +2774,7 @@ private class FunctionEmitter private (
       closureFuncOrigName,
       enclosingClassName = None,
       Some(tree.captureParams),
-      receiverType = if (!hasThis) None else Some(watpe.RefType.anyref),
+      receiverType = if (tree.arrow) None else Some(watpe.RefType.anyref),
       tree.params,
       tree.restParam,
       tree.body,
@@ -2715,20 +2792,7 @@ private class FunctionEmitter private (
     markPosition(tree)
     fb += wa.StructNew(dataStructTypeID)
 
-    /* If there is a ...rest param, the helper requires as third argument the
-     * number of regular arguments.
-     */
-    if (hasRestParam)
-      fb += wa.I32Const(tree.params.size)
-
-    // Call the appropriate helper
-    val helper = (hasThis, hasRestParam) match {
-      case (false, false) => genFunctionID.closure
-      case (true, false)  => genFunctionID.closureThis
-      case (false, true)  => genFunctionID.closureRest
-      case (true, true)   => genFunctionID.closureThisRest
-    }
-    fb += wa.Call(helper)
+    fb += wa.Call(helperID)
 
     AnyType
   }

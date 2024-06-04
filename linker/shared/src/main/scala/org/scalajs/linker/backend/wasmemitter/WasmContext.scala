@@ -34,6 +34,8 @@ import org.scalajs.linker.backend.webassembly.{Modules => wamod}
 import org.scalajs.linker.backend.webassembly.{Identitities => wanme}
 import org.scalajs.linker.backend.webassembly.{Types => watpe}
 
+import org.scalajs.linker.backend.javascript.{Trees => js}
+
 import VarGen._
 import org.scalajs.ir.OriginalName
 
@@ -52,6 +54,8 @@ final class WasmContext(
   val globalRefsRead = mutable.LinkedHashSet.empty[String]
   val globalRefsWritten = mutable.LinkedHashSet.empty[String]
 
+  val customJSHelpers = mutable.ListBuffer.empty[(CustomJSHelperFunctionID, js.Function)]
+
   val moduleBuilder: ModuleBuilder = {
     new ModuleBuilder(new ModuleBuilder.FunctionTypeProvider {
       def functionTypeToTypeID(sig: watpe.FunctionType): wanme.TypeID = {
@@ -64,6 +68,23 @@ final class WasmContext(
         )
       }
     })
+  }
+
+  def addCustomJSHelper(jsFunction: js.Function, wasmType: watpe.FunctionType): wanme.FunctionID = {
+    val id = CustomJSHelperFunctionID(customJSHelpers.size)
+    moduleBuilder.addImport(
+      wamod.Import(
+        "__scalaJSCustomHelpers",
+        id.importName,
+        wamod.ImportDesc.Func(
+          id,
+          OriginalName(id.toString()),
+          moduleBuilder.functionTypeToTypeID(wasmType)
+        )
+      )
+    )
+    customJSHelpers += ((id, jsFunction))
+    id
   }
 
   private var stringPool = new mutable.ArrayBuffer[Byte]()
@@ -203,6 +224,12 @@ final class WasmContext(
 
 object WasmContext {
   final case class StringData(constantStringIndex: Int, offset: Int)
+
+  final case class CustomJSHelperFunctionID(index: Int) extends wanme.FunctionID {
+    override def toString(): String = s"customJSHelper.$index"
+
+    val importName: String = index.toString()
+  }
 
   final class ClassInfo(
       val name: ClassName,
