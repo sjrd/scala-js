@@ -88,6 +88,33 @@ final class Emitter(config: Emitter.Config) {
     }
     CoreWasmLib.genPostClasses()
 
+    for (name <- ctx.globalRefsRead) {
+      ctx.moduleBuilder.addImport(
+        wamod.Import(
+          "__scalaJSGlobalRead",
+          name,
+          wamod.ImportDesc.Func(
+            genFunctionID.forJSGlobalRefRead(name),
+            OriginalName(name),
+            ctx.moduleBuilder.functionTypeToTypeID(watpe.FunctionType(Nil, List(watpe.RefType.anyref)))
+          )
+        )
+      )
+    }
+    for (name <- ctx.globalRefsWritten) {
+      ctx.moduleBuilder.addImport(
+        wamod.Import(
+          "__scalaJSGlobalWrite",
+          name,
+          wamod.ImportDesc.Func(
+            genFunctionID.forJSGlobalRefWrite(name),
+            OriginalName(name),
+            ctx.moduleBuilder.functionTypeToTypeID(watpe.FunctionType(List(watpe.RefType.anyref), Nil))
+          )
+        )
+      )
+    }
+
     complete(
       sortedClasses,
       module.initializers.toList,
@@ -98,7 +125,7 @@ final class Emitter(config: Emitter.Config) {
 
     val loaderContent = LoaderContent.bytesContent
     val jsFileContent =
-      buildJSFileContent(module, module.id.id + ".wasm", allImportedModules)
+      buildJSFileContent(module, module.id.id + ".wasm", allImportedModules, ctx.globalRefsRead, ctx.globalRefsWritten)
 
     new Result(wasmModule, loaderContent, jsFileContent)
   }
@@ -323,7 +350,8 @@ final class Emitter(config: Emitter.Config) {
   }
 
   private def buildJSFileContent(module: ModuleSet.Module,
-      wasmFileName: String, importedModules: List[String]): String = {
+      wasmFileName: String, importedModules: List[String],
+      globalRefsRead: Iterable[String], globalRefsWritten: Iterable[String]): String = {
     val (moduleImports, importedModulesItems) = (for {
       (moduleName, idx) <- importedModules.zipWithIndex
     } yield {
@@ -343,6 +371,13 @@ final class Emitter(config: Emitter.Config) {
       (decl, setter)
     }).unzip
 
+    val globalRefReaders = (for (name <- globalRefsRead.toList) yield {
+      s"  $name: () => $name,"
+    })
+    val globalRefWriters = (for (name <- globalRefsWritten.toList) yield {
+      s"  $name: (___x) => void ($name = ___x),"
+    })
+
     s"""
       |${moduleImports.mkString("\n")}
       |
@@ -354,6 +389,10 @@ final class Emitter(config: Emitter.Config) {
       |${importedModulesItems.mkString("\n")}
       |}, {
       |${exportSetters.mkString("\n")}
+      |}, {
+      |${globalRefReaders.mkString("\n")}
+      |}, {
+      |${globalRefWriters.mkString("\n")}
       |});
     """.stripMargin.trim() + "\n"
   }

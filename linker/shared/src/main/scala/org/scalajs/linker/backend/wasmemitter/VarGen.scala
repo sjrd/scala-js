@@ -108,6 +108,9 @@ object VarGen {
     private final case class SuperArgsID(className: ClassName) extends FunctionID
     private final case class PostSuperStatsID(className: ClassName) extends FunctionID
 
+    private final case class JSGlobalRefReadID(name: String) extends FunctionID
+    private final case class JSGlobalRefWriteID(name: String) extends FunctionID
+
     def forMethod(namespace: MemberNamespace, clazz: ClassName, method: MethodName): FunctionID =
       MethodID(namespace, clazz, method)
     def forTableEntry(clazz: ClassName, method: MethodName): FunctionID =
@@ -141,6 +144,11 @@ object VarGen {
       SuperArgsID(clazz)
     def postSuperStats(clazz: ClassName): FunctionID =
       PostSuperStatsID(clazz)
+
+    def forJSGlobalRefRead(name: String): FunctionID =
+      JSGlobalRefReadID(name)
+    def forJSGlobalRefWrite(name: String): FunctionID =
+      JSGlobalRefWriteID(name)
 
     case object start extends FunctionID
 
