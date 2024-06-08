@@ -3,6 +3,7 @@ package build
 import org.scalajs.ir._
 import org.scalajs.ir.ClassKind
 import org.scalajs.ir.Names._
+import org.scalajs.ir.OriginalName.NoOriginalName
 import org.scalajs.ir.Trees._
 import org.scalajs.ir.Types._
 import org.scalajs.ir.Version.Unversioned
@@ -56,8 +57,12 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
     val jsTypes = {
       val dependencyIR = dependencyFiles.iterator.map(readIR(_))
       val libIR = libIRMappings.iterator.map(_._1)
-      getJSTypes(dependencyIR ++ libIR)
+      (dependencyIR ++ libIR).filter(_.kind.isJSType).map(t => t.className -> t).toMap
     }
+    val concreteFunctionClasses: Map[ClassName, Int] = libIRMappings.iterator.map(_._1)
+      .filter(_.superClass.exists(_.name.nameString.startsWith("scala.runtime.AbstractFunction")))
+      .map(c => c.className -> c.superClass.get.name.nameString.stripPrefix("scala.runtime.AbstractFunction").toInt)
+      .toMap
 
     val resultBuilder = Set.newBuilder[File]
 
@@ -66,7 +71,7 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
 
       tree.kind match {
         case Class | ModuleClass | Interface | HijackedClass =>
-          val cleanedTree = cleanTree(tree, jsTypes, errorManager)
+          val cleanedTree = cleanTree(tree, jsTypes, concreteFunctionClasses, errorManager)
           writeIRFile(output, cleanedTree)
           resultBuilder += output
 
@@ -127,21 +132,23 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
     }
   }
 
-  private def getJSTypes(trees: Iterator[ClassDef]): Map[ClassName, ClassDef] =
-    trees.filter(_.kind.isJSType).map(t => t.className -> t).toMap
-
   private def cleanTree(tree: ClassDef, jsTypes: Map[ClassName, ClassDef],
-      errorManager: ErrorManager): ClassDef = {
-    new ClassDefCleaner(tree.className, jsTypes, errorManager)
+      concreteFunctionClasses: Map[ClassName, Int], errorManager: ErrorManager): ClassDef = {
+    new ClassDefCleaner(tree.className, jsTypes, concreteFunctionClasses, errorManager)
       .cleanClassDef(tree)
   }
 
   private final class ClassDefCleaner(enclosingClassName: ClassName,
-      jsTypes: Map[ClassName, ClassDef], errorManager: ErrorManager)
+      jsTypes: Map[ClassName, ClassDef], concreteFunctionClasses: Map[ClassName, Int],
+      errorManager: ErrorManager)
       extends Transformers.ClassTransformer {
 
     def cleanClassDef(tree: ClassDef): ClassDef = {
       import tree._
+
+      val newSuperClass =
+        if (concreteFunctionClasses.contains(className)) Some(ClassIdent(ObjectClass))
+        else superClass
 
       // Preprocess the super interface list
       val newInterfaces = transformInterfaceList(interfaces)
@@ -152,7 +159,7 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
       val newMethods = methods.filter(_.name.name != writeReplaceMethodName)
 
       val preprocessedTree = ClassDef(name, originalName, kind, jsClassCaptures,
-          superClass, newInterfaces, jsSuperClass, jsNativeLoadSpec, fields,
+          newSuperClass, newInterfaces, jsSuperClass, jsNativeLoadSpec, fields,
           newMethods, jsConstructor, jsMethodProps, jsNativeMembers,
           topLevelExportDefs)(
           optimizerHints)(pos)
@@ -325,6 +332,11 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
         case New(AnonFunctionNClass(n), _, List(closure)) =>
           closure
 
+        // this.AbstractFunctionN::<init>()  -->  this.Object::<init>()
+        case ApplyStatically(flags, ths: This, className, m @ MethodIdent(NoArgConstructorName), Nil)
+            if className.nameString.startsWith("scala.runtime.AbstractFunction") =>
+          ApplyStatically(flags, ths, ObjectClass, m, Nil)(NoType)
+
         // someFunctionN.apply(args)  -->  someFunctionN(args)
         case Apply(ApplyFlags.empty, fun, MethodIdent(FunctionApplyMethodName(n)), args)
             if isFunctionNType(n, fun.tpe) =>
@@ -425,6 +437,30 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
       implicit val pos = tree.pos
 
       tree match {
+        /* new ConcreteFunction(captures)  -->
+         * closure<captures' = captures>(args) => new ConcreteFunction(captures').apply(args)
+         */
+        case New(className, ctor, captures) if concreteFunctionClasses.contains(className) =>
+          val arity = concreteFunctionClasses(className)
+          val captureParamDefs = captures.zipWithIndex.map {
+            case (capture, index) =>
+              ParamDef(LocalIdent(LocalName("c" + index)), NoOriginalName,
+                  capture.tpe, mutable = false)
+          }
+          val argParamDefs = (0 until arity).toList.map { index =>
+            ParamDef(LocalIdent(LocalName("x" + index)), NoOriginalName,
+                AnyType, mutable = false)
+          }
+          val objectClassRef = ClassRef(ObjectClass)
+          val applyMethodName =
+            MethodName("apply", List.fill(arity)(objectClassRef), objectClassRef)
+          Closure(arrow = true, captureParamDefs, argParamDefs, restParam = None, {
+            Apply(ApplyFlags.empty,
+                New(transformNonJSClassName(className), transformMethodIdent(ctor), captureParamDefs.map(_.ref)),
+                MethodIdent(applyMethodName),
+                argParamDefs.map(_.ref))(AnyType)
+          }, captures)
+
         case VarDef(name, originalName, vtpe, mutable, rhs) =>
           VarDef(name, originalName, transformType(vtpe), mutable, rhs)
 
