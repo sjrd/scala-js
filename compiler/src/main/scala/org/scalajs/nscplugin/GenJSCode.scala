@@ -5966,7 +5966,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       assert(sym.isAnonymousFunction,
           s"tryGenAndRecordAnonFunctionClass called with non-anonymous function $cd")
 
-      if (!sym.superClass.fullName.startsWith("scala.runtime.AbstractFunction")) {
+      /*if (!sym.superClass.fullName.startsWith("scala.runtime.AbstractFunction")) {
         /* This is an anonymous class for a non-LMF capable SAM in 2.12.
          * We must not rewrite it, as it would then not inherit from the
          * appropriate parent class and/or interface.
@@ -5977,9 +5977,12 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           val (functionBase, arity) =
             tryGenAnonFunctionClassGeneric(cd, capturedArgs)(_ => return None)
 
-          Some(genJSFunctionToScala(functionBase, arity))
+          println(sym.fullName)
+          //Some(genJSFunctionToScala(functionBase, arity))
+          None
         }
-      }
+      }*/
+      None
       // scalastyle:on return
     }
 
@@ -6250,123 +6253,52 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
     private def genAnonFunction(originalFunction: Function): js.Tree = {
       implicit val pos = originalFunction.pos
       val Function(paramTrees, Apply(
-          targetTree @ Select(receiver, _), allArgs0)) = originalFunction
+          targetTree @ Select(receiver, _), _)) = originalFunction
 
       val captureSyms =
-        global.delambdafy.FreeVarTraverser.freeVarsOf(originalFunction)
+        global.delambdafy.FreeVarTraverser.freeVarsOf(originalFunction).toList
       val target = targetTree.symbol
-      val params = paramTrees.map(_.symbol)
 
-      val allArgs = allArgs0 map genExpr
+      val ctorName = {
+        val allCaptureTypes =
+          if (target.isStaticMember) captureSyms.map(_.tpe)
+          else receiver.tpe :: captureSyms.map(_.tpe)
+        ir.Names.MethodName.constructor(allCaptureTypes.map(toTypeRef(_)))
+      }
 
-      val formalCaptures = captureSyms.toList.map(genParamDef(_, pos))
+      val formalCaptures = captureSyms.map(genParamDef(_, pos))
       val actualCaptures = formalCaptures.map(_.ref)
 
-      val formalArgs = params.map(genParamDef(_))
-
-      val (allFormalCaptures, body, allActualCaptures) = if (!target.isStaticMember) {
-        val thisActualCapture = genExpr(receiver)
-        val thisFormalCapture = js.ParamDef(
-            freshLocalIdent("this")(receiver.pos), thisOriginalName,
-            thisActualCapture.tpe, mutable = false)(receiver.pos)
-        val thisCaptureArg = thisFormalCapture.ref
-
-        val body = if (isJSType(receiver.tpe) && target.owner != ObjectClass) {
-          assert(isNonNativeJSClass(target.owner) && !isExposed(target),
-              s"A Function lambda is trying to call an exposed JS method ${target.fullName}")
-          genApplyJSClassMethod(thisCaptureArg, target, allArgs)
-        } else {
-          genApplyMethodMaybeStatically(thisCaptureArg, target, allArgs)
-        }
-
-        (thisFormalCapture :: formalCaptures,
-            body, thisActualCapture :: actualCaptures)
-      } else {
-        val body = genApplyStatic(target, allArgs)
-
-        (formalCaptures, body, actualCaptures)
+      val thisActualCapture =
+        if (target.isStaticMember) None
+        else Some(genExpr(receiver))
+      val thisFormalCapture = thisActualCapture.map { actual =>
+        js.ParamDef(freshLocalIdent("this")(receiver.pos), thisOriginalName,
+            actual.tpe, mutable = false)(receiver.pos)
       }
 
-      val (patchedFormalArgs, paramsLocals) =
-        patchFunParamsWithBoxes(target, formalArgs, useParamsBeforeLambdaLift = true)
+      val targetParamTypesForUnboxing =
+        paramTypesOfMethodForUnboxing(target, useParamsBeforeLambdaLift = true)
+      val targetResultTypeForBoxing =
+        enteringPhase(currentRun.posterasurePhase)(target.tpe.resultType)
 
-      val patchedBody =
-        js.Block(paramsLocals :+ ensureResultBoxed(body, target))
-
-      val closure = js.Closure(
-          arrow = true,
-          allFormalCaptures,
-          patchedFormalArgs,
-          restParam = None,
-          patchedBody,
-          allActualCaptures)
-
-      // Wrap the closure in the appropriate box for the SAM type
+      // Retrieve info of the SAM type
       val funSym = originalFunction.tpe.typeSymbolDirect
-      if (isFunctionSymbol(funSym)) {
-        /* This is a scala.FunctionN. We use the existing AnonFunctionN
-         * wrapper.
+      val (parentClass, sam, samBridges) = if (isFunctionSymbol(funSym)) {
+        /* This is a scala.FunctionN. Extend AbstractFunctionN to cut down on
+         * generated size. We never have bridges in this case.
          */
-        genJSFunctionToScala(closure, params.size)
+        val abstractFunctionNClass = AbstractFunctionClass(paramTrees.size)
+        val sam = abstractFunctionNClass.info.findMember(nme.apply,
+            excludedFlags = 0L, requiredFlags = 0L, stableOnly = false)
+        (abstractFunctionNClass, sam, Nil)
       } else {
-        /* This is an arbitrary SAM type (can only happen in 2.12).
-         * We have to synthesize a class like LambdaMetaFactory would do on
-         * the JVM.
+        /* This is an arbitrary SAM type. Get info from the SAMFunction
+         * attachement.
          */
-        val sam = originalFunction.attachments.get[SAMFunction].getOrElse {
+        val samInfo = originalFunction.attachments.get[SAMFunction].getOrElse {
           abort(s"Cannot find the SAMFunction attachment on $originalFunction at $pos")
         }
-
-        val samWrapperClassName = synthesizeSAMWrapper(funSym, sam)
-        js.New(samWrapperClassName, js.MethodIdent(ObjectArgConstructorName),
-            List(closure))
-      }
-    }
-
-    private def synthesizeSAMWrapper(funSym: Symbol, samInfo: SAMFunction)(
-        implicit pos: Position): ClassName = {
-      val intfName = encodeClassName(funSym)
-
-      val suffix = {
-        generatedSAMWrapperCount.value += 1
-        // LambdaMetaFactory names classes like this
-        "$$Lambda$" + generatedSAMWrapperCount.value
-      }
-      val className = encodeClassName(currentClassSym).withSuffix(suffix)
-
-      val classType = jstpe.ClassType(className)
-
-      // val f: Any
-      val fFieldIdent = js.FieldIdent(FieldName(className, SimpleFieldName("f")))
-      val fFieldDef = js.FieldDef(js.MemberFlags.empty, fFieldIdent,
-          NoOriginalName, jstpe.AnyType)
-
-      // def this(f: Any) = { this.f = f; super() }
-      val ctorDef = {
-        val fParamDef = js.ParamDef(js.LocalIdent(LocalName("f")),
-            NoOriginalName, jstpe.AnyType, mutable = false)
-        js.MethodDef(
-            js.MemberFlags.empty.withNamespace(js.MemberNamespace.Constructor),
-            js.MethodIdent(ObjectArgConstructorName),
-            NoOriginalName,
-            List(fParamDef),
-            jstpe.NoType,
-            Some(js.Block(List(
-                js.Assign(
-                    js.Select(js.This()(classType), fFieldIdent)(jstpe.AnyType),
-                    fParamDef.ref),
-                js.ApplyStatically(js.ApplyFlags.empty.withConstructor(true),
-                    js.This()(classType),
-                    ir.Names.ObjectClass,
-                    js.MethodIdent(ir.Names.NoArgConstructorName),
-                    Nil)(jstpe.NoType)))))(
-            js.OptimizerHints.empty, Unversioned)
-      }
-
-      // Compute the set of method symbols that we need to implement
-      val sams = {
-        val samsBuilder = List.newBuilder[Symbol]
-        val seenMethodNames = mutable.Set.empty[MethodName]
 
         /* scala/bug#10512: any methods which `samInfo.sam` overrides need
          * bridges made for them.
@@ -6382,52 +6314,140 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           synthCls.info.findMembers(excludedFlags = 0L, requiredFlags = BRIDGE).toList
         }
 
-        for (sam <- samInfo.sam :: samBridges) {
+        (funSym, samInfo.sam, samBridges)
+      }
+
+      val parentClassName = encodeClassName(parentClass)
+      val (superClassName, intfClassNames) =
+        if (parentClass.isTrait) (ir.Names.ObjectClass, parentClassName :: Nil)
+        else (parentClassName, Nil)
+
+      val lambdaSuffix = {
+        generatedSAMWrapperCount.value += 1
+        // LambdaMetaFactory names classes like this
+        "$$Lambda$" + generatedSAMWrapperCount.value
+      }
+      val lambdaClassName = encodeClassName(currentClassSym).withSuffix(lambdaSuffix)
+
+      val lambdaClassType = jstpe.ClassType(lambdaClassName)
+      val lambdaThis = js.This()(lambdaClassType)
+
+      // Fields for captures
+      val allFormalCaptures = thisFormalCapture.toList ::: formalCaptures
+      val allCaptureFieldDefs = allFormalCaptures.map { p =>
+        val fieldIdent = js.FieldIdent(FieldName(lambdaClassName, SimpleFieldName(p.name.name.encoded)))
+        js.FieldDef(js.MemberFlags.empty, fieldIdent, p.originalName, p.ptpe)
+      }
+
+      // def this(...formalCaptures) = { ...this.captureField = formalCapture; super() }
+      val ctorDef = {
+        val assignments = allCaptureFieldDefs.zip(allFormalCaptures).map {
+          case (fieldDef, paramDef) =>
+            js.Assign(js.Select(lambdaThis, fieldDef.name)(fieldDef.ftpe), paramDef.ref)
+        }
+        val superCtorCall = js.ApplyStatically(
+            js.ApplyFlags.empty.withConstructor(true),
+            lambdaThis,
+            superClassName,
+            js.MethodIdent(ir.Names.NoArgConstructorName),
+            Nil
+        )(jstpe.NoType)
+        js.MethodDef(
+            js.MemberFlags.empty.withNamespace(js.MemberNamespace.Constructor),
+            js.MethodIdent(ctorName),
+            NoOriginalName,
+            allFormalCaptures,
+            jstpe.NoType,
+            Some(js.Block(assignments :+ superCtorCall))
+        )(js.OptimizerHints.empty, Unversioned)
+      }
+
+      // Compute the set of method symbols that we need to implement
+      val sams = if (samBridges.isEmpty) {
+        // fast path
+        sam :: Nil
+      } else {
+        val samsBuilder = List.newBuilder[Symbol]
+        val seenMethodNames = mutable.Set.empty[MethodName]
+
+        for (s <- sam :: samBridges) {
           /* Remove duplicates, e.g., if we override the same method declared
            * in two super traits.
            */
-          if (seenMethodNames.add(encodeMethodSym(sam).name))
-            samsBuilder += sam
+          if (seenMethodNames.add(encodeMethodSym(s).name))
+            samsBuilder += s
         }
 
         samsBuilder.result()
       }
 
-      // def samMethod(...params): resultType = this.f(...params)
+      def genCall(actualArgs: List[(js.VarRef, Type)], resultTypeForUnboxing: Type): js.Tree = {
+        def adapt(tree: js.Tree, fromType: Type, toType: Type): js.Tree =
+          if (fromType =:= toType) tree
+          else fromAny(ensureBoxed(tree, fromType), toType)
+
+        val adaptedActualArgs = for {
+          ((actualArg, actualType), targetTypeForUnboxing) <- actualArgs.zip(targetParamTypesForUnboxing)
+        } yield {
+          adapt(actualArg, actualType, targetTypeForUnboxing)
+        }
+
+        val allCaptureFieldRefs = allCaptureFieldDefs.map { fieldDef =>
+          js.Select(lambdaThis, fieldDef.name)(fieldDef.ftpe)
+        }
+
+        val call = thisFormalCapture match {
+          case Some(thisActual) =>
+            if (isJSType(receiver.tpe) && target.owner != ObjectClass) {
+              assert(isNonNativeJSClass(target.owner) && !isExposed(target),
+                  s"A Function lambda is trying to call an exposed JS method ${target.fullName}")
+              genApplyJSClassMethod(allCaptureFieldRefs.head, target,
+                  allCaptureFieldRefs.tail ::: adaptedActualArgs)
+            } else {
+              genApplyMethodMaybeStatically(allCaptureFieldRefs.head, target,
+                  allCaptureFieldRefs.tail ::: adaptedActualArgs)
+            }
+          case None =>
+            genApplyStatic(target, allCaptureFieldRefs ::: adaptedActualArgs)
+        }
+
+        adapt(call, targetResultTypeForBoxing, resultTypeForUnboxing)
+      }
+
+      /* For each sam, including bridges:
+       * def sam(...args: SuperTs): SuperR =
+       *   adaptResult(capturedThis.target(captures, ...adaptedArgs))
+       */
       val samMethodDefs = for (sam <- sams) yield {
         val jsParams = sam.tpe.params.map(genParamDef(_, pos))
         val resultType = toIRType(sam.tpe.finalResultType)
 
-        val actualParams = enteringPhase(currentRun.posterasurePhase) {
+        val actualArgs = enteringPhase(currentRun.posterasurePhase) {
           for ((formal, param) <- jsParams.zip(sam.tpe.params))
             yield (formal.ref, param.tpe)
-        }.map((ensureBoxed _).tupled)
+        }
 
-        val call = js.JSFunctionApply(
-            js.Select(js.This()(classType), fFieldIdent)(jstpe.AnyType),
-            actualParams)
-
-        val body = fromAny(call, enteringPhase(currentRun.posterasurePhase) {
+        val resultTypeForUnboxing = enteringPhase(currentRun.posterasurePhase) {
           sam.tpe.finalResultType
-        })
+        }
 
         js.MethodDef(js.MemberFlags.empty, encodeMethodSym(sam),
             originalNameOfMethod(sam), jsParams, resultType,
-            Some(body))(
+            Some(genCall(actualArgs, resultTypeForUnboxing)))(
             js.OptimizerHints.empty, Unversioned)
       }
 
       // The class definition
-      val classDef = js.ClassDef(
-          js.ClassIdent(className),
+      val lambdaClassDef = js.ClassDef(
+          js.ClassIdent(lambdaClassName),
           NoOriginalName,
           ClassKind.Class,
           None,
-          Some(js.ClassIdent(ir.Names.ObjectClass)),
-          List(js.ClassIdent(intfName)),
+          Some(js.ClassIdent(superClassName)),
+          intfClassNames.map(js.ClassIdent(_)),
           None,
           None,
-          fields = fFieldDef :: Nil,
+          fields = allCaptureFieldDefs,
           methods = ctorDef :: samMethodDefs,
           jsConstructor = None,
           Nil,
@@ -6435,14 +6455,28 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           Nil)(
           js.OptimizerHints.empty.withInline(true))
 
-      generatedClasses += classDef -> pos
+      generatedClasses += lambdaClassDef -> pos
 
-      className
+      js.New(lambdaClassName, js.MethodIdent(ctorName),
+          thisActualCapture.toList ::: actualCaptures)
     }
 
     private def patchFunParamsWithBoxes(methodSym: Symbol,
         params: List[js.ParamDef], useParamsBeforeLambdaLift: Boolean)(
         implicit pos: Position): (List[js.ParamDef], List[js.VarDef]) = {
+
+      val paramTypesForUnboxing =
+        paramTypesOfMethodForUnboxing(methodSym, useParamsBeforeLambdaLift)
+
+      (for {
+        (param, paramTpe) <- params.zip(paramTypesForUnboxing)
+      } yield {
+        genPatchedParam(param, fromAny(_, paramTpe))
+      }).unzip
+    }
+
+    private def paramTypesOfMethodForUnboxing(methodSym: Symbol,
+        useParamsBeforeLambdaLift: Boolean): List[Type] = {
       // See the comment in genPrimitiveJSArgs for a rationale about this
       val paramTpes = enteringPhase(currentRun.posterasurePhase) {
         for (param <- methodSym.tpe.params)
@@ -6465,12 +6499,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           methodSym.tpe.params
       }
 
-      (for {
-        (param, paramSym) <- params zip paramSyms
-      } yield {
-        val paramTpe = paramTpes.getOrElse(paramSym.name, paramSym.tpe)
-        genPatchedParam(param, fromAny(_, paramTpe))
-      }).unzip
+      paramSyms.map(paramSym => paramTpes.getOrElse(paramSym.name, paramSym.tpe))
     }
 
     private def genPatchedParam(param: js.ParamDef, rhs: js.VarRef => js.Tree)(
