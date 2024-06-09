@@ -316,7 +316,7 @@ object CoreWasmLib {
 
     addHelperImport(genFunctionID.isUndef, List(anyref), List(Int32))
 
-    for (primRef <- List(BooleanRef, ByteRef, ShortRef, IntRef, FloatRef, DoubleRef)) {
+    for (primRef <- List(BooleanRef, ByteRef, ShortRef, FloatRef, DoubleRef)) {
       val wasmType = primRef match {
         case FloatRef  => Float32
         case DoubleRef => Float64
@@ -326,6 +326,10 @@ object CoreWasmLib {
       addHelperImport(genFunctionID.unbox(primRef), List(anyref), List(wasmType))
       addHelperImport(genFunctionID.typeTest(primRef), List(anyref), List(Int32))
     }
+
+    addHelperImport(genFunctionID.bIFallback, List(Int32), List(anyref))
+    addHelperImport(genFunctionID.uIFallback, List(anyref), List(Int32))
+    addHelperImport(genFunctionID.typeTest(IntRef), List(anyref), List(Int32))
 
     addHelperImport(genFunctionID.fmod, List(Float64, Float64), List(Float64))
 
@@ -595,6 +599,8 @@ object CoreWasmLib {
 
   /** Generates all the helper function definitions of the core Wasm lib. */
   private def genHelperDefinitions()(implicit ctx: WasmContext): Unit = {
+    genBoxInt()
+    genUnboxInt()
     genStringLiteral()
     genCreateStringFromData()
     genTypeDataName()
@@ -625,6 +631,53 @@ object CoreWasmLib {
   private def newFunctionBuilder(functionID: FunctionID)(
       implicit ctx: WasmContext): FunctionBuilder = {
     newFunctionBuilder(functionID, OriginalName(functionID.toString()))
+  }
+
+  private def genBoxInt()(implicit ctx: WasmContext): Unit = {
+    val fb = newFunctionBuilder(genFunctionID.box(IntRef))
+    val xParam = fb.addParam("x", Int32)
+    fb.setResultType(RefType.anyref)
+
+    // Test if the most significant bit is necessary: (x ^ (x << 1)) & 0x80000000
+    fb += LocalGet(xParam)
+    fb += LocalGet(xParam)
+    fb += I32Const(1)
+    fb += I32Shl
+    fb += I32Xor
+    fb += I32Const(0x80000000)
+    fb += I32And
+
+    // If non-zero,
+    fb.ifThenElse(RefType.anyref) {
+      // then call the fallback JS helper
+      fb += LocalGet(xParam)
+      fb += Call(genFunctionID.bIFallback)
+    } {
+      // else use ref.i31
+      fb += LocalGet(xParam)
+      fb += RefI31
+    }
+
+    fb.buildAndAddToModule()
+  }
+
+  private def genUnboxInt()(implicit ctx: WasmContext): Unit = {
+    val fb = newFunctionBuilder(genFunctionID.unbox(IntRef))
+    val xParam = fb.addParam("x", RefType.anyref)
+    fb.setResultType(Int32)
+
+    // If x is a (ref i31), extract it
+    fb.block(RefType.anyref) { xIsNotI31Label =>
+      fb += LocalGet(xParam)
+      fb += BrOnCastFail(xIsNotI31Label, RefType.anyref, RefType.i31)
+      fb += I31GetS
+      fb += Return
+    }
+
+    // Otherwise, use the fallback helper
+    fb += Call(genFunctionID.uIFallback)
+
+    fb.buildAndAddToModule()
   }
 
   private def genStringLiteral()(implicit ctx: WasmContext): Unit = {

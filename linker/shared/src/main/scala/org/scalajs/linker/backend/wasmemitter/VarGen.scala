@@ -113,6 +113,9 @@ object VarGen {
       override def toString(): String = "t" + primRef.charCode
     }
 
+    case object bIFallback extends JSHelperFunctionID
+    case object uIFallback extends JSHelperFunctionID
+
     case object fmod extends JSHelperFunctionID
 
     case object closure extends JSHelperFunctionID
