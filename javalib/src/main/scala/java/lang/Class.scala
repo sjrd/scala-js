@@ -34,11 +34,27 @@ private trait ScalaJSClassData[A] extends js.Object {
   def newArrayOfThisClass(dimensions: js.Array[Int]): AnyRef = js.native
 }
 
+private object Class {
+  private final val KindPrimitive = 0
+  private final val KindClass = 1
+  private final val KindInterface = 2
+  private final val KindArray = 3
+}
+
 final class Class[A] private (data0: Object)
     extends Object with Serializable with Constable {
 
+  import Class._
+
   private[this] val data: ScalaJSClassData[A] =
     data0.asInstanceOf[ScalaJSClassData[A]]
+
+  private[this] val kind = {
+    if (data.isPrimitive) KindPrimitive
+    else if (data.isInterface) KindInterface
+    else if (data.isArrayClass) KindArray
+    else KindClass
+  }
 
   private[this] var cachedSimpleName: String = _
 
@@ -63,17 +79,24 @@ final class Class[A] private (data0: Object)
   def isInstance(obj: Any): scala.Boolean =
     data.isInstance(obj)
 
+  @inline
   def isAssignableFrom(that: Class[_]): scala.Boolean =
+    (this eq that) || isAssignableFromSlowPath(that)
+
+  private def isAssignableFromSlowPath(that: Class[_]): scala.Boolean =
     this.data.isAssignableFrom(that.getData())
 
+  @inline
   def isInterface(): scala.Boolean =
-    data.isInterface
+    kind == KindInterface
 
+  @inline
   def isArray(): scala.Boolean =
-    data.isArrayClass
+    kind == KindArray
 
+  @inline
   def isPrimitive(): scala.Boolean =
-    data.isPrimitive
+    kind == KindPrimitive
 
   def getName(): String =
     data.name
