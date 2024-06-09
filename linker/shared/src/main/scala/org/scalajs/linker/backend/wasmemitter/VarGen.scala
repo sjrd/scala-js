@@ -180,6 +180,9 @@ object VarGen {
     def unbox(primRef: PrimRef): JSHelperFunctionID = UnboxID(primRef)
     def typeTest(primRef: PrimRef): JSHelperFunctionID = TypeTestID(primRef)
 
+    case object bIFallback extends JSHelperFunctionID
+    case object uIFallback extends JSHelperFunctionID
+
     case object fmod extends JSHelperFunctionID
 
     case object closure extends JSHelperFunctionID
