@@ -316,7 +316,7 @@ object CoreWasmLib {
 
     addHelperImport(genFunctionID.isUndef, List(anyref), List(Int32))
 
-    for (primRef <- List(BooleanRef, ByteRef, ShortRef, FloatRef, DoubleRef)) {
+    for (primRef <- List(BooleanRef, FloatRef, DoubleRef)) {
       val wasmType = primRef match {
         case FloatRef  => Float32
         case DoubleRef => Float64
@@ -601,6 +601,10 @@ object CoreWasmLib {
   private def genHelperDefinitions()(implicit ctx: WasmContext): Unit = {
     genBoxInt()
     genUnboxInt()
+    genUnboxByteOrShort(ByteRef)
+    genUnboxByteOrShort(ShortRef)
+    genTestByteOrShort(ByteRef, I32Extend8S)
+    genTestByteOrShort(ShortRef, I32Extend16S)
     genStringLiteral()
     genCreateStringFromData()
     genTypeDataName()
@@ -676,6 +680,59 @@ object CoreWasmLib {
 
     // Otherwise, use the fallback helper
     fb += Call(genFunctionID.uIFallback)
+
+    fb.buildAndAddToModule()
+  }
+
+  private def genUnboxByteOrShort(typeRef: PrimRef)(implicit ctx: WasmContext): Unit = {
+    /* As long as we only support Unchecked asInstanceOfs, the unboxing
+     * functions for Byte and Short actually do exactly the same thing.
+     * We keep them separate so that the rest of the codebase is clearer.
+     */
+
+    val fb = newFunctionBuilder(genFunctionID.unbox(typeRef))
+    val xParam = fb.addParam("x", RefType.anyref)
+    fb.setResultType(Int32)
+
+    // If x is a (ref i31), extract it
+    fb.block(RefType.anyref) { xIsNotI31Label =>
+      fb += LocalGet(xParam)
+      fb += BrOnCastFail(xIsNotI31Label, RefType.anyref, RefType.i31)
+      fb += I31GetS
+      fb += Return
+    }
+
+    // Otherwise, it must be null, so return 0
+    fb += Drop
+    fb += I32Const(0)
+
+    fb.buildAndAddToModule()
+  }
+
+  private def genTestByteOrShort(typeRef: PrimRef, signExtend: SimpleInstr)(
+        implicit ctx: WasmContext): Unit = {
+
+    val fb = newFunctionBuilder(genFunctionID.typeTest(typeRef))
+    val xParam = fb.addParam("x", RefType.anyref)
+    fb.setResultType(Int32)
+
+    val intValueLocal = fb.addLocal("intValue", Int32)
+
+    // If x is a (ref i31), extract it and that it sign-extends to itself
+    fb.block(RefType.anyref) { xIsNotI31Label =>
+      fb += LocalGet(xParam)
+      fb += BrOnCastFail(xIsNotI31Label, RefType.anyref, RefType.i31)
+      fb += I31GetS
+      fb += LocalTee(intValueLocal)
+      fb += LocalGet(intValueLocal)
+      fb += signExtend
+      fb += I32Eq
+      fb += Return
+    }
+
+    // Otherwise, return false
+    fb += Drop
+    fb += I32Const(0)
 
     fb.buildAndAddToModule()
   }
