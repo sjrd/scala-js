@@ -10,6 +10,9 @@ object BinaryIncompatibilities {
   val Linker = Seq(
     // private, not an issue
     ProblemFilters.exclude[DirectMissingMethodProblem]("org.scalajs.linker.standard.CommonPhaseConfig.this"),
+
+    // private[linker], not an issue
+    ProblemFilters.exclude[DirectMissingMethodProblem]("org.scalajs.linker.standard.ModuleSet.this"),
   )
 
   val LinkerInterface = Seq(
