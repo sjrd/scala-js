@@ -1223,6 +1223,34 @@ private class FunctionEmitter private (
       // String.length
       case String_length =>
         fb += wa.Call(genFunctionID.stringLength)
+
+      // Class operations, introduced in 1.17
+      case Class_name =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.Call(genFunctionID.typeDataName)
+      case Class_isPrimitive =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.StructGet(genTypeID.typeData, genFieldID.typeData.kind)
+        fb += wa.I32Const(KindLastPrimitive)
+        fb += wa.I32LeU
+      case Class_isInterface =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.StructGet(genTypeID.typeData, genFieldID.typeData.kind)
+        fb += wa.I32Const(KindInterface)
+        fb += wa.I32Eq
+      case Class_isArray =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.StructGet(genTypeID.typeData, genFieldID.typeData.kind)
+        fb += wa.I32Const(KindArray)
+        fb += wa.I32Eq
+      case Class_componentType =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.StructGet(genTypeID.typeData, genFieldID.typeData.componentType)
+        fb += wa.Call(genFunctionID.getClassOfNullable)
+      case Class_superClass =>
+        // FIXME Implement this
+        fb += wa.Drop
+        fb += wa.RefNull(watpe.HeapType.None)
     }
 
     tree.tpe
@@ -1317,6 +1345,20 @@ private class FunctionEmitter private (
         fb += wa.Call(genFunctionID.stringCharAt)
         CharType
 
+      // Class operations for which genTreeAuto would not do the right thing
+      case Class_isInstance =>
+        genTreeAuto(lhs)
+        genTree(rhs, AnyType)
+        markPosition(tree)
+        fb += wa.Call(genFunctionID.isInstance)
+        BooleanType
+      case Class_cast =>
+        genTreeAuto(lhs)
+        genTree(rhs, AnyType)
+        markPosition(tree)
+        fb += wa.Call(genFunctionID.cast)
+        AnyType
+
       case _ =>
         genTreeAuto(lhs)
         genTreeAuto(rhs)
@@ -1402,6 +1444,9 @@ private class FunctionEmitter private (
       case Double_<= => wa.F64Le
       case Double_>  => wa.F64Gt
       case Double_>= => wa.F64Ge
+
+      case Class_isAssignableFrom => wa.Call(genFunctionID.isAssignableFromExternal)
+      case Class_newArray         => wa.Call(genFunctionID.newArray)
     }
   }
 

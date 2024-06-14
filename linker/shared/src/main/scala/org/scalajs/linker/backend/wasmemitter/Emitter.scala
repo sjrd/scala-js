@@ -387,7 +387,7 @@ object Emitter {
 
     factory.multiple(
       // TODO Ideally we should not require these, but rather adapt to their absence
-      factory.instantiateClass(ClassClass, AnyArgConstructorName),
+      factory.instantiateClass(ClassClass, NoArgConstructorName),
       factory.instantiateClass(JSExceptionClass, AnyArgConstructorName),
 
       // See genIdentityHashCode in HelperFunctions

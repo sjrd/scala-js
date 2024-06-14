@@ -219,13 +219,13 @@ object VarGen {
     case object typeDataName extends FunctionID
     case object createClassOf extends FunctionID
     case object getClassOf extends FunctionID
+    case object getClassOfNullable extends FunctionID
     case object arrayTypeData extends FunctionID
     case object isInstance extends FunctionID
     case object isAssignableFromExternal extends FunctionID
     case object isAssignableFrom extends FunctionID
-    case object checkCast extends FunctionID
-    case object getComponentType extends FunctionID
-    case object newArrayOfThisClass extends FunctionID
+    case object cast extends FunctionID
+    case object newArray extends FunctionID
     case object anyGetClass extends FunctionID
     case object anyGetClassName extends FunctionID
     case object anyGetTypeData extends FunctionID
@@ -365,6 +365,9 @@ object VarGen {
        */
       case object reflectiveProxies extends FieldID
     }
+
+    /** The magic `data` field of type `(ref typeData)`, injected into `jl.Class`. */
+    case object classData extends FieldID
   }
 
   object genTypeID {

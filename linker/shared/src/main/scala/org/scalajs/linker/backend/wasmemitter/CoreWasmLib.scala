@@ -89,6 +89,17 @@ object CoreWasmLib {
     )
   }
 
+  private val primRefsWithArrayTypes = List(
+    BooleanRef -> KindBoolean,
+    CharRef -> KindChar,
+    ByteRef -> KindByte,
+    ShortRef -> KindShort,
+    IntRef -> KindInt,
+    LongRef -> KindLong,
+    FloatRef -> KindFloat,
+    DoubleRef -> KindDouble
+  )
+
   /** Generates definitions that must come *before* the code generated for regular classes.
    *
    *  This notably includes the `typeData` definitions, since the vtable of `jl.Object` is a subtype
@@ -589,13 +600,13 @@ object CoreWasmLib {
     genTypeDataName()
     genCreateClassOf()
     genGetClassOf()
+    genGetClassOfNullable()
     genArrayTypeData()
     genIsInstance()
     genIsAssignableFromExternal()
     genIsAssignableFrom()
-    genCheckCast()
-    genGetComponentType()
-    genNewArrayOfThisClass()
+    genCast()
+    genNewArray()
     genAnyGetClass()
     genAnyGetClassName()
     genAnyGetTypeData()
@@ -862,87 +873,18 @@ object CoreWasmLib {
 
     val classInstanceLocal = fb.addLocal("classInstance", RefType(genTypeID.ClassStruct))
 
-    // classInstance := newDefault$java.lang.Class()
+    // classInstance := newDefault$java.lang.Class(typeData)
     // leave it on the stack for the constructor call
+    fb += LocalGet(typeDataParam)
     fb += Call(genFunctionID.newDefault(ClassClass))
     fb += LocalTee(classInstanceLocal)
 
-    /* The JS object containing metadata to pass as argument to the `jl.Class` constructor.
-     * Specified by https://lampwww.epfl.ch/~doeraene/sjsir-semantics/#sec-sjsir-createclassdataof
-     * Leave it on the stack.
-     */
-    fb += Call(genFunctionID.jsNewObject)
-    // "__typeData": typeData (TODO hide this better? although nobody will notice anyway)
-    // (this is used by `isAssignableFromExternal`)
-    fb ++= ctx.stringPool.getConstantStringInstr("__typeData")
-    fb += LocalGet(typeDataParam)
-    fb += Call(genFunctionID.jsObjectPush)
-    // "name": typeDataName(typeData)
-    fb ++= ctx.stringPool.getConstantStringInstr("name")
-    fb += LocalGet(typeDataParam)
-    fb += Call(genFunctionID.typeDataName)
-    fb += Call(genFunctionID.jsObjectPush)
-    // "isPrimitive": (typeData.kind <= KindLastPrimitive)
-    fb ++= ctx.stringPool.getConstantStringInstr("isPrimitive")
-    fb += LocalGet(typeDataParam)
-    fb += StructGet(genTypeID.typeData, genFieldID.typeData.kind)
-    fb += I32Const(KindLastPrimitive)
-    fb += I32LeU
-    fb += Call(genFunctionID.box(BooleanRef))
-    fb += Call(genFunctionID.jsObjectPush)
-    // "isArrayClass": (typeData.kind == KindArray)
-    fb ++= ctx.stringPool.getConstantStringInstr("isArrayClass")
-    fb += LocalGet(typeDataParam)
-    fb += StructGet(genTypeID.typeData, genFieldID.typeData.kind)
-    fb += I32Const(KindArray)
-    fb += I32Eq
-    fb += Call(genFunctionID.box(BooleanRef))
-    fb += Call(genFunctionID.jsObjectPush)
-    // "isInterface": (typeData.kind == KindInterface)
-    fb ++= ctx.stringPool.getConstantStringInstr("isInterface")
-    fb += LocalGet(typeDataParam)
-    fb += StructGet(genTypeID.typeData, genFieldID.typeData.kind)
-    fb += I32Const(KindInterface)
-    fb += I32Eq
-    fb += Call(genFunctionID.box(BooleanRef))
-    fb += Call(genFunctionID.jsObjectPush)
-    // "isInstance": closure(isInstance, typeData)
-    fb ++= ctx.stringPool.getConstantStringInstr("isInstance")
-    fb += ctx.refFuncWithDeclaration(genFunctionID.isInstance)
-    fb += LocalGet(typeDataParam)
-    fb += Call(genFunctionID.closure)
-    fb += Call(genFunctionID.jsObjectPush)
-    // "isAssignableFrom": closure(isAssignableFrom, typeData)
-    fb ++= ctx.stringPool.getConstantStringInstr("isAssignableFrom")
-    fb += ctx.refFuncWithDeclaration(genFunctionID.isAssignableFromExternal)
-    fb += LocalGet(typeDataParam)
-    fb += Call(genFunctionID.closure)
-    fb += Call(genFunctionID.jsObjectPush)
-    // "checkCast": closure(checkCast, typeData)
-    fb ++= ctx.stringPool.getConstantStringInstr("checkCast")
-    fb += ctx.refFuncWithDeclaration(genFunctionID.checkCast)
-    fb += LocalGet(typeDataParam)
-    fb += Call(genFunctionID.closure)
-    fb += Call(genFunctionID.jsObjectPush)
-    // "getComponentType": closure(getComponentType, typeData)
-    fb ++= ctx.stringPool.getConstantStringInstr("getComponentType")
-    fb += ctx.refFuncWithDeclaration(genFunctionID.getComponentType)
-    fb += LocalGet(typeDataParam)
-    fb += Call(genFunctionID.closure)
-    fb += Call(genFunctionID.jsObjectPush)
-    // "newArrayOfThisClass": closure(newArrayOfThisClass, typeData)
-    fb ++= ctx.stringPool.getConstantStringInstr("newArrayOfThisClass")
-    fb += ctx.refFuncWithDeclaration(genFunctionID.newArrayOfThisClass)
-    fb += LocalGet(typeDataParam)
-    fb += Call(genFunctionID.closure)
-    fb += Call(genFunctionID.jsObjectPush)
-
-    // Call java.lang.Class::<init>(dataObject)
+    // Call java.lang.Class::<init>()
     fb += Call(
       genFunctionID.forMethod(
         MemberNamespace.Constructor,
         ClassClass,
-        SpecialNames.AnyArgConstructorName
+        NoArgConstructorName
       )
     )
 
@@ -978,6 +920,31 @@ object CoreWasmLib {
       fb += LocalGet(typeDataParam)
       fb += Call(genFunctionID.createClassOf)
     } // end bock alreadyInitializedLabel
+
+    fb.buildAndAddToModule()
+  }
+
+  /** `getClassOfNullable: (ref null typeData) -> (ref null jlClass)`.
+   *
+   *  Like `getClassOf`, but returns `null` if the argument is `null`.
+   */
+  private def genGetClassOfNullable()(implicit ctx: WasmContext): Unit = {
+    val typeDataType = RefType(genTypeID.typeData)
+
+    val fb = newFunctionBuilder(genFunctionID.getClassOfNullable)
+    val typeDataParam = fb.addParam("typeData", RefType.nullable(genTypeID.typeData))
+    fb.setResultType(RefType.nullable(genTypeID.ClassStruct))
+
+    fb.block() { isNullLabel =>
+      // if (typeData eq null), return null
+      fb += LocalGet(typeDataParam)
+      fb += BrOnNull(isNullLabel)
+
+      // otherwise delegate to getClassOf
+      fb += ReturnCall(genFunctionID.getClassOf)
+    }
+
+    fb += RefNull(HeapType.None)
 
     fb.buildAndAddToModule()
   }
@@ -1116,12 +1083,11 @@ object CoreWasmLib {
     fb.buildAndAddToModule()
   }
 
-  /** `isInstance: (ref typeData), anyref -> anyref` (a boxed boolean).
+  /** `isInstance: (ref null jlClass), anyref -> i32` (a boolean).
    *
    *  Tests whether the given value is a non-null instance of the given type.
    *
-   *  Specified by `"isInstance"` at
-   *  [[https://lampwww.epfl.ch/~doeraene/sjsir-semantics/#sec-sjsir-createclassdataof]].
+   *  This is the underlying func for the `Class_isInstance` operation.
    */
   private def genIsInstance()(implicit ctx: WasmContext): Unit = {
     import genFieldID.typeData._
@@ -1130,16 +1096,22 @@ object CoreWasmLib {
     val objectRefType = RefType(genTypeID.ObjectStruct)
 
     val fb = newFunctionBuilder(genFunctionID.isInstance)
-    val typeDataParam = fb.addParam("typeData", typeDataType)
+    val jlClassParam = fb.addParam("jlClass", RefType.nullable(genTypeID.ClassStruct))
     val valueParam = fb.addParam("value", RefType.anyref)
-    fb.setResultType(anyref)
+    fb.setResultType(Int32)
 
+    val typeDataLocal = fb.addLocal("typeData", typeDataType)
     val valueNonNullLocal = fb.addLocal("valueNonNull", RefType.any)
     val specialInstanceTypesLocal = fb.addLocal("specialInstanceTypes", Int32)
 
+    // typeData := jlClass.data
+    fb += LocalGet(jlClassParam)
+    fb += StructGet(genTypeID.ClassStruct, genFieldID.classData)
+    fb += LocalSet(typeDataLocal)
+
     // switch (typeData.kind)
     fb.switch(Int32) { () =>
-      fb += LocalGet(typeDataParam)
+      fb += LocalGet(typeDataLocal)
       fb += StructGet(genTypeID.typeData, kind)
     }(
       // case anyPrimitiveKind => false
@@ -1202,13 +1174,12 @@ object CoreWasmLib {
           fb += LocalGet(valueParam)
 
           // Load the function reference; break if null
-          fb += LocalGet(typeDataParam)
+          fb += LocalGet(typeDataLocal)
           fb += StructGet(genTypeID.typeData, isJSClassInstance)
           fb += BrOnNull(isJSClassInstanceIsNull)
 
           // Call the function
           fb += CallRef(genTypeID.isJSClassInstanceFuncType)
-          fb += Call(genFunctionID.box(BooleanRef))
           fb += Return
         }
         fb += Drop // drop `value` which was left on the stack
@@ -1232,7 +1203,7 @@ object CoreWasmLib {
       fb.block(RefType.any) { nonNullLabel =>
         fb += LocalGet(valueParam)
         fb += BrOnNonNull(nonNullLabel)
-        fb += GlobalGet(genGlobalID.bFalse)
+        fb += I32Const(0)
         fb += Return
       }
       fb += LocalSet(valueNonNullLocal)
@@ -1258,7 +1229,7 @@ object CoreWasmLib {
        * There is a more elaborated concrete example of this algorithm in
        * `genInstanceTest`.
        */
-      fb += LocalGet(typeDataParam)
+      fb += LocalGet(typeDataLocal)
       fb += StructGet(genTypeID.typeData, specialInstanceTypes)
       fb += LocalTee(specialInstanceTypesLocal)
       fb += I32Const(0)
@@ -1278,7 +1249,6 @@ object CoreWasmLib {
         fb.ifThen() {
           // then return true
           fb += I32Const(1)
-          fb += Call(genFunctionID.box(BooleanRef))
           fb += Return
         }
       }
@@ -1286,7 +1256,7 @@ object CoreWasmLib {
       // Get the vtable and delegate to isAssignableFrom
 
       // Load typeData
-      fb += LocalGet(typeDataParam)
+      fb += LocalGet(typeDataLocal)
 
       // Load the vtable; return false if it is not one of our object
       fb.block(objectRefType) { ourObjectLabel =>
@@ -1295,7 +1265,7 @@ object CoreWasmLib {
         fb += BrOnCast(ourObjectLabel, RefType.any, objectRefType)
 
         // on cast fail, return false
-        fb += GlobalGet(genGlobalID.bFalse)
+        fb += I32Const(0)
         fb += Return
       }
       fb += StructGet(genTypeID.ObjectStruct, genFieldID.objStruct.vtable)
@@ -1304,35 +1274,27 @@ object CoreWasmLib {
       fb += Call(genFunctionID.isAssignableFrom)
     }
 
-    fb += Call(genFunctionID.box(BooleanRef))
-
     fb.buildAndAddToModule()
   }
 
-  /** `isAssignableFromExternal: (ref typeData), anyref -> i32` (a boolean).
+  /** `isAssignableFromExternal: (ref null jlClass), (ref null jlClass) -> i32` (a boolean).
    *
-   *  This is the underlying func for the `isAssignableFrom()` closure inside class data objects.
+   *  This is the underlying func for the `Class_isAssignableFrom` operation.
    */
   private def genIsAssignableFromExternal()(implicit ctx: WasmContext): Unit = {
-    val typeDataType = RefType(genTypeID.typeData)
-
     val fb = newFunctionBuilder(genFunctionID.isAssignableFromExternal)
-    val typeDataParam = fb.addParam("typeData", typeDataType)
-    val fromParam = fb.addParam("from", RefType.anyref)
-    fb.setResultType(anyref)
+    val typeDataParam = fb.addParam("typeData", RefType.nullable(genTypeID.ClassStruct))
+    val fromParam = fb.addParam("from", RefType.nullable(genTypeID.ClassStruct))
+    fb.setResultType(Int32)
 
-    // load typeData
+    // load the `data` fields of both `jl.Class`es
     fb += LocalGet(typeDataParam)
-
-    // load ref.cast<typeData> from["__typeData"] (as a JS selection)
+    fb += StructGet(genTypeID.ClassStruct, genFieldID.classData)
     fb += LocalGet(fromParam)
-    fb ++= ctx.stringPool.getConstantStringInstr("__typeData")
-    fb += Call(genFunctionID.jsSelect)
-    fb += RefCast(RefType(typeDataType.heapType))
+    fb += StructGet(genTypeID.ClassStruct, genFieldID.classData)
 
     // delegate to isAssignableFrom
     fb += Call(genFunctionID.isAssignableFrom)
-    fb += Call(genFunctionID.box(BooleanRef))
 
     fb.buildAndAddToModule()
   }
@@ -1461,15 +1423,15 @@ object CoreWasmLib {
     fb.buildAndAddToModule()
   }
 
-  /** `checkCast: (ref typeData), anyref -> anyref`.
+  /** `cast: (ref null jlClass), anyref -> anyref`.
    *
    *  Casts the given value to the given type; subject to undefined behaviors.
+   *
+   *  This is the underlying func for the `Class_cast` operation.
    */
-  private def genCheckCast()(implicit ctx: WasmContext): Unit = {
-    val typeDataType = RefType(genTypeID.typeData)
-
-    val fb = newFunctionBuilder(genFunctionID.checkCast)
-    val typeDataParam = fb.addParam("typeData", typeDataType)
+  private def genCast()(implicit ctx: WasmContext): Unit = {
+    val fb = newFunctionBuilder(genFunctionID.cast)
+    val jlClassParam = fb.addParam("jlClass", RefType.nullable(genTypeID.ClassStruct))
     val valueParam = fb.addParam("value", RefType.anyref)
     fb.setResultType(RefType.anyref)
 
@@ -1482,98 +1444,59 @@ object CoreWasmLib {
     fb.buildAndAddToModule()
   }
 
-  /** `getComponentType: (ref typeData) -> (ref null jlClass)`.
+  /** `newArray: (ref null jlClass), i32 -> (ref jlObject)`.
    *
-   *  This is the underlying func for the `getComponentType()` closure inside class data objects.
+   *  This is the underlying func for the `Class_newArray` operation.
    */
-  private def genGetComponentType()(implicit ctx: WasmContext): Unit = {
+  private def genNewArray()(implicit ctx: WasmContext): Unit = {
     val typeDataType = RefType(genTypeID.typeData)
+    val arrayTypeDataType = RefType(genTypeID.ObjectVTable)
 
-    val fb = newFunctionBuilder(genFunctionID.getComponentType)
-    val typeDataParam = fb.addParam("typeData", typeDataType)
-    fb.setResultType(RefType.nullable(genTypeID.ClassStruct))
-
-    val componentTypeDataLocal = fb.addLocal("componentTypeData", typeDataType)
-
-    fb.block() { nullResultLabel =>
-      // Try and extract non-null component type data
-      fb += LocalGet(typeDataParam)
-      fb += StructGet(genTypeID.typeData, genFieldID.typeData.componentType)
-      fb += BrOnNull(nullResultLabel)
-      // Get the corresponding classOf
-      fb += Call(genFunctionID.getClassOf)
-      fb += Return
-    } // end block nullResultLabel
-    fb += RefNull(HeapType(genTypeID.ClassStruct))
-
-    fb.buildAndAddToModule()
-  }
-
-  /** `newArrayOfThisClass: (ref typeData), anyref -> (ref jlObject)`.
-   *
-   *  This is the underlying func for the `newArrayOfThisClass()` closure inside class data objects.
-   */
-  private def genNewArrayOfThisClass()(implicit ctx: WasmContext): Unit = {
-    val typeDataType = RefType(genTypeID.typeData)
-    val i32ArrayType = RefType(genTypeID.i32Array)
-
-    val fb = newFunctionBuilder(genFunctionID.newArrayOfThisClass)
-    val typeDataParam = fb.addParam("typeData", typeDataType)
-    val lengthsParam = fb.addParam("lengths", RefType.anyref)
+    val fb = newFunctionBuilder(genFunctionID.newArray)
+    val jlClassParam = fb.addParam("jlClass", RefType.nullable(genTypeID.ClassStruct))
+    val lengthParam = fb.addParam("length", Int32)
     fb.setResultType(RefType(genTypeID.ObjectStruct))
 
-    val lengthsLenLocal = fb.addLocal("lengthsLenLocal", Int32)
-    val lengthsValuesLocal = fb.addLocal("lengthsValues", i32ArrayType)
-    val iLocal = fb.addLocal("i", Int32)
+    val componentTypeDataLocal = fb.addLocal("componentTypeData", RefType(genTypeID.typeData))
 
-    // lengthsLen := lengths.length // as a JS field access
-    fb += LocalGet(lengthsParam)
-    fb ++= ctx.stringPool.getConstantStringInstr("length")
-    fb += Call(genFunctionID.jsSelect)
-    fb += Call(genFunctionID.unbox(IntRef))
-    fb += LocalTee(lengthsLenLocal)
+    // componentTypeData := jlClass.data
+    fb += LocalGet(jlClassParam)
+    fb += StructGet(genTypeID.ClassStruct, genFieldID.classData)
+    fb += LocalTee(componentTypeDataLocal)
 
-    // lengthsValues := array.new<i32Array> lengthsLen
-    fb += ArrayNewDefault(genTypeID.i32Array)
-    fb += LocalSet(lengthsValuesLocal)
+    // Load the vtable and itables of the ArrayClass instance we will create
+    fb += I32Const(1)
+    fb += Call(genFunctionID.arrayTypeData) // vtable
+    fb += GlobalGet(genGlobalID.arrayClassITable) // itables
 
-    // i := 0
-    fb += I32Const(0)
-    fb += LocalSet(iLocal)
+    // Load the length
+    fb += LocalGet(lengthParam)
 
-    // while (i != lengthsLen)
-    fb.whileLoop() {
-      fb += LocalGet(iLocal)
-      fb += LocalGet(lengthsLenLocal)
-      fb += I32Ne
-    } {
-      // lengthsValue[i] := lengths[i] (where the rhs is a JS field access)
-
-      fb += LocalGet(lengthsValuesLocal)
-      fb += LocalGet(iLocal)
-
-      fb += LocalGet(lengthsParam)
-      fb += LocalGet(iLocal)
-      fb += RefI31
-      fb += Call(genFunctionID.jsSelect)
-      fb += Call(genFunctionID.unbox(IntRef))
-
-      fb += ArraySet(genTypeID.i32Array)
-
-      // i += 1
-      fb += LocalGet(iLocal)
-      fb += I32Const(1)
-      fb += I32Add
-      fb += LocalSet(iLocal)
+    // switch (componentTypeData.kind)
+    val switchClauseSig = FunctionType(
+      List(arrayTypeDataType, RefType(genTypeID.itables), Int32),
+      List(RefType(genTypeID.ObjectStruct))
+    )
+    fb.switch(switchClauseSig) { () =>
+      // scrutinee
+      fb += LocalGet(componentTypeDataLocal)
+      fb += StructGet(genTypeID.typeData, genFieldID.typeData.kind)
+    }(
+      // case KindPrim => array.new_default underlyingPrimArray; struct.new PrimArray
+      primRefsWithArrayTypes.map { case (primRef, kind) =>
+        List(kind) -> { () =>
+          val arrayTypeRef = ArrayTypeRef(primRef, 1)
+          fb += ArrayNewDefault(genTypeID.underlyingOf(arrayTypeRef))
+          fb += StructNew(genTypeID.forArrayClass(arrayTypeRef))
+          () // required for correct type inference
+        }
+      }: _*
+    ) { () =>
+      // case _ => array.new_default anyrefArray; struct.new ObjectArray
+      val arrayTypeRef = ArrayTypeRef(ClassRef(ObjectClass), 1)
+      fb += ArrayNewDefault(genTypeID.underlyingOf(arrayTypeRef))
+      fb += StructNew(genTypeID.forArrayClass(arrayTypeRef))
     }
-
-    // return newArrayObject(arrayTypeData(typeData, lengthsLen), lengthsValues, 0)
-    fb += LocalGet(typeDataParam)
-    fb += LocalGet(lengthsLenLocal)
-    fb += Call(genFunctionID.arrayTypeData)
-    fb += LocalGet(lengthsValuesLocal)
-    fb += I32Const(0)
-    fb += Call(genFunctionID.newArrayObject)
 
     fb.buildAndAddToModule()
   }
@@ -1830,17 +1753,6 @@ object CoreWasmLib {
      *   }
      * }
      */
-
-    val primRefsWithArrayTypes = List(
-      BooleanRef -> KindBoolean,
-      CharRef -> KindChar,
-      ByteRef -> KindByte,
-      ShortRef -> KindShort,
-      IntRef -> KindInt,
-      LongRef -> KindLong,
-      FloatRef -> KindFloat,
-      DoubleRef -> KindDouble
-    )
 
     // Load the vtable and itable of the resulting array on the stack
     fb += LocalGet(arrayTypeDataParam) // vtable
