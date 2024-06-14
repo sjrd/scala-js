@@ -389,7 +389,7 @@ object Emitter {
     val factory = SymbolRequirement.factory("wasm")
 
     factory.multiple(
-      factory.instantiateClass(ClassClass, AnyArgConstructorName),
+      factory.instantiateClass(ClassClass, NoArgConstructorName),
 
       // TODO Ideally we should not require this, but rather adapt to its absence
       factory.instantiateClass(JSExceptionClass, AnyArgConstructorName),

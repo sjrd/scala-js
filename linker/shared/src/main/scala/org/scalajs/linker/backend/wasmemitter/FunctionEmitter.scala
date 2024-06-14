@@ -1230,6 +1230,34 @@ private class FunctionEmitter private (
       // String.length, introduced in 1.11
       case String_length =>
         fb += wa.Call(genFunctionID.stringLength)
+
+      // Class operations, introduced in 1.17
+      case Class_name =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.Call(genFunctionID.typeDataName)
+      case Class_isPrimitive =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.StructGet(genTypeID.typeData, genFieldID.typeData.kind)
+        fb += wa.I32Const(KindLastPrimitive)
+        fb += wa.I32LeU
+      case Class_isInterface =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.StructGet(genTypeID.typeData, genFieldID.typeData.kind)
+        fb += wa.I32Const(KindInterface)
+        fb += wa.I32Eq
+      case Class_isArray =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.StructGet(genTypeID.typeData, genFieldID.typeData.kind)
+        fb += wa.I32Const(KindArray)
+        fb += wa.I32Eq
+      case Class_componentType =>
+        fb += wa.StructGet(genTypeID.ClassStruct, genFieldID.classData)
+        fb += wa.StructGet(genTypeID.typeData, genFieldID.typeData.componentType)
+        fb += wa.Call(genFunctionID.getClassOfNullable)
+      case Class_superClass =>
+        // FIXME Implement this
+        fb += wa.Drop
+        fb += wa.RefNull(watpe.HeapType.None)
     }
 
     unary.tpe
@@ -1534,6 +1562,11 @@ private class FunctionEmitter private (
       case BinaryOp.Double_<= => wa.F64Le
       case BinaryOp.Double_>  => wa.F64Gt
       case BinaryOp.Double_>= => wa.F64Ge
+
+      case BinaryOp.Class_isInstance       => wa.Call(genFunctionID.isInstance)
+      case BinaryOp.Class_isAssignableFrom => wa.Call(genFunctionID.isAssignableFromExternal)
+      case BinaryOp.Class_cast             => wa.Call(genFunctionID.cast)
+      case BinaryOp.Class_newArray         => wa.Call(genFunctionID.newArray)
     }
 
     fb += operation
