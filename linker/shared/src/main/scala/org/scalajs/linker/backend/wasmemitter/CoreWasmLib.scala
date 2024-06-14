@@ -260,6 +260,7 @@ object CoreWasmLib {
   private def genImports()(implicit ctx: WasmContext): Unit = {
     genTagImports()
     genGlobalImports()
+    genStringBuiltinImports()
     genHelperImports()
   }
 
@@ -296,6 +297,30 @@ object CoreWasmLib {
     addGlobalHelperImport(genGlobalID.bZero, RefType.any)
     addGlobalHelperImport(genGlobalID.emptyString, RefType.any)
     addGlobalHelperImport(genGlobalID.idHashCodeMap, RefType.extern)
+  }
+
+  private def genStringBuiltinImports()(implicit ctx: WasmContext): Unit = {
+    import RefType.{extern, externref}
+
+    def addHelperImport(id: genFunctionID.JSHelperFunctionID,
+        params: List[Type], results: List[Type]): Unit = {
+      val sig = FunctionType(params, results)
+      val typeID = ctx.moduleBuilder.functionTypeToTypeID(sig)
+      ctx.moduleBuilder.addImport(
+        Import(
+          "wasm:js-string",
+          id.toString(), // import name, guaranteed by JSHelperFunctionID
+          ImportDesc.Func(id, OriginalName(id.toString()), typeID)
+        )
+      )
+    }
+
+    addHelperImport(genFunctionID.stringBuiltins.test, List(externref), List(Int32))
+    addHelperImport(genFunctionID.stringBuiltins.fromCharCode, List(Int32), List(extern))
+    addHelperImport(genFunctionID.stringBuiltins.charCodeAt, List(externref, Int32), List(Int32))
+    addHelperImport(genFunctionID.stringBuiltins.length, List(externref), List(Int32))
+    addHelperImport(genFunctionID.stringBuiltins.concat, List(externref, externref), List(extern))
+    addHelperImport(genFunctionID.stringBuiltins.equals, List(externref, externref), List(Int32))
   }
 
   private def genHelperImports()(implicit ctx: WasmContext): Unit = {
@@ -606,6 +631,7 @@ object CoreWasmLib {
     genTestByteOrShort(ByteRef, I32Extend8S)
     genTestByteOrShort(ShortRef, I32Extend16S)
     genStringLiteral()
+    genStringEquals()
     genCreateStringFromData()
     genTypeDataName()
     genCreateClassOf()
@@ -770,6 +796,36 @@ object CoreWasmLib {
     fb.buildAndAddToModule()
   }
 
+  private def genStringEquals()(implicit ctx: WasmContext): Unit = {
+    val fb = newFunctionBuilder(genFunctionID.stringEquals)
+    val aParam = fb.addParam("a", RefType.anyref)
+    val bParam = fb.addParam("b", RefType.anyref)
+    fb.setResultType(Int32)
+
+    fb.block() { falseResultLabel =>
+      fb.block() { aIsNullLabel =>
+        fb += LocalGet(aParam)
+        fb += BrOnNull(aIsNullLabel)
+        fb += ExternConvertAny
+
+        fb += LocalGet(bParam)
+        fb += BrOnNull(falseResultLabel)
+        fb += ExternConvertAny
+
+        fb += Call(genFunctionID.stringBuiltins.equals)
+        fb += Return
+      }
+
+      fb += LocalGet(bParam)
+      fb += RefIsNull
+      fb += Return
+    }
+
+    fb += I32Const(0)
+
+    fb.buildAndAddToModule()
+  }
+
   /** `createStringFromData: (ref array u16) -> (ref any)` (representing a `string`). */
   private def genCreateStringFromData()(implicit ctx: WasmContext): Unit = {
     val dataType = RefType(genTypeID.i16Array)
@@ -780,7 +836,7 @@ object CoreWasmLib {
 
     val lenLocal = fb.addLocal("len", Int32)
     val iLocal = fb.addLocal("i", Int32)
-    val resultLocal = fb.addLocal("result", RefType.any)
+    val resultLocal = fb.addLocal("result", RefType.extern)
 
     // len := data.length
     fb += LocalGet(dataParam)
@@ -793,6 +849,7 @@ object CoreWasmLib {
 
     // result := ""
     fb += GlobalGet(genGlobalID.emptyString)
+    fb += ExternConvertAny
     fb += LocalSet(resultLocal)
 
     fb.loop() { labelLoop =>
@@ -803,6 +860,7 @@ object CoreWasmLib {
       fb.ifThen() {
         // then return result
         fb += LocalGet(resultLocal)
+        fb += AnyConvertExtern
         fb += Return
       }
 
@@ -811,8 +869,8 @@ object CoreWasmLib {
       fb += LocalGet(dataParam)
       fb += LocalGet(iLocal)
       fb += ArrayGetU(genTypeID.i16Array)
-      fb += Call(genFunctionID.charToString)
-      fb += Call(genFunctionID.stringConcat)
+      fb += Call(genFunctionID.stringBuiltins.fromCharCode)
+      fb += Call(genFunctionID.stringBuiltins.concat)
       fb += LocalSet(resultLocal)
 
       // i := i + 1
@@ -872,7 +930,7 @@ object CoreWasmLib {
 
         // <top of stack> := "[", for the CALL to stringConcat near the end
         fb += I32Const('['.toInt)
-        fb += Call(genFunctionID.charToString)
+        fb += Call(genFunctionID.stringBuiltins.fromCharCode)
 
         // componentTypeData := ref_as_non_null(typeData.componentType)
         fb += LocalGet(typeDataParam)
@@ -885,63 +943,66 @@ object CoreWasmLib {
 
         // switch (componentTypeData.kind)
         // the result of this switch is the string that must come after "["
-        fb.switch(RefType.any) { () =>
+        fb.switch(RefType.extern) { () =>
           // scrutinee
           fb += LocalGet(componentTypeDataLocal)
           fb += StructGet(genTypeID.typeData, genFieldID.typeData.kind)
         }(
           List(KindBoolean) -> { () =>
             fb += I32Const('Z'.toInt)
-            fb += Call(genFunctionID.charToString)
+            fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           },
           List(KindChar) -> { () =>
             fb += I32Const('C'.toInt)
-            fb += Call(genFunctionID.charToString)
+            fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           },
           List(KindByte) -> { () =>
             fb += I32Const('B'.toInt)
-            fb += Call(genFunctionID.charToString)
+            fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           },
           List(KindShort) -> { () =>
             fb += I32Const('S'.toInt)
-            fb += Call(genFunctionID.charToString)
+            fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           },
           List(KindInt) -> { () =>
             fb += I32Const('I'.toInt)
-            fb += Call(genFunctionID.charToString)
+            fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           },
           List(KindLong) -> { () =>
             fb += I32Const('J'.toInt)
-            fb += Call(genFunctionID.charToString)
+            fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           },
           List(KindFloat) -> { () =>
             fb += I32Const('F'.toInt)
-            fb += Call(genFunctionID.charToString)
+            fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           },
           List(KindDouble) -> { () =>
             fb += I32Const('D'.toInt)
-            fb += Call(genFunctionID.charToString)
+            fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           },
           List(KindArray) -> { () =>
             // the component type is an array; get its own name
             fb += LocalGet(componentTypeDataLocal)
             fb += Call(genFunctionID.typeDataName)
+            fb += ExternConvertAny
           }
         ) { () =>
           // default: the component type is neither a primitive nor an array;
           // concatenate "L" + <its own name> + ";"
           fb += I32Const('L'.toInt)
-          fb += Call(genFunctionID.charToString)
+          fb += Call(genFunctionID.stringBuiltins.fromCharCode)
           fb += LocalGet(componentTypeDataLocal)
           fb += Call(genFunctionID.typeDataName)
-          fb += Call(genFunctionID.stringConcat)
+          fb += ExternConvertAny
+          fb += Call(genFunctionID.stringBuiltins.concat)
           fb += I32Const(';'.toInt)
-          fb += Call(genFunctionID.charToString)
-          fb += Call(genFunctionID.stringConcat)
+          fb += Call(genFunctionID.stringBuiltins.fromCharCode)
+          fb += Call(genFunctionID.stringBuiltins.concat)
         }
 
         // At this point, the stack contains "[" and the string that must be concatenated with it
-        fb += Call(genFunctionID.stringConcat)
+        fb += Call(genFunctionID.stringBuiltins.concat)
+        fb += AnyConvertExtern
       } {
         // it is not an array; its name is stored in nameData
         for (
@@ -1275,7 +1336,8 @@ object CoreWasmLib {
       },
       List(KindBoxedString) -> { () =>
         fb += LocalGet(valueParam)
-        fb += Call(genFunctionID.isString)
+        fb += ExternConvertAny
+        fb += Call(genFunctionID.stringBuiltins.test)
       },
       // case KindJSType => call typeData.isJSClassInstance(value) or throw if it is null
       List(KindJSType) -> { () =>

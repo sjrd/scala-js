@@ -300,6 +300,15 @@ const scalaJSHelpers = {
   },
 }
 
+const stringBuiltinPolyfills = {
+  test: (x) => typeof x === 'string',
+  fromCharCode: (c) => String.fromCharCode(c),
+  charCodeAt: (s, i) => s.charCodeAt(i),
+  length: (s) => s.length,
+  concat: (a, b) => "" + a + b,
+  equals: (a, b) => a === b,
+};
+
 export async function load(wasmFileURL, importedModules, exportSetters,
     globalRefReaders, globalRefWriters, customJSHelpers) {
 
@@ -311,6 +320,10 @@ export async function load(wasmFileURL, importedModules, exportSetters,
     "__scalaJSGlobalRead": globalRefReaders,
     "__scalaJSGlobalWrite": globalRefWriters,
     "__scalaJSCustomHelpers": customJSHelpers,
+    "wasm:js-string": stringBuiltinPolyfills,
+  };
+  const options = {
+    builtins: ["js-string"],
   };
   const resolvedURL = new URL(wasmFileURL, import.meta.url);
   if (resolvedURL.protocol === 'file:') {
@@ -318,9 +331,9 @@ export async function load(wasmFileURL, importedModules, exportSetters,
     const { readFile } = await import("node:fs/promises");
     const wasmPath = fileURLToPath(resolvedURL);
     const body = await readFile(wasmPath);
-    return WebAssembly.instantiate(body, importsObj);
+    return WebAssembly.instantiate(body, importsObj, options);
   } else {
-    return await WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj);
+    return await WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj, options);
   }
 }
     """

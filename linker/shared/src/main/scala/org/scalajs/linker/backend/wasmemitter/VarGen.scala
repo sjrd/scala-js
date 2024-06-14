@@ -222,6 +222,7 @@ object VarGen {
 
     case object createStringFromData extends FunctionID
     case object stringLiteral extends FunctionID
+    case object stringEquals extends FunctionID
     case object typeDataName extends FunctionID
     case object createClassOf extends FunctionID
     case object getClassOf extends FunctionID
@@ -250,6 +251,17 @@ object VarGen {
     }
 
     case object genericArrayCopy extends FunctionID
+
+    // String builtins
+
+    object stringBuiltins {
+      case object test extends JSHelperFunctionID
+      case object fromCharCode extends JSHelperFunctionID
+      case object charCodeAt extends JSHelperFunctionID
+      case object length extends JSHelperFunctionID
+      case object concat extends JSHelperFunctionID
+      case object equals extends JSHelperFunctionID
+    }
   }
 
   object genFieldID {
