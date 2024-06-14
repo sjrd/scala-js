@@ -310,6 +310,15 @@ const scalaJSHelpers = {
   },
 }
 
+const stringBuiltinPolyfills = {
+  test: (x) => typeof x === 'string',
+  fromCharCode: (c) => String.fromCharCode(c),
+  charCodeAt: (s, i) => s.charCodeAt(i),
+  length: (s) => s.length,
+  concat: (a, b) => "" + a + b,
+  equals: (a, b) => a === b,
+};
+
 export function load(wasmFileURL, importedModules, exportSetters, globalRefReaders, globalRefWriters, customJSHelpers) {
   const myScalaJSHelpers = { ...scalaJSHelpers, idHashCodeMap: new WeakMap() };
   const importsObj = {
@@ -319,6 +328,10 @@ export function load(wasmFileURL, importedModules, exportSetters, globalRefReade
     "__scalaJSGlobalRead": globalRefReaders,
     "__scalaJSGlobalWrite": globalRefWriters,
     "__scalaJSCustomHelpers": customJSHelpers,
+    "wasm:js-string": stringBuiltinPolyfills,
+  };
+  const options = {
+    builtins: ["js-string"],
   };
   const resolvedURL = new URL(wasmFileURL, import.meta.url);
   let wasmModulePromise;
@@ -326,11 +339,11 @@ export function load(wasmFileURL, importedModules, exportSetters, globalRefReade
     const wasmPath = import("node:url").then((url) => url.fileURLToPath(resolvedURL))
     wasmModulePromise = import("node:fs").then((fs) => {
       return wasmPath.then((path) => {
-        return WebAssembly.instantiate(fs.readFileSync(path), importsObj);
+        return WebAssembly.instantiate(fs.readFileSync(path), importsObj, options);
       });
     });
   } else {
-    wasmModulePromise = WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj);
+    wasmModulePromise = WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj, options);
   }
   return wasmModulePromise;
 }

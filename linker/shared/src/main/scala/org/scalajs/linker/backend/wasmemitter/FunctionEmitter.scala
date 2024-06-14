@@ -1234,7 +1234,8 @@ private class FunctionEmitter private (
 
       // String.length, introduced in 1.11
       case String_length =>
-        fb += wa.Call(genFunctionID.stringLength)
+        fb += wa.ExternConvertAny
+        fb += wa.Call(genFunctionID.stringBuiltins.length)
 
       // Class operations, introduced in 1.17
       case Class_name =>
@@ -1447,9 +1448,10 @@ private class FunctionEmitter private (
       // New in 1.11
       case BinaryOp.String_charAt =>
         genTree(binary.lhs, StringType) // push the string
+        fb += wa.ExternConvertAny
         genTree(binary.rhs, IntType) // push the index
         markPosition(binary)
-        fb += wa.Call(genFunctionID.stringCharAt)
+        fb += wa.Call(genFunctionID.stringBuiltins.charCodeAt)
         CharType
 
       case _ =>
@@ -1463,6 +1465,12 @@ private class FunctionEmitter private (
         fb += wa.I32Const(1)
         fb += wa.I32Xor
       }
+    }
+
+    def isStringType(tpe: Type): Boolean = tpe match {
+      case StringType                  => true
+      case ClassType(BoxedStringClass) => true
+      case _                           => false
     }
 
     val lhsType = binary.lhs.tpe
@@ -1483,6 +1491,12 @@ private class FunctionEmitter private (
       genTree(binary.rhs, NoType) // no-op if it is actually a Null() literal
       markPosition(binary)
       fb += wa.RefIsNull
+      maybeGenInvert()
+      BooleanType
+    } else if (isStringType(lhsType) && isStringType(rhsType)) {
+      genTree(binary.lhs, ClassType(BoxedStringClass))
+      genTree(binary.rhs, ClassType(BoxedStringClass))
+      fb += wa.Call(genFunctionID.stringEquals)
       maybeGenInvert()
       BooleanType
     } else {
@@ -1679,7 +1693,8 @@ private class FunctionEmitter private (
             case BooleanType =>
               fb += wa.Call(genFunctionID.booleanToString)
             case CharType =>
-              fb += wa.Call(genFunctionID.charToString)
+              fb += wa.Call(genFunctionID.stringBuiltins.fromCharCode)
+              fb += wa.AnyConvertExtern
             case ByteType | ShortType | IntType =>
               fb += wa.Call(genFunctionID.intToString)
             case LongType =>
@@ -1726,9 +1741,12 @@ private class FunctionEmitter private (
 
       case _ =>
         genToString(binary.lhs)
+        fb += wa.ExternConvertAny
         genToString(binary.rhs)
+        fb += wa.ExternConvertAny
         markPosition(binary)
-        fb += wa.Call(genFunctionID.stringConcat)
+        fb += wa.Call(genFunctionID.stringBuiltins.concat)
+        fb += wa.AnyConvertExtern
     }
 
     StringType
@@ -1744,7 +1762,8 @@ private class FunctionEmitter private (
         case UndefType =>
           fb += wa.Call(genFunctionID.isUndef)
         case StringType =>
-          fb += wa.Call(genFunctionID.isString)
+          fb += wa.ExternConvertAny
+          fb += wa.Call(genFunctionID.stringBuiltins.test)
 
         case testType: PrimTypeWithRef =>
           testType match {
