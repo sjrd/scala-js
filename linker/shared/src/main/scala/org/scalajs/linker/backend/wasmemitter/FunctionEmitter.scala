@@ -3325,6 +3325,14 @@ private class FunctionEmitter private (
         fb += value.wasmInstr
         value.tpe
 
+      case value @ WasmTransients.WasmSubstring(string, start, end) =>
+        genTree(string, ClassType(BoxedStringClass, nullable = false))
+        genTree(start, IntType)
+        genTree(end, IntType)
+        markPosition(tree)
+        fb += wa.Call(genFunctionID.stringBuiltins.substring)
+        value.tpe
+
       case other =>
         throw new AssertionError(s"Unknown transient: $other")
     }
