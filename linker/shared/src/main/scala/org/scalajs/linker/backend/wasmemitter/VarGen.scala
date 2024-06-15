@@ -260,6 +260,7 @@ object VarGen {
       case object charCodeAt extends JSHelperFunctionID
       case object length extends JSHelperFunctionID
       case object concat extends JSHelperFunctionID
+      case object substring extends JSHelperFunctionID
       case object equals extends JSHelperFunctionID
     }
   }

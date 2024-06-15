@@ -320,6 +320,7 @@ object CoreWasmLib {
     addHelperImport(genFunctionID.stringBuiltins.charCodeAt, List(externref, Int32), List(Int32))
     addHelperImport(genFunctionID.stringBuiltins.length, List(externref), List(Int32))
     addHelperImport(genFunctionID.stringBuiltins.concat, List(externref, externref), List(extern))
+    addHelperImport(genFunctionID.stringBuiltins.substring, List(externref, Int32, Int32), List(extern))
     addHelperImport(genFunctionID.stringBuiltins.equals, List(externref, externref), List(Int32))
   }
 

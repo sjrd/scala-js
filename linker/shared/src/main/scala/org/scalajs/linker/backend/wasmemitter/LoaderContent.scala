@@ -306,6 +306,13 @@ const stringBuiltinPolyfills = {
   charCodeAt: (s, i) => s.charCodeAt(i),
   length: (s) => s.length,
   concat: (a, b) => "" + a + b,
+  substring: (str, start, end) => {
+    start >>>= 0;
+    end >>>= 0;
+    if (start > end || start > str.length)
+      return "";
+    return str.substring(start, end);
+  },
   equals: (a, b) => a === b,
 };
 

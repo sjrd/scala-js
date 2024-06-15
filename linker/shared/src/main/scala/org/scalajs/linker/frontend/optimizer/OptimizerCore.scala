@@ -3085,6 +3085,25 @@ private[optimizer] abstract class OptimizerCore(
       case LongBitsToDouble =>
         contTree(wasmUnaryOp(WasmUnaryOp.F64ReinterpretI64, targs.head))
 
+      // java.lang.String -- TODO: handle stringIndexOutOfBounds
+
+      case StringSubstringStart =>
+        assert(semantics.stringIndexOutOfBounds == CheckedBehavior.Unchecked,
+            s"Optimizing jl.String.substring for Wasm but stringIndexOutOfBounds is not unchecked")
+        contTree(Transient(WasmSubstring(
+          finishTransformExpr(checkNotNull(optTReceiver.get)),
+          finishTransformExpr(targs.head),
+          IntLiteral(-1) // unsigned max value
+        )))
+      case StringSubstringStartEnd =>
+        assert(semantics.stringIndexOutOfBounds == CheckedBehavior.Unchecked,
+            s"Optimizing jl.String.substring for Wasm but stringIndexOutOfBounds is not unchecked")
+        contTree(Transient(WasmSubstring(
+          finishTransformExpr(checkNotNull(optTReceiver.get)),
+          finishTransformExpr(targs(0)),
+          finishTransformExpr(targs(1))
+        )))
+
       // java.lang.Math
 
       case MathAbsFloat =>
@@ -6523,7 +6542,10 @@ private[optimizer] object OptimizerCore {
     final val DoubleToLongBits = IntBitsToFloat + 1
     final val LongBitsToDouble = DoubleToLongBits + 1
 
-    final val MathAbsFloat = LongBitsToDouble + 1
+    final val StringSubstringStart = LongBitsToDouble + 1
+    final val StringSubstringStartEnd = StringSubstringStart + 1
+
+    final val MathAbsFloat = StringSubstringStartEnd + 1
     final val MathAbsDouble = MathAbsFloat + 1
     final val MathCeil = MathAbsDouble + 1
     final val MathFloor = MathCeil + 1
@@ -6655,6 +6677,10 @@ private[optimizer] object OptimizerCore {
         ClassName("java.lang.Double$") -> List(
             m("doubleToLongBits", List(D), J) -> DoubleToLongBits,
             m("longBitsToDouble", List(J), D) -> LongBitsToDouble
+        ),
+        ClassName("java.lang.String") -> List(
+            m("substring", List(I), StringClassRef) -> StringSubstringStart,
+            m("substring", List(I, I), StringClassRef) -> StringSubstringStartEnd,
         ),
         ClassName("java.lang.Math$") -> List(
             m("abs", List(F), F) -> MathAbsFloat,
