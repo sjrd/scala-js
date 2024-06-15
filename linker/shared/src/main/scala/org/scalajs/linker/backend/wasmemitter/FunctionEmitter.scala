@@ -1454,6 +1454,20 @@ private class FunctionEmitter private (
         fb += wa.Call(genFunctionID.stringBuiltins.charCodeAt)
         CharType
 
+      // Class operations for which genTreeAuto would not do the right thing
+      case BinaryOp.Class_isInstance =>
+        genTreeAuto(binary.lhs)
+        genTree(binary.rhs, AnyType)
+        markPosition(binary)
+        fb += wa.Call(genFunctionID.isInstance)
+        BooleanType
+      case BinaryOp.Class_cast =>
+        genTreeAuto(binary.lhs)
+        genTree(binary.rhs, AnyType)
+        markPosition(binary)
+        fb += wa.Call(genFunctionID.cast)
+        AnyType
+
       case _ =>
         genElementaryBinaryOp(binary)
     }
@@ -1582,9 +1596,7 @@ private class FunctionEmitter private (
       case BinaryOp.Double_>  => wa.F64Gt
       case BinaryOp.Double_>= => wa.F64Ge
 
-      case BinaryOp.Class_isInstance       => wa.Call(genFunctionID.isInstance)
       case BinaryOp.Class_isAssignableFrom => wa.Call(genFunctionID.isAssignableFromExternal)
-      case BinaryOp.Class_cast             => wa.Call(genFunctionID.cast)
       case BinaryOp.Class_newArray         => wa.Call(genFunctionID.newArray)
     }
 
