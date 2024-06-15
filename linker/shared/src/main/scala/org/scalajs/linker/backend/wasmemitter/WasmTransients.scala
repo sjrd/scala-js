@@ -206,4 +206,41 @@ object WasmTransients {
         DoubleType
     }
   }
+
+  /** The Wasm JS string builtin `substring`.
+   *
+   *  Evaluation semantics are as follows:
+   *
+   *  1. Let `stringV`, `startV` and `endV` be the result of evaluating
+   *     `string`, `start` and `end`, in that order. `startV` and `endV` are
+   *     interpreted as unsigned integers.
+   *  2. If `stringV eq null`, UB (i.e., this transient *assumes* that
+   *     `stringV` is not null).
+   *  3. If `startV > endV` or if `startV > stringV.length`, return `""`.
+   *  4. Let `endVClamped` be the minimum of `endV` and `stringV.length`.
+   *  5. Return the substring of `stringV` in the range `[startV, endVClamped)`.
+   */
+  final case class WasmSubstring(string: Tree, start: Tree, end: Tree)
+      extends Transient.Value {
+    import WasmBinaryOp._
+
+    val tpe: Type = StringType
+
+    def traverse(traverser: Traverser): Unit = {
+      traverser.traverse(string)
+      traverser.traverse(start)
+      traverser.traverse(end)
+    }
+
+    def transform(transformer: Transformer, isStat: Boolean)(
+        implicit pos: Position): Tree = {
+      Transient(WasmSubstring(transformer.transformExpr(string),
+          transformer.transformExpr(start), transformer.transformExpr(end)))
+    }
+
+    def printIR(out: IRTreePrinter): Unit = {
+      out.print("$substring")
+      out.printArgs(List(string, start, end))
+    }
+  }
 }
