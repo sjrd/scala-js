@@ -322,13 +322,14 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
 
       tree match {
         // new AnonFunctionN(closure)  -->  closure
-        case New(AnonFunctionNClass(n), _, List(closure)) =>
+        case New(TypedFunctionNClass(n), _, List(closure)) =>
           closure
 
         // someFunctionN.apply(args)  -->  someFunctionN(args)
-        case Apply(ApplyFlags.empty, fun, MethodIdent(FunctionApplyMethodName(n)), args)
+        case Apply(flags, fun, MethodIdent(FunctionApplyMethodName(n)), args)
             if isFunctionNType(n, fun.tpe) =>
-          JSFunctionApply(fun, args)
+          //JSFunctionApply(fun, args)
+          ApplyTypedClosure(flags, fun, args)
 
         // <= 2.12 : toJSVarArgs(jsArrayOps(jsArray).toSeq) -> jsArray
         case IntrinsicCall(ScalaJSRuntimeMod, `toJSVarArgsReadOnlyMethodName`,
@@ -483,6 +484,10 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
           Closure(arrow, transformParamDefs(captureParams), transformParamDefs(params),
               restParam, body, captureValues)
 
+        case TypedClosure(captureParams, params, resultType, body, captureValues) =>
+          TypedClosure(transformParamDefs(captureParams), transformParamDefs(params),
+              transformType(resultType), body, captureValues)
+
         case _ =>
           tree
       }
@@ -526,11 +531,16 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
     }
 
     private def transformClassRef(cls: ClassRef)(
-        implicit pos: Position): ClassRef = {
-      if (jsTypes.contains(cls.className))
+        implicit pos: Position): TypeRef = {
+      if (jsTypes.contains(cls.className)) {
         ClassRef(ObjectClass)
-      else
-        ClassRef(transformClassName(cls.className))
+      } else {
+        cls.className match {
+          case FunctionNClass(n)      => TypedClosureTypeRefs(n)
+          case TypedFunctionNClass(n) => TypedClosureTypeRefs(n)
+          case className              => ClassRef(transformClassName(className))
+        }
+      }
     }
 
     private def transformArrayTypeRef(typeRef: ArrayTypeRef)(
@@ -551,6 +561,9 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
       case typeRef: PrimRef      => typeRef
       case typeRef: ClassRef     => transformClassRef(typeRef)
       case typeRef: ArrayTypeRef => transformArrayTypeRef(typeRef)
+
+      case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
+        ClosureTypeRef(paramTypeRefs.map(transformTypeRef(_)), transformTypeRef(resultTypeRef))
     }
 
     private def postTransformChecks(classDef: ClassDef): Unit = {
@@ -570,6 +583,10 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
         case ClassType(ObjectClass) =>
           // In java.lang.Object iself, there are ClassType(ObjectClass) that must be preserved as is.
           tpe
+        case ClassType(FunctionNClass(n)) =>
+          TypedClosureTypes(n)
+        case ClassType(TypedFunctionNClass(n)) =>
+          TypedClosureTypes(n)
         case ClassType(cls) =>
           transformClassName(cls) match {
             case ObjectClass => AnyType
@@ -577,7 +594,9 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
           }
         case ArrayType(arrayTypeRef) =>
           ArrayType(transformArrayTypeRef(arrayTypeRef))
-        case _ =>
+        case ClosureType(paramTypes, resultType) =>
+          ClosureType(paramTypes.map(transformType(_)), transformType(resultType))
+        case AnyType | _:PrimType | _:RecordType =>
           tpe
       }
     }
@@ -662,6 +681,15 @@ object JavalibIRCleaner {
   private val AnonFunctionNClasses: IndexedSeq[ClassName] =
     (0 to MaxFunctionArity).map(n => ClassName(s"scala.scalajs.runtime.AnonFunction$n"))
 
+  private val TypedFunctionNClasses: IndexedSeq[ClassName] =
+    (0 to MaxFunctionArity).map(n => ClassName(s"scala.scalajs.runtime.TypedFunction$n"))
+
+  private val TypedClosureTypes: IndexedSeq[ClosureType] =
+    (0 to MaxFunctionArity).map(n => ClosureType(List.fill(n)(AnyType), AnyType))
+
+  private val TypedClosureTypeRefs: IndexedSeq[ClosureTypeRef] =
+    (0 to MaxFunctionArity).map(n => ClosureTypeRef(List.fill(n)(ClassRef(ObjectClass)), ClassRef(ObjectClass)))
+
   private val enableJSNumberOpsDoubleMethodName =
     MethodName("enableJSNumberOps", List(DoubleRef), ClassRef(JSNumberOps))
   private val enableJSNumberOpsIntMethodName =
@@ -705,6 +733,15 @@ object JavalibIRCleaner {
     }
   }
 
+  private object FunctionNClass {
+    private val FunctionNClassToN: Map[ClassName, Int] =
+      FunctionNClasses.zipWithIndex.toMap
+
+    def apply(n: Int): ClassName = FunctionNClasses(n)
+
+    def unapply(cls: ClassName): Option[Int] = FunctionNClassToN.get(cls)
+  }
+
   private object AnonFunctionNClass {
     private val AnonFunctionNClassToN: Map[ClassName, Int] =
       AnonFunctionNClasses.zipWithIndex.toMap
@@ -712,6 +749,15 @@ object JavalibIRCleaner {
     def apply(n: Int): ClassName = AnonFunctionNClasses(n)
 
     def unapply(cls: ClassName): Option[Int] = AnonFunctionNClassToN.get(cls)
+  }
+
+  private object TypedFunctionNClass {
+    private val TypedFunctionNClassToN: Map[ClassName, Int] =
+      TypedFunctionNClasses.zipWithIndex.toMap
+
+    def apply(n: Int): ClassName = TypedFunctionNClasses(n)
+
+    def unapply(cls: ClassName): Option[Int] = TypedFunctionNClassToN.get(cls)
   }
 
   private object FunctionApplyMethodName {
@@ -725,17 +771,17 @@ object JavalibIRCleaner {
 
   private def isFunctionNType(n: Int, tpe: Type): Boolean = tpe match {
     case ClassType(cls) =>
-      cls == FunctionNClasses(n) || cls == AnonFunctionNClasses(n)
+      cls == FunctionNClasses(n) || cls == AnonFunctionNClasses(n) || cls == TypedFunctionNClasses(n)
     case _ =>
       false
   }
 
   private val ClassNameSubstitutions: Map[ClassName, ClassName] = {
-    val functionTypePairs = for {
+    /*val functionTypePairs = for {
       funClass <- FunctionNClasses ++ AnonFunctionNClasses
     } yield {
       funClass -> ObjectClass
-    }
+    }*/
 
     val refBaseNames =
       List("Boolean", "Char", "Byte", "Short", "Int", "Long", "Float", "Double", "Object")
@@ -760,7 +806,7 @@ object JavalibIRCleaner {
       ClassName("scala.MatchError") -> ClassName("java.lang.AssertionError"),
     )
 
-    val allPairs = functionTypePairs ++ refPairs ++ tuplePairs ++ otherPairs
+    val allPairs = /*unctionTypePairs ++*/ refPairs ++ tuplePairs ++ otherPairs
     allPairs.toMap
   }
 }

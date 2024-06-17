@@ -310,6 +310,12 @@ object Hashers {
           mixMethodIdent(method)
           mixTrees(args)
 
+        case ApplyTypedClosure(flags, fun, args) =>
+          mixTag(TagApplyTypedClosure)
+          mixInt(ApplyFlags.toBits(flags))
+          mixTree(fun)
+          mixTrees(args)
+
         case UnaryOp(op, lhs) =>
           mixTag(TagUnaryOp)
           mixInt(op)
@@ -527,6 +533,10 @@ object Hashers {
           mixTag(TagClassOf)
           mixTypeRef(typeRef)
 
+        case NullTypedClosure(tpe) =>
+          mixTag(TagNullTypedClosure)
+          mixType(tpe)
+
         case VarRef(ident) =>
           mixTag(TagVarRef)
           mixLocalIdent(ident)
@@ -542,6 +552,14 @@ object Hashers {
           mixParamDefs(captureParams)
           mixParamDefs(params)
           restParam.foreach(mixParamDef(_))
+          mixTree(body)
+          mixTrees(captureValues)
+
+        case TypedClosure(captureParams, params, resultType, body, captureValues) =>
+          mixTag(TagTypedClosure)
+          mixParamDefs(captureParams)
+          mixParamDefs(params)
+          mixType(resultType)
           mixTree(body)
           mixTrees(captureValues)
 
@@ -597,11 +615,19 @@ object Hashers {
       case typeRef: ArrayTypeRef =>
         mixTag(TagArrayTypeRef)
         mixArrayTypeRef(typeRef)
+      case typeRef: ClosureTypeRef =>
+        mixTag(TagClosureTypeRef)
+        mixClosureTypeRef(typeRef)
     }
 
     def mixArrayTypeRef(arrayTypeRef: ArrayTypeRef): Unit = {
       mixTypeRef(arrayTypeRef.base)
       mixInt(arrayTypeRef.dimensions)
+    }
+
+    def mixClosureTypeRef(closureTypeRef: ClosureTypeRef): Unit = {
+      closureTypeRef.paramTypeRefs.foreach(mixTypeRef(_))
+      mixTypeRef(closureTypeRef.resultTypeRef)
     }
 
     def mixType(tpe: Type): Unit = tpe match {
@@ -628,6 +654,11 @@ object Hashers {
         mixTag(TagArrayType)
         mixArrayTypeRef(arrayTypeRef)
 
+      case ClosureType(paramTypes, resultType) =>
+        mixTag(TagClosureType)
+        mixTypes(paramTypes)
+        mixType(resultType)
+
       case RecordType(fields) =>
         mixTag(TagRecordType)
         for (RecordType.Field(name, originalName, tpe, mutable) <- fields) {
@@ -637,6 +668,9 @@ object Hashers {
           mixBoolean(mutable)
         }
     }
+
+    def mixTypes(tpes: List[Type]): Unit =
+      tpes.foreach(mixType)
 
     def mixLocalIdent(ident: LocalIdent): Unit = {
       mixPos(ident.pos)
