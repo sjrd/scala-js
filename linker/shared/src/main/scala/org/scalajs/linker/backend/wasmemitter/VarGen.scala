@@ -335,11 +335,16 @@ object VarGen {
 
   object genFieldID {
     private final case class ClassInstanceFieldID(name: IRFieldName) extends FieldID
+    private final case class ClassInstanceFieldClosureDataID(name: IRFieldName) extends FieldID
+    private final case class ClassInstanceFieldClosureFunID(name: IRFieldName) extends FieldID
     private final case class MethodTableEntryID(methodName: MethodName) extends FieldID
     private final case class CaptureParamID(i: Int) extends FieldID
 
     def forClassInstanceField(name: IRFieldName): FieldID =
       ClassInstanceFieldID(name)
+
+    def forClassInstanceFieldClosure(name: IRFieldName): (FieldID, FieldID) =
+      (ClassInstanceFieldClosureDataID(name), ClassInstanceFieldClosureFunID(name))
 
     def forMethodTableEntry(name: MethodName): FieldID =
       MethodTableEntryID(name)

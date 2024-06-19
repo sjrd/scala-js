@@ -38,7 +38,6 @@ import org.scalajs.linker.backend.javascript.{Trees => js}
 
 import VarGen._
 import org.scalajs.ir.OriginalName
-import org.scalajs.linker.backend.wasmemitter.TypeTransformer.transformSingleType
 
 final class WasmContext(
     classInfo: Map[ClassName, WasmContext.ClassInfo],
@@ -51,7 +50,7 @@ final class WasmContext(
   private val tableFunctionTypes = mutable.HashMap.empty[MethodName, wanme.TypeID]
   private val constantStringGlobals = LinkedHashMap.empty[String, StringData]
   private val closureDataTypes = LinkedHashMap.empty[List[Type], wanme.TypeID]
-  private val typedClosureTypes = LinkedHashMap.empty[ClosureType, (wanme.TypeID, wanme.TypeID)]
+  private val typedClosureTypes = LinkedHashMap.empty[ClosureType, wanme.TypeID]
 
   val globalRefsRead = mutable.LinkedHashSet.empty[String]
   val globalRefsWritten = mutable.LinkedHashSet.empty[String]
@@ -143,7 +142,7 @@ final class WasmContext(
     tableFunctionTypes.getOrElseUpdate(
       normalizedName, {
         val typeID = genTypeID.forTableFunctionType(normalizedName)
-        val regularParamTyps = normalizedName.paramTypeRefs.map { typeRef =>
+        val regularParamTyps = normalizedName.paramTypeRefs.flatMap { typeRef =>
           TypeTransformer.transformParamType(inferTypeFromTypeRef(typeRef))(this)
         }
         val resultType = TypeTransformer.transformResultType(
@@ -193,11 +192,13 @@ final class WasmContext(
     closureDataTypes.getOrElseUpdate(
       captureParamTypes, {
         val fields: List[watpe.StructField] = {
-          for ((tpe, i) <- captureParamTypes.zipWithIndex) yield {
+          val flattenedTypes =
+            captureParamTypes.flatMap(TypeTransformer.transformParamType(_)(this))
+          for ((tpe, i) <- flattenedTypes.zipWithIndex) yield {
             watpe.StructField(
               genFieldID.captureParam(i),
               NoOriginalName,
-              TypeTransformer.transformParamType(tpe)(this),
+              tpe,
               isMutable = false
             )
           }
@@ -211,37 +212,17 @@ final class WasmContext(
     )
   }
 
-  def genTypedClosureStructType(tpe: ClosureType): (wanme.TypeID, wanme.TypeID) = {
+  def genTypedClosureFunType(tpe: ClosureType): wanme.TypeID = {
     typedClosureTypes.getOrElseUpdate(tpe, {
       implicit val ctx = this
 
       val funType = watpe.FunctionType(
-        watpe.RefType.struct :: tpe.paramTypes.map(TypeTransformer.transformParamType(_)),
+        watpe.RefType.structref :: tpe.paramTypes.flatMap(TypeTransformer.transformParamType(_)),
         TypeTransformer.transformResultType(tpe.resultType)
       )
       val funTypeID = genTypeID.forClosureFunType(tpe)
       mainRecType.addSubType(funTypeID, OriginalName("fun" + tpe.show), funType)
-
-      val fields: List[watpe.StructField] = List(
-        watpe.StructField(
-          genFieldID.typedClosure.fun,
-          OriginalName("fun"),
-          watpe.RefType(funTypeID),
-          isMutable = false
-        ),
-        watpe.StructField(
-          genFieldID.typedClosure.data,
-          OriginalName("data"),
-          watpe.RefType.struct,
-          isMutable = false
-        )
-      )
-
-      val structTypeID = genTypeID.forClosureType(tpe)
-      val structType = watpe.StructType(fields)
-      mainRecType.addSubType(structTypeID, OriginalName(tpe.show), structType)
-
-      (funTypeID, structTypeID)
+      funTypeID
     })
   }
 

@@ -44,30 +44,8 @@ object TypeTransformer {
    *  value of such a parameter is always unreachable. It is up to the reading
    *  codegen to handle this case.
    */
-  def transformParamType(tpe: Type)(implicit ctx: WasmContext): watpe.Type = {
+  def transformParamType(tpe: Type)(implicit ctx: WasmContext): List[watpe.Type] = {
     tpe match {
-      case NothingType   => watpe.Int32
-      case _: RecordType => throw new AssertionError(s"Unexpected $tpe for parameter")
-      case _             => transformSingleType(tpe)
-    }
-  }
-
-  /** Transforms an IR type for a local definition (including parameters).
-   *
-   *  `void` is not a valid input for this method. It is rejected by the
-   *  `ClassDefChecker`.
-   *
-   *  `RecordType`s are flattened.
-   *
-   *  `nothing` translates to `i32` in this specific case, because it is a valid
-   *  type for a `ParamDef` or `VarDef`. Obviously, assigning a value to a local
-   *  of type `nothing` (either locally or by calling the method for a param)
-   *  can never complete, and therefore reading the value of such a local is
-   *  always unreachable. It is up to the reading codegen to handle this case.
-   */
-  def transformLocalType(tpe: Type)(implicit ctx: WasmContext): List[watpe.Type] = {
-    tpe match {
-      case NoType      => throw new AssertionError(s"Unexpected $tpe for local")
       case NothingType => List(watpe.Int32)
       case _           => transformResultType(tpe)
     }
@@ -89,10 +67,17 @@ object TypeTransformer {
    */
   def transformResultType(tpe: Type)(implicit ctx: WasmContext): List[watpe.Type] = {
     tpe match {
-      case NoType             => Nil
-      case NothingType        => Nil
-      case RecordType(fields) => fields.flatMap(f => transformResultType(f.tpe))
-      case _                  => List(transformSingleType(tpe))
+      case NoType | NothingType =>
+        Nil
+      case tpe: ClosureType =>
+        List(
+          watpe.RefType.structref,
+          watpe.RefType.nullable(ctx.genTypedClosureFunType(tpe))
+        )
+      case RecordType(fields) =>
+        fields.flatMap(f => transformResultType(f.tpe))
+      case _ =>
+        List(transformSingleType(tpe))
     }
   }
 
@@ -101,8 +86,8 @@ object TypeTransformer {
    *  This method cannot be used for `void` and `nothing`, since they have no corresponding Wasm
    *  value type.
    *
-   *  Likewise, it cannot be used for `RecordType`s, since they must be
-   *  flattened into several Wasm types.
+   *  Likewise, it cannot be used for `ClosureType`s nor `RecordType`s, since
+   *  they must be flattened into several Wasm types.
    */
   def transformSingleType(tpe: Type)(implicit ctx: WasmContext): watpe.Type = {
     tpe match {
@@ -114,7 +99,7 @@ object TypeTransformer {
         watpe.RefType.nullable(genTypeID.forArrayClass(tpe.arrayTypeRef))
 
       case tpe: ClosureType =>
-        watpe.RefType.nullable(ctx.genTypedClosureStructType(tpe)._2)
+        throw new AssertionError(s"Unexpected record type $tpe")
 
       case RecordType(fields) =>
         throw new AssertionError(s"Unexpected record type $tpe")

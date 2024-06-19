@@ -58,7 +58,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
         origName,
         isMutable = true,
         transformFieldType(ftpe),
-        wa.Expr(List(genZeroOf(ftpe)))
+        wa.Expr(genZeroOf(ftpe))
       )
       ctx.addGlobal(global)
     }
@@ -317,14 +317,40 @@ class ClassEmitter(coreSpec: CoreSpec) {
       watpe.RefType.nullable(genTypeID.itables),
       isMutable = false
     )
-    val fields = classInfo.allFieldDefs.map { field =>
-      watpe.StructField(
-        genFieldID.forClassInstanceField(field.name.name),
-        makeOriginalName(ns.InstanceField, field.name.name),
-        transformFieldType(field.ftpe),
-        isMutable = true // initialized by the constructors, so always mutable at the Wasm level
-      )
+
+    val fields = classInfo.allFieldDefs.flatMap { field =>
+      field.ftpe match {
+        case ftpe: ClosureType =>
+          val (dataFieldID, funFieldID) =
+            genFieldID.forClassInstanceFieldClosure(field.name.name)
+          val funTypeID = ctx.genTypedClosureFunType(ftpe)
+          List(
+            watpe.StructField(
+              dataFieldID,
+              makeOriginalName(ns.InstanceField, field.name.name, dotDataUTF8String),
+              watpe.RefType.structref,
+              isMutable = true
+            ),
+            watpe.StructField(
+              funFieldID,
+              makeOriginalName(ns.InstanceField, field.name.name, dotFunUTF8String),
+              watpe.RefType.nullable(funTypeID),
+              isMutable = true
+            )
+          )
+
+        case _ =>
+          List(
+            watpe.StructField(
+              genFieldID.forClassInstanceField(field.name.name),
+              makeOriginalName(ns.InstanceField, field.name.name),
+              transformFieldType(field.ftpe),
+              isMutable = true // initialized by the constructors, so always mutable at the Wasm level
+            )
+          )
+      }
     }
+
     val jlClassDataField = if (className == ClassClass) {
       // Inject the magic `data` field
       watpe.StructField(
@@ -521,7 +547,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       fb += wa.RefNull(watpe.HeapType(genTypeID.itables))
 
     classInfo.allFieldDefs.foreach { f =>
-      fb += genZeroOf(f.ftpe)
+      fb ++= genZeroOf(f.ftpe)
     }
     for (dataParam <- dataParamOpt)
       fb += wa.LocalGet(dataParam)
@@ -748,7 +774,12 @@ class ClassEmitter(coreSpec: CoreSpec) {
         clazz.pos
       )
       val classCaptureParams = jsClassCaptures.map { cc =>
-        fb.addParam("cc." + cc.name.name.nameString, transformParamType(cc.ptpe))
+        transformParamType(cc.ptpe) match {
+          case singleType :: Nil =>
+            fb.addParam("cc." + cc.name.name.nameString, singleType)
+          case tpes =>
+            throw new AssertionError(s"Unexpected multiple types for class capture: $tpes")
+        }
       }
       fb.setResultType(watpe.RefType.any)
 
@@ -1153,9 +1184,16 @@ class ClassEmitter(coreSpec: CoreSpec) {
         pos
       )
       val receiverParam = fb.addParam(thisOriginalName, watpe.RefType.any)
-      val argParams = method.args.map { arg =>
-        val origName = arg.originalName.orElse(arg.name.name)
-        fb.addParam(origName, TypeTransformer.transformParamType(arg.ptpe))
+      val argParams = method.args.flatMap { arg =>
+        val origName = arg.originalName.getOrElse(arg.name.name)
+        TypeTransformer.transformParamType(arg.ptpe) match {
+          case singleType :: Nil =>
+            fb.addParam(OriginalName(origName), singleType) :: Nil
+          case tpes =>
+            tpes.zipWithIndex.map { case (tpe, idx) =>
+              fb.addParam(OriginalName(origName ++ UTF8String("." + idx)), tpe)
+            }
+        }
       }
       fb.setResultTypes(TypeTransformer.transformResultType(method.resultType))
       fb.setFunctionType(ctx.tableFunctionType(methodName))
@@ -1194,6 +1232,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
     )
   }
 
+  private def makeOriginalName(namespace: UTF8String, fieldName: FieldName,
+      suffix: UTF8String): OriginalName = {
+    OriginalName(
+      namespace ++ fieldName.className.encoded ++ dotUTF8String ++
+      fieldName.simpleName.encoded ++ suffix
+    )
+  }
+
   private def makeOriginalName(
       namespace: UTF8String,
       className: ClassName,
@@ -1212,6 +1258,8 @@ object ClassEmitter {
   }
 
   private val dotUTF8String: UTF8String = UTF8String(".")
+  private val dotDataUTF8String: UTF8String = UTF8String(".data")
+  private val dotFunUTF8String: UTF8String = UTF8String(".fun")
 
   // These particular names are the same as in the JS backend
   private object ns {

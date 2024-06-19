@@ -87,6 +87,9 @@ object Types {
     /** `(ref struct)`. */
     val struct: RefType = apply(HeapType.Struct)
 
+    /** `(ref null struct)`, i.e., `structref`. */
+    val structref: RefType = nullable(HeapType.Struct)
+
     /** `(ref extern)`. */
     val extern: RefType = apply(HeapType.Extern)
 

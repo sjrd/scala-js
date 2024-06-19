@@ -24,19 +24,22 @@ import VarGen._
 /** Scala.js-specific Wasm generators that are used across the board. */
 object SWasmGen {
 
-  def genZeroOf(tpe: Type)(implicit ctx: WasmContext): Instr = {
+  def genZeroOf(tpe: Type)(implicit ctx: WasmContext): List[Instr] = {
     tpe match {
       case BooleanType | CharType | ByteType | ShortType | IntType =>
-        I32Const(0)
+        I32Const(0) :: Nil
 
-      case LongType   => I64Const(0L)
-      case FloatType  => F32Const(0.0f)
-      case DoubleType => F64Const(0.0)
-      case StringType => GlobalGet(genGlobalID.emptyString)
-      case UndefType  => GlobalGet(genGlobalID.undef)
+      case LongType   => I64Const(0L) :: Nil
+      case FloatType  => F32Const(0.0f) :: Nil
+      case DoubleType => F64Const(0.0) :: Nil
+      case StringType => GlobalGet(genGlobalID.emptyString) :: Nil
+      case UndefType  => GlobalGet(genGlobalID.undef) :: Nil
 
-      case AnyType | ClassType(_) | ArrayType(_) | NullType | ClosureType(_, _) =>
-        RefNull(Types.HeapType.None)
+      case AnyType | ClassType(_) | ArrayType(_) | NullType =>
+        RefNull(Types.HeapType.None) :: Nil
+
+      case _: ClosureType =>
+        RefNull(Types.HeapType.None) :: RefNull(Types.HeapType.NoFunc) :: Nil
 
       case NoType | NothingType | _: RecordType =>
         throw new AssertionError(s"Unexpected type for field: ${tpe.show()}")

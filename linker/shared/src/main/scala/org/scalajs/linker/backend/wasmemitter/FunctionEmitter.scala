@@ -56,6 +56,8 @@ object FunctionEmitter {
   private final val UseLegacyExceptionsForTryCatch = true
 
   private val dotUTF8String = UTF8String(".")
+  private val dotDataUTF8String = UTF8String(".data")
+  private val dotFunUTF8String = UTF8String(".fun")
 
   def emitFunction(
       functionID: wanme.FunctionID,
@@ -222,7 +224,7 @@ object FunctionEmitter {
           val dataStructTypeID = ctx.getClosureDataStructType(captureLikes.map(_._2))
 
           val dataStructLocal = if (captureDataAsRefStruct) {
-            val param = fb.addParam(captureParamName + "0", watpe.RefType.struct)
+            val param = fb.addParam(captureParamName + "0", watpe.RefType.structref)
             val local = fb.addLocal(captureParamName, watpe.RefType(dataStructTypeID))
             fb += wa.LocalGet(param)
             fb += wa.RefCast(watpe.RefType(dataStructTypeID))
@@ -232,15 +234,21 @@ object FunctionEmitter {
             fb.addParam(captureParamName, watpe.RefType(dataStructTypeID))
           }
 
-          val env: Env = captureLikes.zipWithIndex.map { case (captureLike, idx) =>
-            val storage = VarStorage.StructField(
-              dataStructLocal,
-              dataStructTypeID,
-              genFieldID.captureParam(idx)
-            )
-            captureLike._1 -> storage
+          var lastIndex = -1
+          def nextStructFieldStorage(): VarStorage.StructField = {
+            lastIndex += 1
+            VarStorage.StructField(dataStructLocal, dataStructTypeID,
+                genFieldID.captureParam(lastIndex))
+          }
+
+          captureLikes.map { captureLike =>
+            captureLike._1 -> (captureLike._2 match {
+              case _: ClosureType =>
+                VarStorage.ClosurePair(nextStructFieldStorage(), nextStructFieldStorage())
+              case _ =>
+                nextStructFieldStorage()
+            })
           }.toMap
-          env
       }
     }
 
@@ -266,12 +274,27 @@ object FunctionEmitter {
       VarStorage.Local(receiverParam)
     }
 
-    val normalParamsEnv = paramDefs.map { paramDef =>
-      val param = fb.addParam(
-        paramDef.originalName.orElse(paramDef.name.name),
-        transformParamType(paramDef.ptpe)
-      )
-      paramDef.name.name -> VarStorage.Local(param)
+    val normalParamsEnv: List[(LocalName, VarStorage)] = paramDefs.map { paramDef =>
+      val origName = paramDef.originalName.getOrElse(paramDef.name.name)
+
+      val storage = paramDef.ptpe match {
+        case ptpe: ClosureType =>
+          val dataParam = fb.addParam(
+            OriginalName(origName ++ dotDataUTF8String),
+            watpe.RefType.structref
+          )
+          val funParam = fb.addParam(
+            OriginalName(origName ++ dotFunUTF8String),
+            watpe.RefType.nullable(ctx.genTypedClosureFunType(ptpe))
+          )
+          VarStorage.ClosurePair(VarStorage.Local(dataParam), VarStorage.Local(funParam))
+
+        case _ =>
+          val List(singleType) = transformParamType(paramDef.ptpe)
+          VarStorage.Local(fb.addParam(OriginalName(origName), singleType))
+      }
+
+      paramDef.name.name -> storage
     }
 
     val fullEnv = captureParamsEnv ++ preSuperEnvEnv ++ normalParamsEnv
@@ -303,13 +326,14 @@ object FunctionEmitter {
   private sealed abstract class VarStorage
 
   private object VarStorage {
-    sealed abstract class NonStructStorage extends VarStorage
+    final case class Local(localID: wanme.LocalID) extends VarStorage
 
-    final case class Local(localID: wanme.LocalID) extends NonStructStorage
+    final case class ClosurePair(data: VarStorage, fun: VarStorage)
+        extends VarStorage
 
     // We use Vector here because we want a decent reverseIterator
-    final case class LocalRecord(fields: Vector[(SimpleFieldName, NonStructStorage)])
-        extends NonStructStorage
+    final case class Record(fields: Vector[(SimpleFieldName, VarStorage)])
+        extends VarStorage
 
     final case class StructField(structLocalID: wanme.LocalID,
         structTypeID: wanme.TypeID, fieldID: wanme.FieldID)
@@ -376,7 +400,7 @@ private class FunctionEmitter private (
         lookupLocal(ident.name)
       case RecordSelect(record, field) =>
         rec(record) match {
-          case VarStorage.LocalRecord(fields) =>
+          case VarStorage.Record(fields) =>
             fields.find(_._1 == field.name).getOrElse {
               throw new AssertionError(s"Unknown field ${field.name} of $record")
             }._2
@@ -523,7 +547,13 @@ private class FunctionEmitter private (
       case (NothingType, _) =>
         ()
       case (_, NoType) =>
-        fb += wa.Drop
+        generatedType match {
+          case _: ClosureType =>
+            fb += wa.Drop
+            fb += wa.Drop
+          case _ =>
+            fb += wa.Drop
+        }
       case (primType: PrimTypeWithRef, _) =>
         // box
         primType match {
@@ -572,11 +602,29 @@ private class FunctionEmitter private (
            */
           fb += wa.Unreachable
         } else {
-          genTree(t.rhs, t.lhs.tpe)
-          fb += wa.StructSet(
-            genTypeID.forClass(className),
-            genFieldID.forClassInstanceField(sel.field.name)
-          )
+          val classTypeID = genTypeID.forClass(className)
+
+          t.lhs.tpe match {
+            case lhsType: ClosureType =>
+              val (dataFieldID, funFieldID) = genFieldID.forClassInstanceFieldClosure(sel.field.name)
+              val qualifierTemp = addSyntheticLocal(watpe.RefType.nullable(classTypeID))
+              val funTemp = addSyntheticLocal(watpe.RefType.nullable(ctx.genTypedClosureFunType(lhsType)))
+
+              fb += wa.LocalTee(qualifierTemp)
+              genTree(t.rhs, lhsType)
+
+              markPosition(t)
+              fb += wa.LocalSet(funTemp)
+              fb += wa.StructSet(classTypeID, dataFieldID)
+              fb += wa.LocalGet(qualifierTemp)
+              fb += wa.LocalGet(funTemp)
+              fb += wa.StructSet(classTypeID, funFieldID)
+
+            case lhsType =>
+              genTree(t.rhs, lhsType)
+              markPosition(t)
+              fb += wa.StructSet(classTypeID, genFieldID.forClassInstanceField(sel.field.name))
+          }
         }
 
       case sel: SelectStatic =>
@@ -643,35 +691,33 @@ private class FunctionEmitter private (
         fb += wa.Call(genFunctionID.forJSGlobalRefWrite(assign.name))
 
       case ref: VarRef =>
-        genAssignToStorage(ref.tpe, lookupLocal(ref.ident.name), t.rhs)
+        genTree(t.rhs, ref.tpe)
+        genAssignStackToStorage(lookupLocal(ref.ident.name))
 
       case lhs: RecordSelect =>
-        genAssignToStorage(lhs.tpe, lookupRecordSelect(lhs), t.rhs)
+        genTree(t.rhs, lhs.tpe)
+        genAssignStackToStorage(lookupRecordSelect(lhs))
     }
 
     NoType
   }
 
-  private def genAssignToStorage(lhsType: Type, storage: VarStorage, rhs: Tree): Unit = {
-    storage match {
-      case storage: VarStorage.NonStructStorage =>
-        genTree(rhs, lhsType)
-        genAssignStackToStorage(storage)
-
-      case VarStorage.StructField(structLocal, structTypeID, fieldID) =>
-        fb += wa.LocalGet(structLocal)
-        genTree(rhs, lhsType)
-        fb += wa.StructSet(structTypeID, fieldID)
-    }
-  }
-
-  private def genAssignStackToStorage(storage: VarStorage.NonStructStorage): Unit = {
+  private def genAssignStackToStorage(storage: VarStorage): Unit = {
     storage match {
       case VarStorage.Local(local) =>
         fb += wa.LocalSet(local)
 
-      case VarStorage.LocalRecord(fields) =>
+      case VarStorage.ClosurePair(data, fun) =>
+        genAssignStackToStorage(fun)
+        genAssignStackToStorage(data)
+
+      case VarStorage.Record(fields) =>
         fields.reverseIterator.foreach(field => genAssignStackToStorage(field._2))
+
+      case VarStorage.StructField(structLocal, structTypeID, fieldID) =>
+        throw new AssertionError(
+            s"Trying to assign to struct storage $storage; " +
+            "struct storage should always be immutable")
     }
   }
 
@@ -881,12 +927,12 @@ private class FunctionEmitter private (
 
             fb += wa.LocalSet(receiverLocal)
             val argsLocals: List[wanme.LocalID] =
-              for ((arg, typeRef) <- t.args.zip(t.method.name.paramTypeRefs)) yield {
+              t.args.zip(t.method.name.paramTypeRefs).flatMap { case (arg, typeRef) =>
                 val tpe = ctx.inferTypeFromTypeRef(typeRef)
                 genTree(arg, tpe)
-                val localID = addSyntheticLocal(transformParamType(tpe))
-                fb += wa.LocalSet(localID)
-                localID
+                val locals = transformParamType(tpe).map(addSyntheticLocal(_))
+                locals.reverse.foreach(local => fb += wa.LocalSet(local))
+                locals
               }
             fb += wa.LocalGet(receiverLocal)
             argsLocals
@@ -1117,20 +1163,25 @@ private class FunctionEmitter private (
 
         markPosition(tree)
 
-        val (funTypeID, typedClosureTypeID) = ctx.genTypedClosureStructType(closureType)
-        val funLocal = addSyntheticLocal(watpe.RefType(typedClosureTypeID))
+        val funTypeID = ctx.genTypedClosureFunType(closureType)
 
-        fb += wa.RefAsNonNull
-        fb += wa.LocalTee(funLocal)
-        fb += wa.StructGet(typedClosureTypeID, genFieldID.typedClosure.data)
+        // `data` and `fun` are on the stack
+        // stash `fun` in a local while we evaluate the arguments
+        if (paramTypes.nonEmpty) {
+          val funLocal = addSyntheticLocal(watpe.RefType(funTypeID))
 
-        for ((arg, paramType) <- tree.args.zip(paramTypes))
-          genTree(arg, paramType)
+          fb += wa.RefAsNonNull
+          fb += wa.LocalSet(funLocal)
+          // the data is still on the stack
 
-        markPosition(tree)
+          for ((arg, paramType) <- tree.args.zip(paramTypes))
+            genTree(arg, paramType)
 
-        fb += wa.LocalGet(funLocal)
-        fb += wa.StructGet(typedClosureTypeID, genFieldID.typedClosure.fun)
+          markPosition(tree)
+
+          fb += wa.LocalGet(funLocal)
+        }
+
         fb += wa.CallRef(funTypeID)
 
         resultType
@@ -1238,10 +1289,18 @@ private class FunctionEmitter private (
        */
       fb += wa.Unreachable
     } else {
-      fb += wa.StructGet(
-        genTypeID.forClass(className),
-        genFieldID.forClassInstanceField(sel.field.name)
-      )
+      val classTypeID = genTypeID.forClass(className)
+      sel.tpe match {
+        case _: ClosureType =>
+          val (dataFieldID, funFieldID) = genFieldID.forClassInstanceFieldClosure(sel.field.name)
+          val qualifierTemp = addSyntheticLocal(watpe.RefType.nullable(classTypeID))
+          fb += wa.LocalTee(qualifierTemp)
+          fb += wa.StructGet(classTypeID, dataFieldID)
+          fb += wa.LocalGet(qualifierTemp)
+          fb += wa.StructGet(classTypeID, funFieldID)
+        case _ =>
+          fb += wa.StructGet(classTypeID, genFieldID.forClassInstanceField(sel.field.name))
+      }
     }
 
     sel.tpe
@@ -2108,7 +2167,10 @@ private class FunctionEmitter private (
     storage match {
       case VarStorage.Local(localID) =>
         fb += wa.LocalGet(localID)
-      case VarStorage.LocalRecord(fields) =>
+      case VarStorage.ClosurePair(data, fun) =>
+        genReadStorage(data)
+        genReadStorage(fun)
+      case VarStorage.Record(fields) =>
         for (field <- fields)
           genReadStorage(field._2)
       case VarStorage.StructField(structLocal, structTypeID, fieldID) =>
@@ -2294,38 +2356,42 @@ private class FunctionEmitter private (
     stats match {
       case (stat @ VarDef(name, originalName, vtpe, _, rhs)) :: rest =>
         genTree(rhs, vtpe)
-        markPosition(stat)
 
-        vtpe match {
-          case NothingType =>
-            // `rest` is unreachable; do not allocate a local and stop here
-            ()
+        if (vtpe == NothingType) {
+          /* We cannot allocate storage for `nothing`, but `rest` is unreachable
+           * so we can stop here.
+           */
+          ()
+        } else {
+          markPosition(stat)
 
-          case vtpe: RecordType =>
-            def buildStorage(origName: UTF8String, vtpe: Type): VarStorage.NonStructStorage = vtpe match {
-              case RecordType(fields) =>
-                val fieldStorages = fields.map { field =>
-                  val fieldOrigName =
-                    origName ++ dotUTF8String ++ field.originalName.getOrElse(field.name)
-                  field.name -> buildStorage(fieldOrigName, field.tpe)
-                }
-                VarStorage.LocalRecord(fieldStorages.toVector)
-              case _ =>
-                val local = fb.addLocal(OriginalName(origName), transformSingleType(vtpe))
-                VarStorage.Local(local)
-            }
+          def buildStorage(origName: UTF8String, vtpe: Type): VarStorage = vtpe match {
+            case vtpe: ClosureType =>
+              val dataOrigName = OriginalName(origName ++ dotDataUTF8String)
+              val dataLocal = fb.addLocal(dataOrigName, watpe.RefType.structref)
+              val funOrigName = OriginalName(origName ++ dotFunUTF8String)
+              val funTypeID = ctx.genTypedClosureFunType(vtpe)
+              val funLocal = fb.addLocal(funOrigName, watpe.RefType.nullable(funTypeID))
+              VarStorage.ClosurePair(VarStorage.Local(dataLocal), VarStorage.Local(funLocal))
 
-            val storage = buildStorage(originalName.getOrElse(name.name), vtpe)
-            withLocal(name.name, storage) {
-              genAssignStackToStorage(storage)
-              genBlockStats(rest)(inner)
-            }
+            case RecordType(fields) =>
+              val fieldStorages = fields.map { field =>
+                val fieldOrigName =
+                  origName ++ dotUTF8String ++ field.originalName.getOrElse(field.name)
+                field.name -> buildStorage(fieldOrigName, field.tpe)
+              }
+              VarStorage.Record(fieldStorages.toVector)
 
-          case _ =>
-            withNewLocal(name.name, originalName, transformSingleType(vtpe)) { local =>
-              fb += wa.LocalSet(local)
-              genBlockStats(rest)(inner)
-            }
+            case _ =>
+              val local = fb.addLocal(OriginalName(origName), transformSingleType(vtpe))
+              VarStorage.Local(local)
+          }
+
+          val storage = buildStorage(originalName.getOrElse(name.name), vtpe)
+          withLocal(name.name, storage) {
+            genAssignStackToStorage(storage)
+            genBlockStats(rest)(inner)
+          }
         }
 
       case stat :: rest =>
@@ -2922,8 +2988,8 @@ private class FunctionEmitter private (
   private def genTypedClosure(tree: TypedClosure): Type = {
     implicit val pos = tree.pos
 
-    val (funTypeID, typedClosureTypeID) = ctx.genTypedClosureStructType(tree.tpe)
     val dataStructTypeID = ctx.getClosureDataStructType(tree.captureParams.map(_.ptpe))
+    val funTypeID = ctx.genTypedClosureFunType(tree.tpe)
 
     // Define the function where captures are reified as a `__captureData` argument.
     val closureFuncOrigName = genInnerFuncOriginalName()
@@ -2943,17 +3009,16 @@ private class FunctionEmitter private (
 
     markPosition(tree)
 
-    // Put a reference to the function on the stack
-    fb += ctx.refFuncWithDeclaration(closureFuncID)
-
-    // Evaluate the capture values and instantiate the capture data struct
+    // Evaluate the capture values
     for ((param, value) <- tree.captureParams.zip(tree.captureValues))
       genTree(value, param.ptpe)
+
+    // Build the data struct
     markPosition(tree)
     fb += wa.StructNew(dataStructTypeID)
 
-    // Build the typed closure struct
-    fb += wa.StructNew(typedClosureTypeID)
+    // Put a reference to the function on the stack
+    fb += ctx.refFuncWithDeclaration(closureFuncID)
 
     tree.tpe
   }
