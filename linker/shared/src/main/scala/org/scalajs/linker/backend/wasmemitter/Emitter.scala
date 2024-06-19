@@ -204,12 +204,11 @@ final class Emitter(config: Emitter.Config) {
 
         interfaces.foreach { iface =>
           fb += wa.GlobalGet(genGlobalID.forITable(className))
-          fb += wa.I32Const(iface.itableIdx)
 
           for (method <- iface.tableEntries)
             fb += ctx.refFuncWithDeclaration(resolvedMethodInfos(method).tableEntryID)
           fb += wa.StructNew(genTypeID.forITable(iface.name))
-          fb += wa.ArraySet(genTypeID.itables)
+          fb += wa.StructSet(genTypeID.itables, genFieldID.itablesSlot(iface.itableIdx))
         }
       }
     }
@@ -225,12 +224,11 @@ final class Emitter(config: Emitter.Config) {
         interfaceInfo <- ctx.getClassInfoOption(interfaceName)
       } {
         fb += wa.GlobalGet(globalID)
-        fb += wa.I32Const(interfaceInfo.itableIdx)
 
         for (method <- interfaceInfo.tableEntries)
           fb += ctx.refFuncWithDeclaration(resolvedMethodInfos(method).tableEntryID)
         fb += wa.StructNew(genTypeID.forITable(interfaceName))
-        fb += wa.ArraySet(genTypeID.itables)
+        fb += wa.StructSet(genTypeID.itables, genFieldID.itablesSlot(interfaceInfo.itableIdx))
       }
     }
 

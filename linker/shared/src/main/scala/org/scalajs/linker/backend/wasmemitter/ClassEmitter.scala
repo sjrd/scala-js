@@ -314,7 +314,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val itablesField = watpe.StructField(
       genFieldID.objStruct.itables,
       itablesOriginalName,
-      watpe.RefType.nullable(genTypeID.itables),
+      watpe.RefType(genTypeID.itables),
       isMutable = false
     )
     val fields = classInfo.allFieldDefs.map { field =>
@@ -423,7 +423,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val exprParam = fb.addParam("expr", watpe.RefType.anyref)
     fb.setResultType(watpe.Int32)
 
-    val itables = fb.addLocal("itables", watpe.RefType.nullable(genTypeID.itables))
+    val itables = fb.addLocal("itables", watpe.RefType(genTypeID.itables))
     val exprNonNullLocal = fb.addLocal("exprNonNull", watpe.RefType.any)
 
     fb.block(watpe.RefType.anyref) { testFail =>
@@ -435,20 +435,9 @@ class ClassEmitter(coreSpec: CoreSpec) {
         watpe.RefType(genTypeID.ObjectStruct)
       )
 
-      // get itables and store
+      // get the expected itables slot and test whether it is the correct itable
       fb += wa.StructGet(genTypeID.ObjectStruct, genFieldID.objStruct.itables)
-      fb += wa.LocalSet(itables)
-
-      // Dummy return value from the block
-      fb += wa.RefNull(watpe.HeapType.Any)
-
-      // if the itables is null (no interfaces are implemented)
-      fb += wa.LocalGet(itables)
-      fb += wa.BrOnNull(testFail)
-
-      fb += wa.LocalGet(itables)
-      fb += wa.I32Const(classInfo.itableIdx)
-      fb += wa.ArrayGet(genTypeID.itables)
+      fb += wa.StructGet(genTypeID.itables, genFieldID.itablesSlot(classInfo.itableIdx))
       fb += wa.RefTest(watpe.RefType(genTypeID.forITable(className)))
       fb += wa.Return
     } // test fail
@@ -518,7 +507,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     if (classInfo.classImplementsAnyInterface)
       fb += wa.GlobalGet(genGlobalID.forITable(className))
     else
-      fb += wa.RefNull(watpe.HeapType(genTypeID.itables))
+      fb += wa.GlobalGet(genGlobalID.emptyITable)
 
     classInfo.allFieldDefs.foreach { f =>
       fb += genZeroOf(f.ftpe)
@@ -628,8 +617,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     if (ctx.getClassInfo(className).classImplementsAnyInterface) {
       val globalID = genGlobalID.forITable(className)
       val itablesInit = List(
-        wa.I32Const(ctx.itablesLength),
-        wa.ArrayNewDefault(genTypeID.itables)
+        wa.StructNewDefault(genTypeID.itables)
       )
       val global = wamod.Global(
         globalID,

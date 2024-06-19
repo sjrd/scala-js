@@ -1010,8 +1010,7 @@ private class FunctionEmitter private (
         genTypeID.forClass(ObjectClass),
         genFieldID.objStruct.itables
       )
-      fb += wa.I32Const(receiverClassInfo.itableIdx)
-      fb += wa.ArrayGet(genTypeID.itables)
+      fb += wa.StructGet(genTypeID.itables, genFieldID.itablesSlot(receiverClassInfo.itableIdx))
       fb += wa.RefCast(watpe.RefType(genTypeID.forITable(receiverClassInfo.name)))
       fb += wa.StructGet(
         genTypeID.forITable(receiverClassInfo.name),

@@ -77,6 +77,7 @@ object VarGen {
 
     case object stringLiteralCache extends GlobalID
 
+    case object emptyITable extends GlobalID
     case object arrayClassITable extends GlobalID
 
     case object lastIDHashCode extends GlobalID
@@ -337,6 +338,7 @@ object VarGen {
     private final case class ClassInstanceFieldID(name: IRFieldName) extends FieldID
     private final case class MethodTableEntryID(methodName: MethodName) extends FieldID
     private final case class CaptureParamID(i: Int) extends FieldID
+    private final case class ITablesSlot(index: Int) extends FieldID
 
     def forClassInstanceField(name: IRFieldName): FieldID =
       ClassInstanceFieldID(name)
@@ -346,6 +348,9 @@ object VarGen {
 
     def captureParam(i: Int): FieldID =
       CaptureParamID(i)
+
+    def itablesSlot(index: Int): FieldID =
+      ITablesSlot(index)
 
     object objStruct {
       case object vtable extends FieldID

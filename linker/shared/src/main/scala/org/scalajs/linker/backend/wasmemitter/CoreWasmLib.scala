@@ -113,6 +113,7 @@ object CoreWasmLib {
     genTags()
 
     genGlobalImports()
+    genEmptyITableGlobal()
     genPrimitiveTypeDataGlobals()
 
     genStringBuiltinImports()
@@ -145,6 +146,19 @@ object CoreWasmLib {
     genUnderlyingArrayType(genTypeID.f32Array, Float32)
     genUnderlyingArrayType(genTypeID.f64Array, Float64)
     genUnderlyingArrayType(genTypeID.anyArray, anyref)
+
+    b.addRecType(
+      genTypeID.itables,
+      OriginalName(genTypeID.itables.toString()),
+      StructType((0 until ctx.itablesLength).toList.map { index =>
+        StructField(
+          genFieldID.itablesSlot(index),
+          OriginalName("slot." + index),
+          RefType.structref,
+          isMutable = true
+        )
+      })
+    )
   }
 
   private def genCoreTypesInRecType()(implicit ctx: WasmContext): Unit = {
@@ -167,10 +181,6 @@ object CoreWasmLib {
     genCoreType(
       genTypeID.typeDataArray,
       ArrayType(FieldType(RefType(genTypeID.typeData), isMutable = false))
-    )
-    genCoreType(
-      genTypeID.itables,
-      ArrayType(FieldType(RefType.nullable(HeapType.Struct), isMutable = true))
     )
     genCoreType(
       genTypeID.reflectiveProxies,
@@ -220,7 +230,7 @@ object CoreWasmLib {
     val itablesField = StructField(
       genFieldID.objStruct.itables,
       OriginalName(genFieldID.objStruct.itables.toString()),
-      RefType.nullable(genTypeID.itables),
+      RefType(genTypeID.itables),
       isMutable = false
     )
 
@@ -292,6 +302,18 @@ object CoreWasmLib {
     addGlobalHelperImport(genGlobalID.bZero, isMutable = false, RefType.any)
     addGlobalHelperImport(genGlobalID.emptyString, isMutable = false, RefType.any)
     addGlobalHelperImport(genGlobalID.idHashCodeMap, isMutable = false, RefType.extern)
+  }
+
+  private def genEmptyITableGlobal()(implicit ctx: WasmContext): Unit = {
+    ctx.addGlobal(
+      Global(
+        genGlobalID.emptyITable,
+        OriginalName(genGlobalID.emptyITable.toString()),
+        isMutable = false,
+        RefType(genTypeID.itables),
+        init = Expr(List(StructNewDefault(genTypeID.itables)))
+      )
+    )
   }
 
   private def genPrimitiveTypeDataGlobals()(implicit ctx: WasmContext): Unit = {
@@ -384,8 +406,7 @@ object CoreWasmLib {
   private def genArrayClassGlobals()(implicit ctx: WasmContext): Unit = {
     // Common itable global for all array classes
     val itablesInit = List(
-      I32Const(ctx.itablesLength),
-      ArrayNewDefault(genTypeID.itables)
+      StructNewDefault(genTypeID.itables)
     )
     ctx.addGlobal(
       Global(
@@ -1893,7 +1914,7 @@ object CoreWasmLib {
     val i32ArrayType = RefType(genTypeID.i32Array)
     val objectVTableType = RefType(genTypeID.ObjectVTable)
     val arrayTypeDataType = objectVTableType
-    val itablesType = RefType.nullable(genTypeID.itables)
+    val itablesType = RefType(genTypeID.itables)
     val nonNullObjectType = RefType(genTypeID.ObjectStruct)
     val anyArrayType = RefType(genTypeID.anyArray)
 
