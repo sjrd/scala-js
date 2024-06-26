@@ -36,10 +36,6 @@ final class WebAssemblyLinkerBackend(config: LinkerBackendImpl.Config)
     coreSpec.moduleKind == ModuleKind.ESModule,
     s"The WebAssembly backend only supports ES modules; was ${coreSpec.moduleKind}."
   )
-  require(
-    coreSpec.semantics.strictFloats,
-    "The WebAssembly backend only supports strict float semantics."
-  )
 
   val loaderJSFileName = OutputPatternsImpl.jsFile(config.outputPatterns, "__loader")
 

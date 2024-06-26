@@ -1160,6 +1160,8 @@ class CoreWasmLib(coreSpec: CoreSpec) {
               fb += Call(genFunctionID.isUndef)
             case StringType =>
               fb += Call(genFunctionID.isString)
+            case FloatType if !semantics.strictFloats =>
+              fb += Call(genFunctionID.typeTest(DoubleRef))
             case targetTpe: PrimTypeWithRef =>
               fb += Call(genFunctionID.typeTest(targetTpe.primRef))
           }
@@ -1230,6 +1232,8 @@ class CoreWasmLib(coreSpec: CoreSpec) {
               fb += Call(genFunctionID.isUndef)
             case StringType =>
               fb += Call(genFunctionID.isString)
+            case FloatType if !semantics.strictFloats =>
+              fb += Call(genFunctionID.typeTest(DoubleRef))
             case primType: PrimTypeWithRef =>
               fb += Call(genFunctionID.typeTest(primType.primRef))
           }
@@ -1866,7 +1870,10 @@ class CoreWasmLib(coreSpec: CoreSpec) {
       },
       List(KindBoxedFloat) -> { () =>
         fb += LocalGet(valueParam)
-        fb += Call(genFunctionID.typeTest(FloatRef))
+        if (semantics.strictFloats)
+          fb += Call(genFunctionID.typeTest(FloatRef))
+        else
+          fb += Call(genFunctionID.typeTest(DoubleRef))
       },
       List(KindBoxedDouble) -> { () =>
         fb += LocalGet(valueParam)
@@ -2410,26 +2417,30 @@ class CoreWasmLib(coreSpec: CoreSpec) {
           } {
             // else, it is a Float or a Double
 
-            // if doubleValue.toFloat.toDouble == doubleValue
-            fb += LocalGet(doubleValueLocal)
-            fb += F32DemoteF64
-            fb += F64PromoteF32
-            fb += LocalGet(doubleValueLocal)
-            fb += F64Eq
-            fb.ifThenElse(typeDataType) {
-              // then it is a Float
+            if (!semantics.strictFloats) {
               fb += getHijackedClassTypeDataInstr(BoxedFloatClass)
-            } {
-              // else, if it is NaN
+            } else {
+              // if doubleValue.toFloat.toDouble == doubleValue
               fb += LocalGet(doubleValueLocal)
+              fb += F32DemoteF64
+              fb += F64PromoteF32
               fb += LocalGet(doubleValueLocal)
-              fb += F64Ne
+              fb += F64Eq
               fb.ifThenElse(typeDataType) {
                 // then it is a Float
                 fb += getHijackedClassTypeDataInstr(BoxedFloatClass)
               } {
-                // else, it is a Double
-                fb += getHijackedClassTypeDataInstr(BoxedDoubleClass)
+                // else, if it is NaN
+                fb += LocalGet(doubleValueLocal)
+                fb += LocalGet(doubleValueLocal)
+                fb += F64Ne
+                fb.ifThenElse(typeDataType) {
+                  // then it is a Float
+                  fb += getHijackedClassTypeDataInstr(BoxedFloatClass)
+                } {
+                  // else, it is a Double
+                  fb += getHijackedClassTypeDataInstr(BoxedDoubleClass)
+                }
               }
             }
           }

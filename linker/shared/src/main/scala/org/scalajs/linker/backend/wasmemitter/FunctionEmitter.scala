@@ -1948,6 +1948,8 @@ private class FunctionEmitter private (
             fb += wa.RefTest(watpe.RefType(structTypeID))
           case NoType | NothingType | NullType =>
             throw new AssertionError(s"Illegal isInstanceOf[$testType]")
+          case FloatType if !semantics.strictFloats =>
+            fb += wa.Call(genFunctionID.typeTest(DoubleRef))
           case _ =>
             fb += wa.Call(genFunctionID.typeTest(testType.primRef))
         }
