@@ -423,6 +423,14 @@ object VarGen {
        */
       case object reflectiveProxies extends FieldID
     }
+
+    object typedClosure {
+      /** The `fun` field of a typed closure struct. */
+      case object fun extends FieldID
+
+      /** The `data` field of a typed closure struct. */
+      case object data extends FieldID
+    }
   }
 
   object genTypeID {
@@ -432,6 +440,8 @@ object VarGen {
     private final case class ITableID(className: ClassName) extends TypeID
     private final case class FunctionTypeID(index: Int) extends TypeID
     private final case class TableFunctionTypeID(methodName: MethodName) extends TypeID
+    private final case class ClosureFunTypeID(closureType: ClosureType) extends TypeID
+    private final case class ClosureTypeID(closureType: ClosureType) extends TypeID
 
     def forClass(name: ClassName): TypeID =
       ClassStructID(name)
@@ -522,6 +532,12 @@ object VarGen {
 
     def forTableFunctionType(methodName: MethodName): TypeID =
       TableFunctionTypeID(methodName)
+
+    def forClosureFunType(closureType: ClosureType): TypeID =
+      ClosureFunTypeID(closureType)
+
+    def forClosureType(closureType: ClosureType): TypeID =
+      ClosureTypeID(closureType)
   }
 
   object genTagID {

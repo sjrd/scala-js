@@ -135,6 +135,27 @@ object Types {
   /** Array type. */
   final case class ArrayType(arrayTypeRef: ArrayTypeRef) extends Type
 
+  /** Closure type.
+   *
+   *  This is the type of a `TypedClosure`. Parameters and result are
+   *  statically typed according to the `closureTypeRef` components.
+   *
+   *  Typed closures may be "`nullClosure`" of the appropriate type. Null
+   *  closures are created with `NullTypedClosure`. This is unfortunately
+   *  required for a `ClosureType` to have a default value, which in turn is
+   *  required to be used as the type of a field.
+   *
+   *  Closure types are non-variant in both parameter and result types.
+   *
+   *  Closure types are *not* subtypes of `AnyType`. That statically prevents
+   *  them from going into JavaScript code or in any other universal context.
+   *  They do not support type tests nor casts.
+   *
+   *  `Nothing` is still a subtype of `ClosureType`, which is a subtype of
+   *  `NoType`.
+   */
+  final case class ClosureType(paramTypes: List[Type], resultType: Type) extends Type
+
   /** Record type.
    *  Used by the optimizer to inline classes as records with multiple fields.
    *  They are desugared as several local variables by JSDesugaring.
@@ -179,15 +200,30 @@ object Types {
         }
       case thiz: ClassRef =>
         that match {
-          case that: ClassRef     => thiz.className.compareTo(that.className)
-          case that: PrimRef      => 1
-          case that: ArrayTypeRef => -1
+          case that: ClassRef => thiz.className.compareTo(that.className)
+          case _: PrimRef     => 1
+          case _              => -1
         }
       case thiz: ArrayTypeRef =>
         that match {
           case that: ArrayTypeRef =>
             if (thiz.dimensions != that.dimensions) thiz.dimensions - that.dimensions
             else thiz.base.compareTo(that.base)
+          case _: ClosureTypeRef =>
+            -1
+          case _ =>
+            1
+        }
+      case thiz: ClosureTypeRef =>
+        that match {
+          case that: ClosureTypeRef =>
+            import Ordering.Implicits._
+            implicit val typeRefOrdering: Ordering[TypeRef] =
+              Ordering.comparatorToOrdering(java.util.Comparator.naturalOrder())
+            val cmp = implicitly[Ordering[List[TypeRef]]]
+              .compare(thiz.paramTypeRefs, that.paramTypeRefs)
+            if (cmp != 0) cmp
+            else thiz.resultTypeRef.compareTo(that.resultTypeRef)
           case _ =>
             1
         }
@@ -294,6 +330,17 @@ object Types {
     def of(innerType: TypeRef): ArrayTypeRef = innerType match {
       case innerType: NonArrayTypeRef => ArrayTypeRef(innerType, 1)
       case ArrayTypeRef(base, dim)    => ArrayTypeRef(base, dim + 1)
+      case innerType: ClosureTypeRef  => throw new IllegalArgumentException(innerType.toString())
+    }
+  }
+
+  /** Closure type. */
+  final case class ClosureTypeRef(paramTypeRefs: List[TypeRef], resultTypeRef: TypeRef)
+      extends TypeRef {
+
+    def displayName: String = {
+      paramTypeRefs.map(_.displayName)
+        .mkString("(", ",", ")" + resultTypeRef.displayName)
     }
   }
 
@@ -311,6 +358,8 @@ object Types {
     case UndefType   => Undefined()
 
     case NullType | AnyType | _:ClassType | _:ArrayType => Null()
+
+    case tpe: ClosureType => NullTypedClosure(tpe)
 
     case tpe: RecordType =>
       RecordValue(tpe, tpe.fields.map(f => zeroOf(f.tpe)))
@@ -343,10 +392,12 @@ object Types {
       isSubclass: (ClassName, ClassName) => Boolean): Boolean = {
     (lhs == rhs) ||
     ((lhs, rhs) match {
-      case (_, NoType)      => true
-      case (NoType, _)      => false
-      case (_, AnyType)     => true
+      // nothing and void are sub- and supertype of all types, including ClosureType's
       case (NothingType, _) => true
+      case (_, NoType)      => true
+
+      // any is supertype of all types, except void and closure types
+      case (_, AnyType) => lhs != NoType && !lhs.isInstanceOf[ClosureType]
 
       case (ClassType(lhsClass), ClassType(rhsClass)) =>
         isSubclass(lhsClass, rhsClass)

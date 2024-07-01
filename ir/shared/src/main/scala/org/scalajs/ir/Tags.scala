@@ -127,6 +127,12 @@ private[ir] object Tags {
   final val TagWrapAsThrowable = TagJSNewTarget + 1
   final val TagUnwrapFromThrowable = TagWrapAsThrowable + 1
 
+  // New in 1.17
+
+  final val TagApplyTypedClosure = TagUnwrapFromThrowable + 1
+  final val TagNullTypedClosure = TagApplyTypedClosure + 1
+  final val TagTypedClosure = TagNullTypedClosure + 1
+
   // Tags for member defs
 
   final val TagFieldDef = 1
@@ -170,6 +176,9 @@ private[ir] object Tags {
   final val TagRecordType = TagArrayType + 1
   final val TagNoType = TagRecordType + 1
 
+  // New in 1.17
+  final val TagClosureType = TagNoType + 1
+
   // Tags for TypeRefs
 
   final val TagVoidRef = 1
@@ -185,6 +194,9 @@ private[ir] object Tags {
   final val TagNothingRef = TagNullRef + 1
   final val TagClassRef = TagNothingRef + 1
   final val TagArrayTypeRef = TagClassRef + 1
+
+  // New in 1.17
+  final val TagClosureTypeRef = TagArrayTypeRef + 1
 
   // Tags for JS native loading specs
 

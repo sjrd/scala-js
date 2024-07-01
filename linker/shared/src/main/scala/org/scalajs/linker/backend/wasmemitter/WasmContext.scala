@@ -48,6 +48,7 @@ final class WasmContext(
   private val tableFunctionTypes = mutable.HashMap.empty[MethodName, wanme.TypeID]
   private val constantStringGlobals = LinkedHashMap.empty[String, StringData]
   private val closureDataTypes = LinkedHashMap.empty[List[Type], wanme.TypeID]
+  private val typedClosureTypes = LinkedHashMap.empty[ClosureType, (wanme.TypeID, wanme.TypeID)]
 
   val moduleBuilder: ModuleBuilder = {
     new ModuleBuilder(new ModuleBuilder.FunctionTypeProvider {
@@ -89,6 +90,8 @@ final class WasmContext(
         ClassType(className)
     case typeRef: ArrayTypeRef =>
       ArrayType(typeRef)
+    case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
+      ClosureType(paramTypeRefs.map(inferTypeFromTypeRef(_)), inferTypeFromTypeRef(resultTypeRef))
   }
 
   /** Retrieves a unique identifier for a reflective proxy with the given name.
@@ -181,6 +184,40 @@ final class WasmContext(
         structTypeID
       }
     )
+  }
+
+  def genTypedClosureStructType(tpe: ClosureType): (wanme.TypeID, wanme.TypeID) = {
+    typedClosureTypes.getOrElseUpdate(tpe, {
+      implicit val ctx = this
+
+      val funType = watpe.FunctionType(
+        watpe.RefType.struct :: tpe.paramTypes.map(TypeTransformer.transformLocalType(_)),
+        TypeTransformer.transformResultType(tpe.resultType)
+      )
+      val funTypeID = genTypeID.forClosureFunType(tpe)
+      mainRecType.addSubType(funTypeID, OriginalName("fun" + tpe.show()), funType)
+
+      val fields: List[watpe.StructField] = List(
+        watpe.StructField(
+          genFieldID.typedClosure.fun,
+          OriginalName("fun"),
+          watpe.RefType(funTypeID),
+          isMutable = false
+        ),
+        watpe.StructField(
+          genFieldID.typedClosure.data,
+          OriginalName("data"),
+          watpe.RefType.struct,
+          isMutable = false
+        )
+      )
+
+      val structTypeID = genTypeID.forClosureType(tpe)
+      val structType = watpe.StructType(fields)
+      mainRecType.addSubType(structTypeID, OriginalName(tpe.show()), structType)
+
+      (funTypeID, structTypeID)
+    })
   }
 
   def refFuncWithDeclaration(funcID: wanme.FunctionID): wa.RefFunc = {
