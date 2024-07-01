@@ -310,6 +310,12 @@ object Hashers {
           mixMethodIdent(method)
           mixTrees(args)
 
+        case ApplyTypedClosure(flags, fun, args) =>
+          mixTag(TagApplyTypedClosure)
+          mixInt(ApplyFlags.toBits(flags))
+          mixTree(fun)
+          mixTrees(args)
+
         case UnaryOp(op, lhs) =>
           mixTag(TagUnaryOp)
           mixInt(op)
@@ -545,6 +551,14 @@ object Hashers {
           mixTree(body)
           mixTrees(captureValues)
 
+        case TypedClosure(captureParams, params, resultType, body, captureValues) =>
+          mixTag(TagTypedClosure)
+          mixParamDefs(captureParams)
+          mixParamDefs(params)
+          mixType(resultType)
+          mixTree(body)
+          mixTrees(captureValues)
+
         case CreateJSClass(className, captureValues) =>
           mixTag(TagCreateJSClass)
           mixName(className)
@@ -597,11 +611,19 @@ object Hashers {
       case typeRef: ArrayTypeRef =>
         mixTag(TagArrayTypeRef)
         mixArrayTypeRef(typeRef)
+      case typeRef: ClosureTypeRef =>
+        mixTag(TagClosureTypeRef)
+        mixClosureTypeRef(typeRef)
     }
 
     def mixArrayTypeRef(arrayTypeRef: ArrayTypeRef): Unit = {
       mixTypeRef(arrayTypeRef.base)
       mixInt(arrayTypeRef.dimensions)
+    }
+
+    def mixClosureTypeRef(closureTypeRef: ClosureTypeRef): Unit = {
+      closureTypeRef.paramTypeRefs.foreach(mixTypeRef(_))
+      mixTypeRef(closureTypeRef.resultTypeRef)
     }
 
     def mixType(tpe: Type): Unit = tpe match {
@@ -629,6 +651,11 @@ object Hashers {
         mixTag(if (nullable) TagArrayType else TagNonNullArrayType)
         mixArrayTypeRef(arrayTypeRef)
 
+      case ClosureType(paramTypes, resultType, nullable) =>
+        mixTag(if (nullable) TagClosureType else TagNonNullClosureType)
+        mixTypes(paramTypes)
+        mixType(resultType)
+
       case RecordType(fields) =>
         mixTag(TagRecordType)
         for (RecordType.Field(name, originalName, tpe, mutable) <- fields) {
@@ -638,6 +665,9 @@ object Hashers {
           mixBoolean(mutable)
         }
     }
+
+    def mixTypes(tpes: List[Type]): Unit =
+      tpes.foreach(mixType)
 
     def mixLocalIdent(ident: LocalIdent): Unit = {
       mixPos(ident.pos)
