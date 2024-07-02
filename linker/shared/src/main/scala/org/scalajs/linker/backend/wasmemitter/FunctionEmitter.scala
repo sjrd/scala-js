@@ -558,7 +558,17 @@ private class FunctionEmitter private (
         // box
         primType match {
           case NullType =>
-            ()
+            expectedType match {
+              case _: ClosureType =>
+                /* By construction, we already have a `ref.null none` on the
+                 * stack. We add a `ref.null nofunc` to complete the pair of a
+                 * null typed closure.
+                 */
+                fb += wa.RefNull(watpe.HeapType.NoFunc)
+              case _ =>
+                // For any other type, there is nothing to do
+                ()
+            }
           case ByteType | ShortType =>
             fb += wa.RefI31
           case CharType =>
