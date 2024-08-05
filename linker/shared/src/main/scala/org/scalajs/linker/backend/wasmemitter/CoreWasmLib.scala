@@ -2360,6 +2360,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.setResultType(RefType(genTypeID.ObjectStruct))
 
     val componentTypeDataLocal = fb.addLocal("componentTypeData", RefType(genTypeID.typeData))
+    val vtableLocal = fb.addLocal("vtable", arrayTypeDataType)
 
     // Check negative array size
     if (semantics.negativeArraySizes != CheckedBehavior.Unchecked) {
@@ -2378,20 +2379,13 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb += StructGet(genTypeID.ClassStruct, genFieldID.classData)
     fb += LocalTee(componentTypeDataLocal)
 
-    // Load the vtable and itables of the ArrayClass instance we will create
+    // Compute the vtable of the ArrayClass instance we will create
     fb += I32Const(1)
     fb += Call(genFunctionID.arrayTypeData) // vtable
-    fb += GlobalGet(genGlobalID.arrayClassITable) // itables
-
-    // Load the length
-    fb += LocalGet(lengthParam)
+    fb += LocalSet(vtableLocal)
 
     // switch (componentTypeData.kind)
-    val switchClauseSig = FunctionType(
-      List(arrayTypeDataType, RefType(genTypeID.itables), Int32),
-      List(RefType(genTypeID.ObjectStruct))
-    )
-    fb.switch(switchClauseSig) { () =>
+    fb.switch(RefType(genTypeID.ObjectStruct)) { () =>
       // scrutinee
       fb += LocalGet(componentTypeDataLocal)
       fb += StructGet(genTypeID.typeData, genFieldID.typeData.kind)
@@ -2407,6 +2401,10 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
             fb += ExternConvertAny
             fb += Throw(genTagID.exception)
           } else {
+            fb += LocalGet(vtableLocal)
+            fb += GlobalGet(genGlobalID.arrayClassITable) // itables
+            fb += LocalGet(lengthParam)
+
             val arrayTypeRef = ArrayTypeRef(primRef, 1)
             fb += ArrayNewDefault(genTypeID.underlyingOf(arrayTypeRef))
             fb += StructNew(genTypeID.forArrayClass(arrayTypeRef))
@@ -2416,6 +2414,10 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       }: _*
     ) { () =>
       // case _ => array.new_default anyrefArray; struct.new ObjectArray
+      fb += LocalGet(vtableLocal)
+      fb += GlobalGet(genGlobalID.arrayClassITable) // itables
+      fb += LocalGet(lengthParam)
+
       val arrayTypeRef = ArrayTypeRef(ClassRef(ObjectClass), 1)
       fb += ArrayNewDefault(genTypeID.underlyingOf(arrayTypeRef))
       fb += StructNew(genTypeID.forArrayClass(arrayTypeRef))
