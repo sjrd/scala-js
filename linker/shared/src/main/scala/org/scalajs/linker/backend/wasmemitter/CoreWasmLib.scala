@@ -1614,112 +1614,112 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
     val arrayTypeDataLocal = fb.addLocal("arrayTypeData", objectVTableType)
 
-    fb.loop() { loopLabel =>
-      fb.block(objectVTableType) { arrayOfIsNonNullLabel =>
-        // br_on_non_null $arrayOfIsNonNull typeData.arrayOf
-        fb += LocalGet(typeDataParam)
-        fb += StructGet(
-          genTypeID.typeData,
-          genFieldID.typeData.arrayOf
-        )
-        fb += BrOnNonNull(arrayOfIsNonNullLabel)
-
-        // <top-of-stack> := typeData ; for the <old typeData>.arrayOf := ... later on
-        fb += LocalGet(typeDataParam)
-
-        // typeData := new typeData(...)
-        fb += I32Const(0) // nameOffset
-        fb += I32Const(0) // nameSize
-        fb += I32Const(0) // nameStringIndex
-        fb += I32Const(KindArray) // kind = KindArray
-        fb += I32Const(0) // specialInstanceTypes = 0
-
-        // strictAncestors
-        for (strictAncestor <- strictAncestors)
-          fb += GlobalGet(genGlobalID.forVTable(strictAncestor))
-        fb += ArrayNewFixed(
-          genTypeID.typeDataArray,
-          strictAncestors.size
-        )
-
-        fb += LocalGet(typeDataParam) // componentType
-        fb += RefNull(HeapType.NoExtern) // name
-        fb += RefNull(HeapType.None) // classOf
-        fb += RefNull(HeapType.None) // arrayOf
-
-        // clone
-        fb.switch(RefType(genTypeID.cloneFunctionType)) { () =>
+    fb.block(objectVTableType) { returnLabel =>
+      fb.loop() { loopLabel =>
+        fb.block(objectVTableType) { arrayOfIsNonNullLabel =>
+          // br_on_non_null $arrayOfIsNonNull typeData.arrayOf
           fb += LocalGet(typeDataParam)
-          fb += StructGet(genTypeID.typeData, genFieldID.typeData.kind)
-        }(
-          List(KindBoolean) -> { () =>
-            fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(BooleanRef))
-          },
-          List(KindChar) -> { () =>
-            fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(CharRef))
-          },
-          List(KindByte) -> { () =>
-            fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(ByteRef))
-          },
-          List(KindShort) -> { () =>
-            fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(ShortRef))
-          },
-          List(KindInt) -> { () =>
-            fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(IntRef))
-          },
-          List(KindLong) -> { () =>
-            fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(LongRef))
-          },
-          List(KindFloat) -> { () =>
-            fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(FloatRef))
-          },
-          List(KindDouble) -> { () =>
-            fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(DoubleRef))
-          }
-        ) { () =>
-          fb += ctx.refFuncWithDeclaration(
-            genFunctionID.cloneArray(ClassRef(ObjectClass))
+          fb += StructGet(
+            genTypeID.typeData,
+            genFieldID.typeData.arrayOf
           )
-        }
+          fb += BrOnNonNull(arrayOfIsNonNullLabel)
 
-        // isJSClassInstance
-        fb += RefNull(HeapType.NoFunc)
+          // <top-of-stack> := typeData ; for the <old typeData>.arrayOf := ... later on
+          fb += LocalGet(typeDataParam)
 
-        // reflectiveProxies, empty since all methods of array classes exist in jl.Object
-        fb += ArrayNewFixed(genTypeID.reflectiveProxies, 0)
+          // typeData := new typeData(...)
+          fb += I32Const(0) // nameOffset
+          fb += I32Const(0) // nameSize
+          fb += I32Const(0) // nameStringIndex
+          fb += I32Const(KindArray) // kind = KindArray
+          fb += I32Const(0) // specialInstanceTypes = 0
 
-        val objectClassInfo = ctx.getClassInfo(ObjectClass)
-        fb ++= objectClassInfo.tableEntries.map { methodName =>
-          ctx.refFuncWithDeclaration(objectClassInfo.resolvedMethodInfos(methodName).tableEntryID)
-        }
-        fb += StructNew(genTypeID.ObjectVTable)
-        fb += LocalTee(arrayTypeDataLocal)
+          // strictAncestors
+          for (strictAncestor <- strictAncestors)
+            fb += GlobalGet(genGlobalID.forVTable(strictAncestor))
+          fb += ArrayNewFixed(
+            genTypeID.typeDataArray,
+            strictAncestors.size
+          )
 
-        // <old typeData>.arrayOf := typeData
-        fb += StructSet(genTypeID.typeData, genFieldID.typeData.arrayOf)
+          fb += LocalGet(typeDataParam) // componentType
+          fb += RefNull(HeapType.NoExtern) // name
+          fb += RefNull(HeapType.None) // classOf
+          fb += RefNull(HeapType.None) // arrayOf
 
-        // put arrayTypeData back on the stack
-        fb += LocalGet(arrayTypeDataLocal)
-      } // end block $arrayOfIsNonNullLabel
+          // clone
+          fb.switch(RefType(genTypeID.cloneFunctionType)) { () =>
+            fb += LocalGet(typeDataParam)
+            fb += StructGet(genTypeID.typeData, genFieldID.typeData.kind)
+          }(
+            List(KindBoolean) -> { () =>
+              fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(BooleanRef))
+            },
+            List(KindChar) -> { () =>
+              fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(CharRef))
+            },
+            List(KindByte) -> { () =>
+              fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(ByteRef))
+            },
+            List(KindShort) -> { () =>
+              fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(ShortRef))
+            },
+            List(KindInt) -> { () =>
+              fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(IntRef))
+            },
+            List(KindLong) -> { () =>
+              fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(LongRef))
+            },
+            List(KindFloat) -> { () =>
+              fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(FloatRef))
+            },
+            List(KindDouble) -> { () =>
+              fb += ctx.refFuncWithDeclaration(genFunctionID.cloneArray(DoubleRef))
+            }
+          ) { () =>
+            fb += ctx.refFuncWithDeclaration(
+              genFunctionID.cloneArray(ClassRef(ObjectClass))
+            )
+          }
 
-      // dims := dims - 1 -- leave dims on the stack
-      fb += LocalGet(dimsParam)
-      fb += I32Const(1)
-      fb += I32Sub
-      fb += LocalTee(dimsParam)
+          // isJSClassInstance
+          fb += RefNull(HeapType.NoFunc)
 
-      // if dims == 0 then
-      //   return typeData.arrayOf (which is on the stack)
-      fb += I32Eqz
-      fb.ifThen(FunctionType(List(objectVTableType), List(objectVTableType))) {
-        fb += Return
-      }
+          // reflectiveProxies, empty since all methods of array classes exist in jl.Object
+          fb += ArrayNewFixed(genTypeID.reflectiveProxies, 0)
 
-      // typeData := typeData.arrayOf (which is on the stack), then loop back to the beginning
-      fb += LocalSet(typeDataParam)
-      fb += Br(loopLabel)
-    } // end loop $loop
-    fb += Unreachable
+          val objectClassInfo = ctx.getClassInfo(ObjectClass)
+          fb ++= objectClassInfo.tableEntries.map { methodName =>
+            ctx.refFuncWithDeclaration(objectClassInfo.resolvedMethodInfos(methodName).tableEntryID)
+          }
+          fb += StructNew(genTypeID.ObjectVTable)
+          fb += LocalTee(arrayTypeDataLocal)
+
+          // <old typeData>.arrayOf := typeData
+          fb += StructSet(genTypeID.typeData, genFieldID.typeData.arrayOf)
+
+          // put arrayTypeData back on the stack
+          fb += LocalGet(arrayTypeDataLocal)
+        } // end block $arrayOfIsNonNullLabel
+
+        // dims := dims - 1 -- leave dims on the stack
+        fb += LocalGet(dimsParam)
+        fb += I32Const(1)
+        fb += I32Sub
+        fb += LocalTee(dimsParam)
+
+        // if dims == 0 then
+        //   return typeData.arrayOf (which is on the stack)
+        fb += I32Eqz
+        fb += BrIf(returnLabel)
+
+        // typeData := typeData.arrayOf (which is on the stack), then loop back to the beginning
+        fb += LocalSet(typeDataParam)
+        fb += Br(loopLabel)
+      } // end loop $loop
+      fb += Unreachable
+    }
 
     fb.buildAndAddToModule()
   }
