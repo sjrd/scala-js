@@ -1961,7 +1961,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       },
       // case KindJSType | KindJSTypeWithSuperClass => call typeData.isJSClassInstance(value) or throw if it is null
       List(KindJSType, KindJSTypeWithSuperClass) -> { () =>
-        fb.block(RefType.anyref) { isJSClassInstanceIsNull =>
+        fb.block() { isJSClassInstanceIsNull =>
           // Load value as the argument to the function
           fb += LocalGet(valueParam)
 
@@ -1974,7 +1974,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
           fb += CallRef(genTypeID.isJSClassInstanceFuncType)
           fb += Return
         }
-        fb += Drop // drop `value` which was left on the stack
 
         // throw new TypeError("...")
         fb ++= ctx.stringPool.getConstantStringInstr(
