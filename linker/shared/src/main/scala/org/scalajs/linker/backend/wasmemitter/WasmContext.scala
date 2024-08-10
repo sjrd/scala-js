@@ -177,7 +177,7 @@ object WasmContext {
       val jsNativeLoadSpec: Option[JSNativeLoadSpec],
       val jsNativeMembers: Map[MethodName, JSNativeLoadSpec],
       val staticFieldMirrors: Map[FieldName, List[String]],
-      _specialInstanceTypes: Int,
+      _specialInstanceTypes: Int, // should be `val` but there is a large Scaladoc for it below
       val resolvedMethodInfos: Map[MethodName, ConcreteMethodInfo],
       _itableIdx: Int
   ) {

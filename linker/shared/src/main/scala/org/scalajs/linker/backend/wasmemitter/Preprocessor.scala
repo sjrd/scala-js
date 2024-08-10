@@ -142,12 +142,8 @@ object Preprocessor {
 
     // Does this Scala class implement any interface?
     val classImplementsAnyInterface = {
-      if (kind.isClass || kind == ClassKind.HijackedClass) {
-        clazz.interfaces.nonEmpty ||
-        superClass.exists(_.classImplementsAnyInterface)
-      } else {
-        false
-      }
+      (kind.isClass || kind == ClassKind.HijackedClass) &&
+      (clazz.interfaces.nonEmpty || superClass.exists(_.classImplementsAnyInterface))
     }
 
     /* Should we emit a vtable/typeData global for this class?

@@ -2844,15 +2844,17 @@ private class FunctionEmitter private (
    *
    * Since the various labels can have different result types, and since they
    * can be different from the result of the regular flow of the `try` block,
-   * we have to normalize to `void` for the `try_table` itself. Each label has
-   * a dedicated local for its result if it comes from such a crossing
-   * `return`.
+   * we cannot use the stack for the `try_table` itself: each label has a
+   * dedicated local for its result if it comes from such a crossing `return`.
    *
    * Two more complications:
    *
    * - If the `finally` block itself contains another `try..finally`, they may
    *   need a `destinationTag` concurrently. Therefore, every `try..finally`
-   *   gets its own `destinationTag` local.
+   *   gets its own `destinationTag` local. We do not need this for another
+   *   `try..finally` inside a `try` (or elsewhere in the function), so this is
+   *   not an optimal allocation; we do it this way not to complicate this
+   *   further.
    * - If the `try` block contains another `try..finally`, so that there are
    *   two (or more) `try..finally` in the way between a `Return` and a
    *   `Labeled`, we must forward to the next `finally` in line (and its own
@@ -2864,17 +2866,17 @@ private class FunctionEmitter private (
    * As an evil example of everything that can happen, consider:
    *
    * alpha[double]: { // allocated destinationTag = 1
-   *   val foo: int = try { // uses the local destinationTagOuter
+   *   val foo: int = try { // declare local destinationTagOuter
    *     beta[int]: { // allocated destinationTag = 2
-   *       val bar: int = try { // uses the local destinationTagInner
+   *       val bar: int = try { // declare local destinationTagInner
    *         if (A) return@alpha 5
    *         if (B) return@beta 10
    *         56
    *       } finally {
    *         doTheFinally()
-   *         // not shown: there is another try..finally here
-   *         // its destinationTagLocal must be different than destinationTag
-   *         // since both are live at the same time.
+   *         // not shown: there is another try..finally here using a third
+   *         // local destinationTagThird, since destinationTagOuter and
+   *         // destinationTagInner are alive at the same time.
    *       }
    *       someOtherThings(bar)
    *     }
@@ -3021,58 +3023,85 @@ private class FunctionEmitter private (
 
     /** Information about an enclosing `TryFinally` block. */
     private final class TryFinallyEntry(val depth: Int) {
-      private var _crossInfo: Option[(wanme.LocalID, wanme.LabelID)] = None
+      import TryFinallyEntry._
+
+      private var _crossInfo: Option[CrossInfo] = None
 
       def isInside(labeledEntry: LabeledEntry): Boolean =
         this.depth > labeledEntry.depth
 
       def wasCrossed: Boolean = _crossInfo.isDefined
 
-      def requireCrossInfo(): (wanme.LocalID, wanme.LabelID) = {
+      def requireCrossInfo(): CrossInfo = {
         _crossInfo.getOrElse {
-          val info = (addSyntheticLocal(watpe.Int32), fb.genLabel())
+          val info = CrossInfo(addSyntheticLocal(watpe.Int32), fb.genLabel())
           _crossInfo = Some(info)
           info
         }
       }
     }
 
+    private object TryFinallyEntry {
+      /** Cross info for a `TryFinally` entry.
+       *
+       *  @param destinationTagLocal
+       *    The destinationTag local variable for this `TryFinally`.
+       *  @param crossLabel
+       *    The cross label for this `TryFinally`.
+       */
+      sealed case class CrossInfo(
+        val destinationTagLocal: wanme.LocalID,
+        val crossLabel: wanme.LabelID
+      )
+    }
+
     /** Information about an enclosing `Labeled` block. */
     private final class LabeledEntry(val depth: Int,
         val irLabelName: LabelName, val expectedType: Type) {
 
-      /** The regular label for this `Labeled` block, used for `Return`s that do not cross a
-       *  `TryFinally`.
+      import LabeledEntry._
+
+      /** The regular label for this `Labeled` block, used for `Return`s that
+       *  do not cross a `TryFinally`.
        */
       val regularWasmLabel: wanme.LabelID = fb.genLabel()
 
-      /** The destination tag allocated to this label, used by the `finally` blocks to keep
-       *  propagating to the right destination.
-       *
-       *  Destination tags are always `> 0`. The value `0` is reserved for fall-through.
-       */
-      private var destinationTag: Int = 0
+      private var _crossInfo: Option[CrossInfo] = None
 
-      /** The locals in which to store the result of the label if we have to cross a `try..finally`. */
-      private var resultLocals: List[wanme.LocalID] = null
+      def wasCrossUsed: Boolean = _crossInfo.isDefined
 
-      /** An additional Wasm label that has a `[]` result, and which will get its result from the
-       *  `resultLocal` instead of expecting it on the stack.
-       */
-      private var crossLabel: wanme.LabelID = null
-
-      def wasCrossUsed: Boolean = destinationTag != 0
-
-      def requireCrossInfo(): (Int, List[wanme.LocalID], wanme.LabelID) = {
-        if (destinationTag == 0) {
-          destinationTag = allocateDestinationTag()
+      def requireCrossInfo(): CrossInfo = {
+        _crossInfo.getOrElse {
+          val destinationTag = allocateDestinationTag()
           val resultTypes = transformResultType(expectedType)
-          resultLocals = resultTypes.map(addSyntheticLocal(_))
-          crossLabel = fb.genLabel()
+          val resultLocals = resultTypes.map(addSyntheticLocal(_))
+          val crossLabel = fb.genLabel()
+          val info = CrossInfo(destinationTag, resultLocals, crossLabel)
+          _crossInfo = Some(info)
+          info
         }
-
-        (destinationTag, resultLocals, crossLabel)
       }
+    }
+
+    private object LabeledEntry {
+      /** Cross info for a `LabeledEntry`.
+       *
+       *  @param destinationTag
+       *    The destination tag allocated to this label, used by the `finally`
+       *    blocks to keep propagating to the right destination. Destination
+       *    tags are always `> 0`. The value `0` is reserved for fall-through.
+       *  @param resultLocals
+       *    The locals in which to store the result of the label if we have to
+       *    cross a `try..finally`.
+       *  @param crossLabel
+       *    An additional Wasm label that has a `[]` result, and which will get
+       *    its result from the `resultLocal` instead of expecting it on the stack.
+       */
+      sealed case class CrossInfo(
+        destinationTag: Int,
+        resultLocals: List[wanme.LocalID],
+        crossLabel: wanme.LabelID
+      )
     }
 
     def genLabeled(tree: Labeled, expectedType: Type): Type = {
@@ -3127,7 +3156,8 @@ private class FunctionEmitter private (
          * end
          */
 
-        val (_, resultLocals, crossLabel) = entry.requireCrossInfo()
+        val LabeledEntry.CrossInfo(_, resultLocals, crossLabel) =
+          entry.requireCrossInfo()
 
         // Go back and insert the `block $crossLabel` right after `block $labeled`
         fb.insert(instrsBlockBeginIndex, wa.Block(wa.BlockType.ValueType(), Some(crossLabel)))
@@ -3193,7 +3223,8 @@ private class FunctionEmitter private (
            * end
            */
           if (entry.wasCrossed) {
-            val (destinationTagLocal, crossLabel) = entry.requireCrossInfo()
+            val TryFinallyEntry.CrossInfo(destinationTagLocal, crossLabel) =
+              entry.requireCrossInfo()
 
             // Go back and insert the `block $cross` right after `block $catch`
             fb.insert(
@@ -3234,7 +3265,7 @@ private class FunctionEmitter private (
            * which is set by `Return` or to 0 for fall-through.
            */
 
-          // The order does not matter here because they will be "re-sorted" by emitwa.BRTable
+          // The order does not matter here because they will be "re-sorted" by emitBRTable
           val possibleTargetEntries =
             enclosingLabeledBlocks.valuesIterator.filter(_.wasCrossUsed).toList
 
@@ -3246,18 +3277,19 @@ private class FunctionEmitter private (
            * for other `Labeled`'s, we go to their cross label.
            */
           val brTableDests: List[(Int, wanme.LabelID)] = possibleTargetEntries.map { targetEntry =>
-            val (destinationTag, _, crossLabel) = targetEntry.requireCrossInfo()
+            val LabeledEntry.CrossInfo(destinationTag, _, crossLabel) =
+              targetEntry.requireCrossInfo()
             val label = nextTryFinallyEntry.filter(_.isInside(targetEntry)) match {
               case None          => crossLabel
-              case Some(nextTry) => nextTry.requireCrossInfo()._2
+              case Some(nextTry) => nextTry.requireCrossInfo().crossLabel
             }
             destinationTag -> label
           }
 
-          fb += wa.LocalGet(entry.requireCrossInfo()._1)
+          fb += wa.LocalGet(entry.requireCrossInfo().destinationTagLocal)
           for (nextTry <- nextTryFinallyEntry) {
             // Transfer the destinationTag to the next try..finally in line
-            fb += wa.LocalTee(nextTry.requireCrossInfo()._1)
+            fb += wa.LocalTee(nextTry.requireCrossInfo().destinationTagLocal)
           }
           emitBRTable(brTableDests, doneLabel)
         }
@@ -3318,8 +3350,10 @@ private class FunctionEmitter private (
             /* Here we need to branch to the innermost enclosing `finally` block,
              * while remembering the destination label and the result value.
              */
-            val (destinationTag, resultLocals, _) = targetEntry.requireCrossInfo()
-            val (destinationTagLocal, crossLabel) = tryFinallyEntry.requireCrossInfo()
+            val LabeledEntry.CrossInfo(destinationTag, resultLocals, _) =
+              targetEntry.requireCrossInfo()
+            val TryFinallyEntry.CrossInfo(destinationTagLocal, crossLabel) =
+              tryFinallyEntry.requireCrossInfo()
 
             // 1. Store the result in the label's result locals.
             for (local <- resultLocals.reverse)
