@@ -138,7 +138,7 @@ object Trees {
     def name: Ident
     def mutable: Boolean
 
-    def ref(implicit pos: Position): Tree = VarRef(name)
+    def ref(implicit pos: Position): VarRef = VarRef(name)
   }
 
   sealed case class VarDef(name: Ident, rhs: Option[Tree])(

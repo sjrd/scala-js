@@ -24,7 +24,7 @@ import org.scalajs.ir.Types._
  *  - Converts IR names to JavaScript names.
  *  - Converts module names to JavaScript names.
  */
-private[emitter] final class NameGen {
+private[backend] final class NameGen {
   import NameGen._
 
   private val genLocalNameCache = {

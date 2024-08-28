@@ -92,6 +92,7 @@ private[emitter] final class JSGen(val config: Emitter.Config) {
   }
 
   def genBracketSelect(qual: Tree, item: Tree)(implicit pos: Position): Tree = {
+    // !!! Almost duplicate with wasmemitter.CustomJSHelperBuilder.genJSBracketSelect
     item match {
       case StringLiteral(name) if optimizeBracketSelects &&
           Ident.isValidJSIdentifierName(name) && name != "eval" =>

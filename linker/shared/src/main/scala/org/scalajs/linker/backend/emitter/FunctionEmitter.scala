@@ -2898,6 +2898,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
            * A bare identifier `eval` also need to be protected in the same
            * way, because calling a bare `eval` executes the code in the
            * current lexical scope, as opposed to the global scope.
+           *
+           * !!! There is similar code in `wasmemitter.FunctionEmitter`.
            */
           val transformedFun = transformExprNoChar(fun)
           val protectedFun = transformedFun match {
