@@ -1431,7 +1431,7 @@ private class FunctionEmitter private (
 
       // String.length
       case String_length =>
-        fb += wa.Call(genFunctionID.stringLength)
+        fb += wa.Call(genFunctionID.stringBuiltins.length)
     }
 
     tree.tpe
@@ -1524,7 +1524,7 @@ private class FunctionEmitter private (
         genTree(rhs, IntType)
         markPosition(tree)
         if (semantics.stringIndexOutOfBounds == CheckedBehavior.Unchecked)
-          fb += wa.Call(genFunctionID.stringCharAt)
+          fb += wa.Call(genFunctionID.stringBuiltins.charCodeAt)
         else
           fb += wa.Call(genFunctionID.checkedStringCharAt)
         CharType
@@ -1549,6 +1549,12 @@ private class FunctionEmitter private (
         fb += wa.I32Eqz
     }
 
+    def isStringType(tpe: Type): Boolean = tpe match {
+      case StringType                     => true
+      case ClassType(BoxedStringClass, _) => true
+      case _                              => false
+    }
+
     val lhsType = lhs.tpe
     val rhsType = rhs.tpe
 
@@ -1567,6 +1573,13 @@ private class FunctionEmitter private (
       genTree(rhs, NoType) // no-op if it is actually a Null() literal
       markPosition(tree)
       fb += wa.RefIsNull
+      maybeGenInvert()
+      BooleanType
+    } else if (isStringType(lhsType) && isStringType(rhsType)) {
+      genTree(lhs, ClassType(BoxedStringClass, nullable = lhs.tpe.isNullable))
+      genTree(rhs, ClassType(BoxedStringClass, nullable = rhs.tpe.isNullable))
+      markPosition(tree)
+      fb += wa.Call(genFunctionID.stringBuiltins.equals)
       maybeGenInvert()
       BooleanType
     } else {
@@ -1674,7 +1687,7 @@ private class FunctionEmitter private (
         genToStringForConcat(lhs)
         genToStringForConcat(rhs)
         markPosition(tree)
-        fb += wa.Call(genFunctionID.stringConcat)
+        fb += wa.Call(genFunctionID.stringBuiltins.concat)
     }
 
     StringType
@@ -1780,7 +1793,7 @@ private class FunctionEmitter private (
           case BooleanType =>
             fb += wa.Call(genFunctionID.booleanToString)
           case CharType =>
-            fb += wa.Call(genFunctionID.charToString)
+            fb += wa.Call(genFunctionID.stringBuiltins.fromCharCode)
           case ByteType | ShortType | IntType =>
             fb += wa.Call(genFunctionID.intToString)
           case LongType =>
@@ -1941,7 +1954,8 @@ private class FunctionEmitter private (
       case UndefType =>
         fb += wa.Call(genFunctionID.isUndef)
       case StringType =>
-        fb += wa.Call(genFunctionID.isString)
+        fb += wa.ExternConvertAny
+        fb += wa.Call(genFunctionID.stringBuiltins.test)
       case CharType =>
         val structTypeID = genTypeID.forClass(SpecialNames.CharBoxClass)
         fb += wa.RefTest(watpe.RefType(structTypeID))
