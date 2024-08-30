@@ -633,7 +633,10 @@ private class FunctionEmitter private (
         // box
         primType match {
           case NullType =>
-            ()
+            expectedType match {
+              case ClassType(BoxedStringClass, true) => fb += wa.ExternConvertAny
+              case _                                 => ()
+            }
           case ByteType | ShortType =>
             fb += wa.RefI31
           case CharType =>
@@ -655,6 +658,11 @@ private class FunctionEmitter private (
              * representation, which we can store in an `anyref`.
              */
             fb += wa.Call(genFunctionID.box(primType.primRef))
+        }
+      case (StringType | ClassType(BoxedStringClass, _), _) =>
+        expectedType match {
+          case ClassType(BoxedStringClass, _) => ()
+          case _                              => fb += wa.AnyConvertExtern
         }
       case _ =>
         ()
@@ -716,6 +724,14 @@ private class FunctionEmitter private (
 
             genCheckNonNullFor(array)
 
+            def genRhs(): Unit = {
+              genTree(rhs, lhs.tpe)
+              lhs.tpe match {
+                case ClassType(BoxedStringClass, _) => fb += wa.AnyConvertExtern
+                case _                              => ()
+              }
+            }
+
             if (semantics.arrayIndexOutOfBounds == CheckedBehavior.Unchecked &&
                 (semantics.arrayStores == CheckedBehavior.Unchecked || isPrimArray)) {
               // Get the underlying array
@@ -724,12 +740,12 @@ private class FunctionEmitter private (
                 genFieldID.objStruct.arrayUnderlying
               )
               genTree(index, IntType)
-              genTree(rhs, lhs.tpe)
+              genRhs()
               markPosition(tree)
               fb += wa.ArraySet(genTypeID.underlyingOf(arrayTypeRef))
             } else {
               genTree(index, IntType)
-              genTree(rhs, lhs.tpe)
+              genRhs()
               markPosition(tree)
               fb += wa.Call(genFunctionID.arraySetFor(arrayTypeRef))
             }
@@ -1065,7 +1081,8 @@ private class FunctionEmitter private (
           pushArgs(argsLocals)
           genHijackedClassCall(BoxedDoubleClass)
         } else if (receiverClassName == CharSequenceClass) {
-          // the value must be a `string`; it already has the right type
+          // the value must be a `string`
+          fb += wa.ExternConvertAny
           pushArgs(argsLocals)
           genHijackedClassCall(BoxedStringClass)
         } else if (methodName == compareToMethodName) {
@@ -1097,7 +1114,7 @@ private class FunctionEmitter private (
             // case JSValueTypeString =>
             List(JSValueTypeString) -> { () =>
               fb += wa.LocalGet(receiverLocal)
-              // no need to unbox for string
+              fb += wa.ExternConvertAny
               pushArgs(argsLocals)
               genHijackedClassCall(BoxedStringClass)
             }
@@ -1267,6 +1284,13 @@ private class FunctionEmitter private (
        * `Labeled` in statement position, since they must have a non-`void`
        * type in the IR but they get a `void` expected type.
        */
+      expectedType
+    } else if (tree.isInstanceOf[Null] && expectedType == ClassType(BoxedStringClass, true)) {
+      /* Directly emit a `ref.null noextern` instead of requiring an
+       * `extern.convert_from_any` in `genAdapt`.
+       */
+      markPosition(tree)
+      fb += wa.RefNull(watpe.HeapType.NoExtern)
       expectedType
     } else {
       markPosition(tree)
@@ -1549,9 +1573,19 @@ private class FunctionEmitter private (
       val lhsWasmType = transformSingleType(lhsType)
       val rhsWasmType = transformSingleType(rhsType)
 
+      def isSubEq(heapType: watpe.HeapType): Boolean = heapType match {
+        case watpe.HeapType.Any | watpe.HeapType.Extern =>
+          false
+        case _ =>
+          /* All other ref types *that we return from transformSingleType* are
+           * sub-heap-types of `eq`.
+           */
+          true
+      }
+
       (lhsWasmType, rhsWasmType) match {
         case (watpe.RefType(_, lhsHeapType), watpe.RefType(_, rhsHeapType))
-            if lhsHeapType != watpe.HeapType.Any && rhsHeapType != watpe.HeapType.Any =>
+            if isSubEq(lhsHeapType) && isSubEq(rhsHeapType) =>
           genTree(lhs, lhsType)
           genTree(rhs, rhsType)
           markPosition(tree)
@@ -1669,7 +1703,7 @@ private class FunctionEmitter private (
          *
          * The overall structure of the generated code is as follows:
          *
-         * block (ref any) $done
+         * block (ref extern) $done
          *   block $isNull
          *     load receiver as (ref null java.lang.Object)
          *     br_on_null $isNull
@@ -1680,7 +1714,7 @@ private class FunctionEmitter private (
          * end $done
          */
 
-        fb.block(watpe.RefType.any) { labelDone =>
+        fb.block(watpe.RefType.extern) { labelDone =>
           fb.block() { labelIsNull =>
             genTreeAuto(tree)
             markPosition(tree)
@@ -1697,7 +1731,7 @@ private class FunctionEmitter private (
          *
          * The overall structure of the generated code is as follows:
          *
-         * block (ref any) $done
+         * block (ref extern) $done
          *   block anyref $notOurObject
          *     load receiver
          *     br_on_cast_fail anyref (ref $java.lang.Object) $notOurObject
@@ -1709,7 +1743,7 @@ private class FunctionEmitter private (
          * end $done
          */
 
-        fb.block(watpe.RefType.any) { labelDone =>
+        fb.block(watpe.RefType.extern) { labelDone =>
           // First try the case where the value is one of our objects
           fb.block(watpe.RefType.anyref) { labelNotOurObject =>
             // Load receiver
@@ -1767,10 +1801,16 @@ private class FunctionEmitter private (
 
       case ClassType(BoxedStringClass, nullable) =>
         // Common case for which we want to avoid the hijacked class dispatch
-        genTreeAuto(tree)
-        markPosition(tree)
-        if (nullable)
-          fb += wa.Call(genFunctionID.jsValueToStringForConcat)
+        if (nullable) {
+          fb.block(watpe.RefType.extern) { notNullLabel =>
+            genTreeAuto(tree)
+            markPosition(tree)
+            fb += wa.BrOnNonNull(notNullLabel)
+            fb ++= ctx.stringPool.getConstantStringInstr("null")
+          }
+        } else {
+          genTreeAuto(tree)
+        }
 
       case ClassType(className, _) =>
         genWithDispatch(ctx.getClassInfo(className).isAncestorOfHijackedClass)
@@ -2093,6 +2133,10 @@ private class FunctionEmitter private (
               targetWasmType match {
                 case watpe.RefType(true, watpe.HeapType.Any) =>
                   () // nothing to do
+                case watpe.RefType(targetNullable, watpe.HeapType.Extern) =>
+                  fb += wa.ExternConvertAny
+                  if (!targetNullable)
+                    fb += wa.RefAsNonNull
                 case targetWasmType: watpe.RefType =>
                   fb += wa.RefCast(targetWasmType)
                 case _ =>
@@ -2118,7 +2162,8 @@ private class FunctionEmitter private (
         fb += wa.GlobalGet(genGlobalID.undef)
 
       case StringType =>
-        val sig = watpe.FunctionType(List(watpe.RefType.anyref), List(watpe.RefType.any))
+        fb += wa.ExternConvertAny
+        val sig = watpe.FunctionType(List(watpe.RefType.externref), List(watpe.RefType.extern))
         fb.block(sig) { nonNullLabel =>
           fb += wa.BrOnNonNull(nonNullLabel)
           fb += wa.GlobalGet(genGlobalID.emptyString)
@@ -2911,6 +2956,10 @@ private class FunctionEmitter private (
               case watpe.RefType.anyref =>
                 // nothing to do
                 ()
+              case watpe.RefType(nullable, watpe.HeapType.Extern) =>
+                fb += wa.ExternConvertAny
+                if (!nullable)
+                  fb += wa.RefAsNonNull
               case refType: watpe.RefType =>
                 fb += wa.RefCast(refType)
               case otherType =>
