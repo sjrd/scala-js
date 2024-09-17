@@ -259,8 +259,8 @@ object Preprocessor {
         traverseMethodDef(method)
       for (jsConstructor <- clazz.jsConstructorDef)
         traverseJSConstructorDef(jsConstructor)
-      for (export <- clazz.exportedMembers)
-        traverseJSMethodPropDef(export)
+      for (jsMethodPropDef <- clazz.exportedMembers)
+        traverseJSMethodPropDef(jsMethodPropDef)
     }
 
     def collectAbstractMethodCalls(tle: LinkedTopLevelExport): Unit = {

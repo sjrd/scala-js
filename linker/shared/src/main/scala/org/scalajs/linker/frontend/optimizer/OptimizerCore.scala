@@ -319,7 +319,7 @@ private[optimizer] abstract class OptimizerCore(
   private def transform(tree: Tree, isStat: Boolean)(
       implicit scope: Scope): Tree = {
 
-    @inline implicit def pos = tree.pos
+    @inline implicit def pos: Position = tree.pos
     val result: Tree = tree match {
       // Definitions
 
@@ -898,7 +898,7 @@ private[optimizer] abstract class OptimizerCore(
    */
   private def pretransformExpr(tree: Tree)(cont: PreTransCont)(
       implicit scope: Scope): TailRec[Tree] = tailcall {
-    @inline implicit def pos = tree.pos
+    @inline implicit def pos: Position = tree.pos
 
     tree match {
       case tree: Block =>
@@ -2641,7 +2641,7 @@ private[optimizer] abstract class OptimizerCore(
     }
   }
 
-  private def inline(allocationSites: List[AllocationSite],
+  private def inlineTarget(allocationSites: List[AllocationSite],
       optReceiver: Option[(Type, PreTransform)],
       args: List[PreTransform], target: MethodID, isStat: Boolean,
       usePreTransform: Boolean)(
@@ -2779,7 +2779,7 @@ private[optimizer] abstract class OptimizerCore(
       val beingInlined = scope.implsBeingInlined((allocationSites, target))
       if (shouldInline && !beingInlined) {
         val optReceiver = optTReceiver.map((receiverTypeFor(target), _))
-        inline(allocationSites, optReceiver, targs, target, isStat, usePreTransform)(cont)
+        inlineTarget(allocationSites, optReceiver, targs, target, isStat, usePreTransform)(cont)
       } else {
         treeNotInlined
       }

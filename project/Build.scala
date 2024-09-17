@@ -712,7 +712,10 @@ object Build {
   )
 
   val fatalWarningsSettings = Def.settings(
-      scalacOptions += "-Xfatal-warnings",
+      scalacOptions ++= {
+        if (scalaVersion.value.startsWith("3.")) Nil
+        else Seq("-Xfatal-warnings")
+      },
 
       scalacOptions in (Compile, doc) := {
         val prev = (scalacOptions in (Compile, doc)).value
@@ -776,6 +779,9 @@ object Build {
     CrossVersion.partialVersion(scalaVersion) match {
       case Some((2, n)) if n >= 13 =>
         Seq("org.scala-lang.modules" %% "scala-parallel-collections" % "0.2.0")
+
+      case Some((3, _)) =>
+        Seq("org.scala-lang.modules" % "scala-parallel-collections" % "0.2.0" cross CrossVersion.for3Use2_13)
 
       case _ => Nil
     }
@@ -1150,7 +1156,7 @@ object Build {
   ).settings(
       commonLinkerInterfaceSettings,
       libraryDependencies ++= Seq(
-          "org.scala-js" %% "scalajs-logging" % "1.1.1",
+          "org.scala-js" % "scalajs-logging" % "1.1.1" cross CrossVersion.for3Use2_13,
       ),
       libraryDependencies ++= JUnitDeps,
   ).dependsOn(irProject, jUnitAsyncJVM % "test")
@@ -1301,8 +1307,8 @@ object Build {
       libraryDependencies ++= Seq(
           "com.google.javascript" % "closure-compiler" % "v20220202",
           "com.google.jimfs" % "jimfs" % "1.1" % "test",
-          "org.scala-js" %% "scalajs-env-nodejs" % "1.4.0" % "test",
-          "org.scala-js" %% "scalajs-js-envs-test-kit" % "1.4.0" % "test"
+          "org.scala-js" % "scalajs-env-nodejs" % "1.4.0" % "test" cross CrossVersion.for3Use2_13,
+          "org.scala-js" % "scalajs-js-envs-test-kit" % "1.4.0" % "test" cross CrossVersion.for3Use2_13
       ) ++ (
           parallelCollectionsDependencies(scalaVersion.value)
       ),
@@ -1374,7 +1380,7 @@ object Build {
       name := "Scala.js sbt test adapter",
       libraryDependencies ++= Seq(
           "org.scala-sbt" % "test-interface" % "1.0",
-          "org.scala-js" %% "scalajs-js-envs" % "1.4.0",
+          "org.scala-js" % "scalajs-js-envs" % "1.4.0" cross CrossVersion.for3Use2_13,
           "com.google.jimfs" % "jimfs" % "1.1" % "test",
       ),
       libraryDependencies ++= JUnitDeps,
