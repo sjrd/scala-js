@@ -750,15 +750,11 @@ private[emitter] object CoreJSLib {
       }
 
 
-      /* We use isClassClassInstantiated as an over-approximation of whether
-       * the program contains any `GetClass` node. If `j.l.Class` is not
-       * instantiated, then we know that there is no `GetClass` node, and it is
-       * safe to omit the definition of `objectGetClass`. However, it is
-       * possible that we generate `objectGetClass` even if it is not
-       * necessary, in the case that `j.l.Class` is otherwise instantiated
-       * (i.e., through a `ClassOf` node).
+      /* We use isClassReflectionUsed as an over-approximation of whether
+       * the program contains any `GetClass` node. It may still not contain any
+       * if class-based reflection is enabled only through `ClassOf` nodes.
        */
-      condDefs(globalKnowledge.isClassClassInstantiated)(
+      condDefs(globalKnowledge.isClassReflectionUsed)(
         defineObjectGetClassBasedFun(VarField.objectGetClass,
             className => genClassOf(className),
             instance => Apply(instance DOT classData DOT cpn.getClassOf, Nil),
@@ -883,8 +879,8 @@ private[emitter] object CoreJSLib {
     }
 
     private def defineArithmeticOps(): List[Tree] = {
-      val isArithmeticExceptionClassInstantiated =
-        globalKnowledge.isArithmeticExceptionClassInstantiated
+      val isIntLongDivModByMaybeZeroUsed =
+        globalKnowledge.isIntLongDivModByMaybeZeroUsed
 
       def throwDivByZero: Tree = {
         Throw(genScalaClassNew(ArithmeticExceptionClass,
@@ -894,7 +890,7 @@ private[emitter] object CoreJSLib {
       def wrapBigInt64(tree: Tree): Tree =
         Apply(genIdentBracketSelect(BigIntRef, "asIntN"), 64 :: tree :: Nil)
 
-      condDefs(isArithmeticExceptionClassInstantiated)(
+      condDefs(isIntLongDivModByMaybeZeroUsed)(
         defineFunction2(VarField.intDiv) { (x, y) =>
           If(y === 0, throwDivByZero, {
             Return((x / y) | 0)
@@ -928,7 +924,7 @@ private[emitter] object CoreJSLib {
           )
         }
       ) :::
-      condDefs(allowBigIntsForLongs && isArithmeticExceptionClassInstantiated)(
+      condDefs(allowBigIntsForLongs && isIntLongDivModByMaybeZeroUsed)(
         defineFunction2(VarField.longDiv) { (x, y) =>
           If(y === bigInt(0), throwDivByZero, {
             Return(wrapBigInt64(x / y))
@@ -1958,7 +1954,7 @@ private[emitter] object CoreJSLib {
           initArray,
           getArrayOf
       ) ::: (
-          if (globalKnowledge.isClassClassInstantiated) {
+          if (globalKnowledge.isClassReflectionUsed) {
             List(
                 getClassOf,
                 isAssignableFrom

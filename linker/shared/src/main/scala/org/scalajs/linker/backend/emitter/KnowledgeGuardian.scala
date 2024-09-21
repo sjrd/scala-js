@@ -179,11 +179,11 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
     def isParentDataAccessed: Boolean =
       specialInfo.askIsParentDataAccessed(this)
 
-    def isClassClassInstantiated: Boolean =
-      specialInfo.askIsClassClassInstantiated(this)
+    def isClassReflectionUsed: Boolean =
+      specialInfo.askIsClassReflectionUsed(this)
 
-    def isArithmeticExceptionClassInstantiated: Boolean =
-      specialInfo.askIsArithmeticExceptionClassInstantiated(this)
+    def isIntLongDivModByMaybeZeroUsed: Boolean =
+      specialInfo.askIsIntLongDivModByMaybeZeroUsed(this)
 
     def isInterface(className: ClassName): Boolean =
       classes(className).askIsInterface(this)
@@ -518,8 +518,8 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
 
     import SpecialInfo._
 
-    private var instantiatedSpecialClassBitSet =
-      computeInstantiatedSpecialClassBitSet(initClassClass, initArithmeticExceptionClass)
+    private var conditionalFeaturesBitSet =
+      computeConditionalFeaturesBitSet(initClassClass, initArithmeticExceptionClass)
 
     private var isParentDataAccessed =
       computeIsParentDataAccessed(initGlobalInfo)
@@ -533,8 +533,8 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
     private var hijackedDescendants =
       computeHijackedDescendants(initHijackedClasses)
 
-    // Askers of isXClassInstantiated -- merged for all X because in practice that's only the CoreJSLib
-    private val instantiatedSpecialClassAskers = mutable.Set.empty[Invalidatable]
+    // Askers of conditional features -- all merged because in practice that's only the CoreJSLib
+    private val conditionalFeaturesAskers = mutable.Set.empty[Invalidatable]
 
     private val methodsInRepresentativeClassesAskers = mutable.Set.empty[Invalidatable]
     private val methodsInObjectAskers = mutable.Set.empty[Invalidatable]
@@ -545,11 +545,11 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
         globalInfo: LinkedGlobalInfo): Boolean = {
       var invalidateAll = false
 
-      val newInstantiatedSpecialClassBitSet =
-        computeInstantiatedSpecialClassBitSet(classClass, arithmeticExceptionClass)
-      if (newInstantiatedSpecialClassBitSet != instantiatedSpecialClassBitSet) {
-        instantiatedSpecialClassBitSet = newInstantiatedSpecialClassBitSet
-        invalidateAskers(instantiatedSpecialClassAskers)
+      val newConditionalFeaturesBitSet = computeConditionalFeaturesBitSet(
+          classClass, arithmeticExceptionClass)
+      if (newConditionalFeaturesBitSet != conditionalFeaturesBitSet) {
+        conditionalFeaturesBitSet = newConditionalFeaturesBitSet
+        invalidateAskers(conditionalFeaturesAskers)
       }
 
       val newIsParentDataAccessed = computeIsParentDataAccessed(globalInfo)
@@ -581,14 +581,20 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
       invalidateAll
     }
 
-    private def computeInstantiatedSpecialClassBitSet(
+    private def computeConditionalFeaturesBitSet(
         classClass: Option[LinkedClass],
         arithmeticExceptionClass: Option[LinkedClass]): Int = {
+      def isInstantiatedWithCtor(linkedClass: Option[LinkedClass], ctor: MethodName): Boolean = {
+        linkedClass.exists { cls =>
+          cls.hasDirectInstances && cls.methods.exists(_.methodName == ctor)
+        }
+      }
+
       var bitSet: Int = 0
-      if (classClass.exists(_.hasInstances))
-        bitSet |= SpecialClassClass
-      if (arithmeticExceptionClass.exists(_.hasInstances))
-        bitSet |= SpecialClassArithmeticException
+      if (isInstantiatedWithCtor(classClass, NoArgConstructorName))
+        bitSet |= FeatureClassReflection
+      if (isInstantiatedWithCtor(arithmeticExceptionClass, StringArgConstructorName))
+        bitSet |= FeatureIntLongDivModByMaybeZero
       bitSet
     }
 
@@ -636,16 +642,16 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
       }
     }
 
-    def askIsClassClassInstantiated(invalidatable: Invalidatable): Boolean = {
+    def askIsClassReflectionUsed(invalidatable: Invalidatable): Boolean = {
       invalidatable.registeredTo(this)
-      instantiatedSpecialClassAskers += invalidatable
-      (instantiatedSpecialClassBitSet & SpecialClassClass) != 0
+      conditionalFeaturesAskers += invalidatable
+      (conditionalFeaturesBitSet & FeatureClassReflection) != 0
     }
 
-    def askIsArithmeticExceptionClassInstantiated(invalidatable: Invalidatable): Boolean = {
+    def askIsIntLongDivModByMaybeZeroUsed(invalidatable: Invalidatable): Boolean = {
       invalidatable.registeredTo(this)
-      instantiatedSpecialClassAskers += invalidatable
-      (instantiatedSpecialClassBitSet & SpecialClassArithmeticException) != 0
+      conditionalFeaturesAskers += invalidatable
+      (conditionalFeaturesBitSet & FeatureIntLongDivModByMaybeZero) != 0
     }
 
     def askIsParentDataAccessed(invalidatable: Invalidatable): Boolean =
@@ -670,22 +676,22 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
     }
 
     def unregister(invalidatable: Invalidatable): Unit = {
-      instantiatedSpecialClassAskers -= invalidatable
+      conditionalFeaturesAskers -= invalidatable
       methodsInRepresentativeClassesAskers -= invalidatable
       methodsInObjectAskers -= invalidatable
     }
 
     /** Call this when we invalidate all caches. */
     def unregisterAll(): Unit = {
-      instantiatedSpecialClassAskers.clear()
+      conditionalFeaturesAskers.clear()
       methodsInRepresentativeClassesAskers.clear()
       methodsInObjectAskers.clear()
     }
   }
 
   private object SpecialInfo {
-    private final val SpecialClassClass = 1 << 0
-    private final val SpecialClassArithmeticException = 1 << 1
+    private final val FeatureClassReflection = 1 << 0
+    private final val FeatureIntLongDivModByMaybeZero = 1 << 1
   }
 
   private def invalidateAskers(askers: mutable.Set[Invalidatable]): Unit = {

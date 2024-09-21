@@ -19,11 +19,11 @@ import org.scalajs.ir.Types.Type
 import org.scalajs.linker.standard.ModuleSet.ModuleID
 
 private[emitter] trait GlobalKnowledge {
-  /** Tests whether the `java.lang.Class` class is instantiated. */
-  def isClassClassInstantiated: Boolean
+  /** Tests whether `java.lang.Class`-based reflection is used. */
+  def isClassReflectionUsed: Boolean
 
-  /** Tests whether the `java.lang.ArithmeticException` class is instantiated. */
-  def isArithmeticExceptionClassInstantiated: Boolean
+  /** Tests whether int/long div/mod by maybe-zero is used. */
+  def isIntLongDivModByMaybeZeroUsed: Boolean
 
   /** Tests whether the parent class data is accessed in the linking unit. */
   def isParentDataAccessed: Boolean
