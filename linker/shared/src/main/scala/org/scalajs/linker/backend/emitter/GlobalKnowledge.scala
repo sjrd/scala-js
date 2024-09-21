@@ -25,6 +25,9 @@ private[emitter] trait GlobalKnowledge {
   /** Tests whether int/long div/mod by maybe-zero is used. */
   def isIntLongDivModByMaybeZeroUsed: Boolean
 
+  /** Tests whether `Class_newArray` is used. */
+  def isClassNewArrayUsed: Boolean
+
   /** Tests whether the parent class data is accessed in the linking unit. */
   def isParentDataAccessed: Boolean
 

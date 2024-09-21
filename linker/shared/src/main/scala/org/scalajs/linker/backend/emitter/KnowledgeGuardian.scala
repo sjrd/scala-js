@@ -49,6 +49,7 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
     var objectClass: Option[LinkedClass] = None
     var classClass: Option[LinkedClass] = None
     var arithmeticExceptionClass: Option[LinkedClass] = None
+    var illegalArgumentExceptionClass: Option[LinkedClass] = None
     val hijackedClasses = Iterable.newBuilder[LinkedClass]
 
     // Update classes
@@ -85,6 +86,9 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
         case ArithmeticExceptionClass =>
           arithmeticExceptionClass = Some(linkedClass)
 
+        case IllegalArgumentExceptionClass =>
+          illegalArgumentExceptionClass = Some(linkedClass)
+
         case name if HijackedClasses(name) =>
           hijackedClasses += linkedClass
 
@@ -98,11 +102,12 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
     val invalidateAll = {
       if (specialInfo == null) {
         specialInfo = new SpecialInfo(objectClass, classClass,
-            arithmeticExceptionClass, hijackedClasses.result(),
-            moduleSet.globalInfo)
+            arithmeticExceptionClass, illegalArgumentExceptionClass,
+            hijackedClasses.result(), moduleSet.globalInfo)
         false
       } else {
-        specialInfo.update(objectClass, classClass, arithmeticExceptionClass,
+        specialInfo.update(objectClass, classClass,
+            arithmeticExceptionClass, illegalArgumentExceptionClass,
             hijackedClasses.result(), moduleSet.globalInfo)
       }
     }
@@ -184,6 +189,9 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
 
     def isIntLongDivModByMaybeZeroUsed: Boolean =
       specialInfo.askIsIntLongDivModByMaybeZeroUsed(this)
+
+    def isClassNewArrayUsed: Boolean =
+      specialInfo.askIsClassNewArrayUsed(this)
 
     def isInterface(className: ClassName): Boolean =
       classes(className).askIsInterface(this)
@@ -513,13 +521,16 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
   private class SpecialInfo(initObjectClass: Option[LinkedClass],
       initClassClass: Option[LinkedClass],
       initArithmeticExceptionClass: Option[LinkedClass],
+      initIllegalArgumentExceptionClass: Option[LinkedClass],
       initHijackedClasses: Iterable[LinkedClass],
       initGlobalInfo: LinkedGlobalInfo) extends Unregisterable {
 
     import SpecialInfo._
 
-    private var conditionalFeaturesBitSet =
-      computeConditionalFeaturesBitSet(initClassClass, initArithmeticExceptionClass)
+    private var conditionalFeaturesBitSet = {
+      computeConditionalFeaturesBitSet(initClassClass,
+          initArithmeticExceptionClass, initIllegalArgumentExceptionClass)
+    }
 
     private var isParentDataAccessed =
       computeIsParentDataAccessed(initGlobalInfo)
@@ -541,12 +552,13 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
 
     def update(objectClass: Option[LinkedClass], classClass: Option[LinkedClass],
         arithmeticExceptionClass: Option[LinkedClass],
+        illegalArgumentExceptionClass: Option[LinkedClass],
         hijackedClasses: Iterable[LinkedClass],
         globalInfo: LinkedGlobalInfo): Boolean = {
       var invalidateAll = false
 
       val newConditionalFeaturesBitSet = computeConditionalFeaturesBitSet(
-          classClass, arithmeticExceptionClass)
+          classClass, arithmeticExceptionClass, illegalArgumentExceptionClass)
       if (newConditionalFeaturesBitSet != conditionalFeaturesBitSet) {
         conditionalFeaturesBitSet = newConditionalFeaturesBitSet
         invalidateAskers(conditionalFeaturesAskers)
@@ -583,7 +595,8 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
 
     private def computeConditionalFeaturesBitSet(
         classClass: Option[LinkedClass],
-        arithmeticExceptionClass: Option[LinkedClass]): Int = {
+        arithmeticExceptionClass: Option[LinkedClass],
+        illegalArgumentExceptionClass: Option[LinkedClass]): Int = {
       def isInstantiatedWithCtor(linkedClass: Option[LinkedClass], ctor: MethodName): Boolean = {
         linkedClass.exists { cls =>
           cls.hasDirectInstances && cls.methods.exists(_.methodName == ctor)
@@ -595,6 +608,8 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
         bitSet |= FeatureClassReflection
       if (isInstantiatedWithCtor(arithmeticExceptionClass, StringArgConstructorName))
         bitSet |= FeatureIntLongDivModByMaybeZero
+      if (isInstantiatedWithCtor(illegalArgumentExceptionClass, NoArgConstructorName))
+        bitSet |= FeatureClassNewArray
       bitSet
     }
 
@@ -654,6 +669,12 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
       (conditionalFeaturesBitSet & FeatureIntLongDivModByMaybeZero) != 0
     }
 
+    def askIsClassNewArrayUsed(invalidatable: Invalidatable): Boolean = {
+      invalidatable.registeredTo(this)
+      conditionalFeaturesAskers += invalidatable
+      (conditionalFeaturesBitSet & FeatureClassNewArray) != 0
+    }
+
     def askIsParentDataAccessed(invalidatable: Invalidatable): Boolean =
       isParentDataAccessed
 
@@ -692,6 +713,7 @@ private[emitter] final class KnowledgeGuardian(config: Emitter.Config) {
   private object SpecialInfo {
     private final val FeatureClassReflection = 1 << 0
     private final val FeatureIntLongDivModByMaybeZero = 1 << 1
+    private final val FeatureClassNewArray = 1 << 2
   }
 
   private def invalidateAskers(askers: mutable.Set[Invalidatable]): Unit = {
