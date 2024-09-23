@@ -30,6 +30,7 @@ import org.scalajs.linker.backend.emitter.{NameGen => JSNameGen, PrivateLibHolde
 import org.scalajs.linker.backend.javascript.Printers.JSTreePrinter
 import org.scalajs.linker.backend.javascript.{Trees => js}
 
+import org.scalajs.linker.backend.webassembly.BlockTypesLowering
 import org.scalajs.linker.backend.webassembly.FunctionBuilder
 import org.scalajs.linker.backend.webassembly.{Instructions => wa}
 import org.scalajs.linker.backend.webassembly.{Modules => wamod}
@@ -100,12 +101,13 @@ final class Emitter(config: Emitter.Config) {
     genDeclarativeElements()
 
     val wasmModule = ctx.moduleBuilder.build()
+    val loweredWasmModule = BlockTypesLowering.lowerBlockTypes(wasmModule)
 
     val jsFileContentInfo = new JSFileContentInfo(
       customJSHelpers = ctx.getAllCustomJSHelpers()
     )
 
-    (wasmModule, jsFileContentInfo)
+    (loweredWasmModule, jsFileContentInfo)
   }
 
   private def genStartFunction(
