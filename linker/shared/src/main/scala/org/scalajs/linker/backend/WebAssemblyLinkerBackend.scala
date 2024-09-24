@@ -23,6 +23,7 @@ import org.scalajs.linker._
 import org.scalajs.linker.interface._
 import org.scalajs.linker.interface.unstable._
 import org.scalajs.linker.standard._
+import org.scalajs.linker.standard.ModuleSet.ModuleID
 
 import org.scalajs.linker.backend.javascript.{ByteArrayWriter, SourceMapWriter}
 import org.scalajs.linker.backend.webassembly._
@@ -59,106 +60,128 @@ final class WebAssemblyLinkerBackend(config: LinkerBackendImpl.Config)
 
   def emit(moduleSet: ModuleSet, output: OutputDirectory, logger: Logger)(
       implicit ec: ExecutionContext): Future[Report] = {
-    moduleSet.modules match {
-      case Nil =>
-        val outputImpl = OutputDirectoryImpl.fromOutputDirectory(output)
-        for {
-          currentFilesList <- outputImpl.listFiles()
-          _ <- Future.traverse(currentFilesList) { f =>
-            outputImpl.delete(f)
-          }
-        } yield new ReportImpl(Nil)
-      case onlyModule :: Nil =>
-        emit(onlyModule, moduleSet.globalInfo, output, logger)
-      case modules =>
-        throw new UnsupportedOperationException(
-            "The WebAssembly backend does not support multiple modules. Found: " +
-            modules.map(_.id.id).mkString(", "))
-    }
-  }
-
-  private def emit(onlyModule: ModuleSet.Module, globalInfo: LinkedGlobalInfo,
-      output: OutputDirectory, logger: Logger)(
-      implicit ec: ExecutionContext): Future[Report] = {
-    val moduleID = onlyModule.id.id
-
-    val emitterResult = emitter.emit(onlyModule, globalInfo, logger)
-    val wasmModule = emitterResult.wasmModule
+    val emitterResult: Emitter.Result = emitter.emit(moduleSet, logger)
 
     val outputImpl = OutputDirectoryImpl.fromOutputDirectory(output)
 
-    val watFileName = s"$moduleID.wat"
-    val wasmFileName = s"$moduleID.wasm"
-    val sourceMapFileName = s"$wasmFileName.map"
-    val jsFileName = OutputPatternsImpl.jsFile(config.outputPatterns, moduleID)
+    def watFileName(moduleID: ModuleID) = s"${moduleID.id}.wat"
+    def wasmFileName(moduleID: ModuleID) = s"${moduleID.id}.wasm"
+    def sourceMapFileName(wasmFileName: String) = s"$wasmFileName.map"
+    def jsFileName(moduleID: ModuleID) = OutputPatternsImpl.jsFile(config.outputPatterns, moduleID.id)
 
-    val filesToProduce0 = Set(
-      wasmFileName,
-      loaderJSFileName,
-      jsFileName
-    )
-    val filesToProduce1 =
-      if (config.sourceMap) filesToProduce0 + sourceMapFileName
-      else filesToProduce0
+    def filesToProduceFor(moduleID: ModuleID): Set[String] = {
+      val wasmFile = wasmFileName(moduleID)
+      val result1 = Set(wasmFile, jsFileName(moduleID))
+      val result2 =
+        if (config.sourceMap) result1 + sourceMapFileName(wasmFile)
+        else result1
+      val result3 =
+        if (config.prettyPrint) result2 + watFileName(moduleID)
+        else result2
+      result3
+    }
+
     val filesToProduce =
-      if (config.prettyPrint) filesToProduce1 + watFileName
-      else filesToProduce1
+      Set(loaderJSFileName) ++ emitterResult.body.flatMap(mod => filesToProduceFor(mod._1))
 
-    def maybeWriteWatFile(): Future[Unit] = {
+    val ioThrottler = new IOThrottler(config.maxConcurrentWrites)
+
+    def maybeWriteWatFiles(): Future[Unit] = {
       if (config.prettyPrint) {
-        val textOutput = TextWriter.write(wasmModule)
-        val textOutputBytes = textOutput.getBytes(StandardCharsets.UTF_8)
-        outputImpl.writeFull(watFileName, ByteBuffer.wrap(textOutputBytes))
+        Future.traverse(emitterResult.body) { case (moduleID, content) =>
+          ioThrottler.throttle {
+            Future {
+              TextWriter.write(content.wasmModule).getBytes(StandardCharsets.UTF_8)
+            }.flatMap { textOutputBytes =>
+              outputImpl.writeFull(watFileName(moduleID), ByteBuffer.wrap(textOutputBytes))
+            }
+          }
+        }.map(_ => ())
       } else {
         Future.unit
       }
     }
 
-    def writeWasmFile(): Future[Unit] = {
+    def writeModule(moduleID: ModuleID, content: Emitter.Result.Module): Future[Report.Module] = {
       val emitDebugInfo = !config.minify
 
-      if (config.sourceMap) {
+      def writeWat(): Future[Unit] = {
+        Future {
+          TextWriter.write(content.wasmModule).getBytes(StandardCharsets.UTF_8)
+        }.flatMap { textOutputBytes =>
+          outputImpl.writeFull(watFileName(moduleID), ByteBuffer.wrap(textOutputBytes))
+        }
+      }
+
+      val wasmFile = wasmFileName(moduleID)
+      val sourceMapFile = sourceMapFileName(wasmFile)
+      val jsFile = jsFileName(moduleID)
+
+      def writeWasm(): Future[Unit] = if (config.sourceMap) {
         val sourceMapWriter = new ByteArrayWriter
 
-        val wasmFileURI = s"./$wasmFileName"
-        val sourceMapURI = s"./$sourceMapFileName"
+        val wasmFileURI = s"./$wasmFile"
+        val sourceMapURI = s"./$sourceMapFile"
 
         val smWriter = new SourceMapWriter(sourceMapWriter, wasmFileURI,
             config.relativizeSourceMapBase, fragmentIndex)
         val binaryOutput = BinaryWriter.writeWithSourceMap(
-            wasmModule, emitDebugInfo, smWriter, sourceMapURI)
+            content.wasmModule, emitDebugInfo, smWriter, sourceMapURI)
         smWriter.complete()
 
-        outputImpl.writeFull(wasmFileName, binaryOutput).flatMap { _ =>
-          outputImpl.writeFull(sourceMapFileName, sourceMapWriter.toByteBuffer())
+        outputImpl.writeFull(wasmFile, binaryOutput).flatMap { _ =>
+          outputImpl.writeFull(sourceMapFile, sourceMapWriter.toByteBuffer())
         }
       } else {
-        val binaryOutput = BinaryWriter.write(wasmModule, emitDebugInfo)
-        outputImpl.writeFull(wasmFileName, binaryOutput)
+        val binaryOutput = BinaryWriter.write(content.wasmModule, emitDebugInfo)
+        outputImpl.writeFull(wasmFile, binaryOutput)
+      }
+
+      def writeJS(): Future[Unit] = {
+        outputImpl.writeFull(jsFile, ByteBuffer.wrap(content.jsFileContent))
+      }
+
+      val writeFiles = ioThrottler.throttle {
+        if (config.prettyPrint)
+          writeWat().flatMap(_ => writeWasm()).flatMap(_ => writeJS())
+        else
+          writeWasm().flatMap(_ => writeJS())
+      }
+
+      writeFiles.map { _ =>
+        new ReportImpl.ModuleImpl(moduleID.id, jsFile, None, coreSpec.moduleKind)
       }
     }
 
-    def writeLoaderFile(): Future[Unit] =
-      outputImpl.writeFull(loaderJSFileName, ByteBuffer.wrap(emitterResult.loaderContent))
+    def writeLoaderFile(): Future[Unit] = {
+      ioThrottler.throttle {
+        outputImpl.writeFull(loaderJSFileName, ByteBuffer.wrap(emitterResult.loaderContent))
+      }
+    }
 
-    def writeJSFile(): Future[Unit] =
-      outputImpl.writeFull(jsFileName, ByteBuffer.wrap(emitterResult.jsFileContent))
-
-    for {
-      existingFiles <- outputImpl.listFiles()
-      _ <- Future.sequence(existingFiles.filterNot(filesToProduce).map(outputImpl.delete(_)))
-      _ <- maybeWriteWatFile()
-      _ <- writeWasmFile()
-      _ <- writeLoaderFile()
-      _ <- writeJSFile()
-    } yield {
-      val reportModule = new ReportImpl.ModuleImpl(
-        moduleID,
-        jsFileName,
-        None,
-        coreSpec.moduleKind
-      )
-      new ReportImpl(List(reportModule))
+    if (emitterResult.body.isEmpty) {
+      // Don't even write the loader file if there is no module
+      for {
+        existingFiles <- outputImpl.listFiles()
+        _ <- Future.sequence(existingFiles.map { f =>
+          ioThrottler.throttle(outputImpl.delete(f))
+        })
+      } yield {
+        new ReportImpl(Nil)
+      }
+    } else {
+      for {
+        existingFiles <- outputImpl.listFiles()
+        _ <- writeLoaderFile()
+        _ <- Future.sequence(existingFiles.filterNot(filesToProduce).map { f =>
+          ioThrottler.throttle(outputImpl.delete(f))
+        })
+        reports <- Future.sequence(emitterResult.body.map { case (moduleID, content) =>
+          writeModule(moduleID, content)
+        })
+      } yield {
+        new ReportImpl(reports)
+      }
     }
   }
 }

@@ -56,12 +56,23 @@ final class Emitter(config: Emitter.Config) {
 
   val injectedIRFiles: Seq[IRFile] = PrivateLibHolder.files
 
-  def emit(module: ModuleSet.Module, globalInfo: LinkedGlobalInfo, logger: Logger): Result = {
-    val (wasmModule, jsFileContentInfo) = emitWasmModule(module, globalInfo)
+  def emit(moduleSet: ModuleSet, logger: Logger): Result = {
     val loaderContent = LoaderContent.bytesContent
-    val jsFileContent = buildJSFileContent(module, jsFileContentInfo)
 
-    new Result(wasmModule, loaderContent, jsFileContent)
+    moduleSet.modules match {
+      case Nil =>
+        new Result(loaderContent, Map.empty)
+
+      case onlyModule :: Nil =>
+        val (wasmModule, jsFileContentInfo) = emitWasmModule(onlyModule, moduleSet.globalInfo)
+        val jsFileContent = buildJSFileContent(onlyModule, jsFileContentInfo)
+        new Result(loaderContent, Map(onlyModule.id -> new Result.Module(wasmModule, jsFileContent)))
+
+      case modules =>
+        throw new UnsupportedOperationException(
+            "The WebAssembly backend does not support multiple modules. Found: " +
+            modules.map(_.id.id).mkString(", "))
+    }
   }
 
   private def emitWasmModule(module: ModuleSet.Module,
@@ -384,10 +395,13 @@ object Emitter {
   )
 
   final class Result(
-      val wasmModule: wamod.Module,
       val loaderContent: Array[Byte],
-      val jsFileContent: Array[Byte]
+      val body: Map[ModuleID, Result.Module]
   )
+
+  object Result {
+    final class Module(val wasmModule: wamod.Module, val jsFileContent: Array[Byte])
+  }
 
   /** Builds the symbol requirements of our back-end.
    *
