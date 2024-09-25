@@ -787,8 +787,6 @@ private class FunctionEmitter private (
 
       case lhs @ JSGlobalRef(name) =>
         val builder = new CustomJSHelperBuilderWithTreeSupport()
-        builder.registerGlobalRef(name)
-        builder.registerForGlobals(rhs)
         val rhsRef = builder.addInput(rhs)
         val helperID = builder.build(NoType) {
           js.Assign(builder.genGlobalRef(name), rhsRef)
@@ -2811,7 +2809,6 @@ private class FunctionEmitter private (
       implicit pos: Position): Unit = {
 
     val builder = new CustomJSHelperBuilder()
-    builder.registerForGlobals(jsNativeLoadSpec)
     val result = builder.genJSNativeLoadSpec(jsNativeLoadSpec)
     val helperID = builder.build(AnyType) {
       js.Return(result)
@@ -2943,7 +2940,6 @@ private class FunctionEmitter private (
     implicit val pos = tree.pos
 
     val builder = new CustomJSHelperBuilder()
-    builder.registerGlobalRef(name)
     val helperID = builder.build(AnyType) {
       js.Return(builder.genGlobalRef(name))
     }
@@ -2959,7 +2955,6 @@ private class FunctionEmitter private (
     implicit val pos = tree.pos
 
     val builder = new CustomJSHelperBuilder()
-    builder.registerGlobalRef(name)
     val helperID = builder.build(AnyType) {
       js.Return(js.UnaryOp(JSUnaryOp.typeof, builder.genGlobalRef(name)))
     }
@@ -3556,7 +3551,6 @@ private class FunctionEmitter private (
       implicit pos: Position): Type = {
 
     val builder = new CustomJSHelperBuilderWithTreeSupport()
-    builder.registerForGlobals(args)
     val jsArgs = args.map(builder.addInput(_))
     val helperID = builder.build(resultType) {
       makeJSHelperBody(jsArgs)

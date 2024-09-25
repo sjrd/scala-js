@@ -176,7 +176,6 @@ class ClassEmitter(coreSpec: CoreSpec) {
         fb += wa.I32Const(0) // false
       } else {
         val helperBuilder = new CustomJSHelperBuilder()
-        helperBuilder.registerForGlobals(clazz.jsNativeLoadSpec)
         val xRef = helperBuilder.addWasmInput("x", watpe.RefType.anyref) {
           fb += wa.LocalGet(xParam)
         }
@@ -1044,26 +1043,6 @@ class ClassEmitter(coreSpec: CoreSpec) {
         LoadJSConstructor(clazz.superClass.get.name)
       }
 
-      // Register all the inputs for globals
-      locally {
-        helperBuilder.registerGlobalRef("Object")
-        helperBuilder.registerForGlobals(jsSuperClassTree)
-
-        for (fieldDef <- clazz.fields) {
-          fieldDef match {
-            case _: FieldDef                => ()
-            case JSFieldDef(_, nameTree, _) => helperBuilder.registerForGlobals(nameTree)
-          }
-        }
-
-        for (methodOrProp <- clazz.exportedMembers) {
-          methodOrProp match {
-            case JSMethodDef(_, nameTree, _, _, _) => helperBuilder.registerForGlobals(nameTree)
-            case JSPropertyDef(_, nameTree, _, _)  => helperBuilder.registerForGlobals(nameTree)
-          }
-        }
-      }
-
       val dataRef = helperBuilder.addWasmInput("data", watpe.RefType(dataStructTypeID)) {
         fb += wa.LocalGet(dataStructLocal)
       }
@@ -1102,14 +1081,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
         case _                                                                => js.ComputedName(tree)
       }
 
-      val jsClassIdent = helperBuilder.freshLocalIdent("cls")
+      val jsClassIdent = helperBuilder.newLocalIdent("cls")
 
       val jsCtorDef: js.MethodDef = {
         val JSConstructorDef(_, params, restParam, body) = ctor
         val (paramDefs, restParamDef) = helperBuilder.genJSParamDefs(params, restParam)
         val allParamRefs = (paramDefs ::: restParamDef.toList).map(_.ref)
         js.MethodDef(static = false, js.Ident("constructor"), paramDefs, restParamDef, {
-          val preSuperEnv = helperBuilder.freshLocalIdent("preSuperEnv")
+          val preSuperEnv = helperBuilder.newLocalIdent("preSuperEnv")
           js.Block(
             // var preSuperEnv = preSuperStats(data, new.target, ...allParamRefs);
             js.VarDef(preSuperEnv, Some(js.Apply(preSuperStatsFunctionRef,

@@ -44,10 +44,6 @@ import WasmContext._
  *  {{{
  *  val builder = new CustomJSHelperBuilder()
  *
- *  // Register sources of JS global refs that we will need to avoid clashes with
- *  builder.registerForGlobals(...) // Trees, JSNativeLoadSpecs, etc.
- *  ...
- *
  *  // Add inputs that will be evaluated on the Wasm call site, and whose
  *  // values are then available as `js.Tree`s in the JS helper:
  *  val xRef = builder.addWasmInput(watpe.Int32) {
@@ -89,10 +85,6 @@ import WasmContext._
  *    protected def evalTreeAtCallSite(tree: Tree, expectedType: Type): Unit = ???
  *  }
  *
- *  // Register sources of JS global refs that we will need to avoid clashes with
- *  builder.registerForGlobals(...) // Trees, JSNativeLoadSpecs, etc.
- *  ...
- *
  *  // Add inputs that will be evaluated on the JS side if possible, otherwise
  *  // evaluated on the Wasm call site, and whose values are then available as
  *  // `js.Tree`s in the JS helper:
@@ -107,51 +99,27 @@ import WasmContext._
 class CustomJSHelperBuilder()(implicit ctx: WasmContext, pos: Position) {
   import CustomJSHelperBuilder._
 
-  private val registeredGlobalRefs = mutable.Set.empty[String]
-  private val allocatedLocalIdents = mutable.Set.empty[String]
+  private val usedGlobalRefs = mutable.Set.empty[String]
+  private val allocatedLocalIdentResolvers = mutable.ListBuffer.empty[LocalResolver]
 
   private val jsParamDefs = mutable.ListBuffer.empty[js.ParamDef]
   private val wasmParamTypes = mutable.ListBuffer.empty[watpe.Type]
 
-  def freshLocalIdent(origName: String): js.Ident = {
-    var result = origName
-    var index = 0
-    while (registeredGlobalRefs.contains(result) || !allocatedLocalIdents.add(result)) {
-      index += 1
-      result = origName + index
-    }
-    js.Ident(result)
+  def newLocalIdent(origName: String): js.DelayedIdent = {
+    val resolver = new LocalResolver(origName)
+    allocatedLocalIdentResolvers += resolver
+    js.DelayedIdent(resolver)
   }
 
-  def freshLocalIdent(name: LocalName): js.Ident =
-    freshLocalIdent(ctx.jsNameGen.genName(name))
+  def newLocalIdent(name: LocalName): js.DelayedIdent =
+    newLocalIdent(ctx.jsNameGen.genName(name))
 
   private def addParamDef(origName: String, wasmType: watpe.Type): js.VarRef = {
-    val jsParamDef = js.ParamDef(freshLocalIdent(origName))
+    val jsParamDef = js.ParamDef(newLocalIdent(origName))
     jsParamDefs += jsParamDef
     wasmParamTypes += wasmType
     jsParamDef.ref
   }
-
-  def registerGlobalRef(name: String): Unit = {
-    if (allocatedLocalIdents.nonEmpty) {
-      // We have already allocated locals, we are not allowed to register globals anymore
-      throw new IllegalStateException(
-          "Cannot register new JS global refs after local idents were allocated")
-    }
-
-    registeredGlobalRefs += name
-  }
-
-  def registerForGlobals(jsNativeLoadSpec: JSNativeLoadSpec): Unit = jsNativeLoadSpec match {
-    case JSNativeLoadSpec.Global(name, _) =>
-      registerGlobalRef(name)
-    case _:JSNativeLoadSpec.Import | _:JSNativeLoadSpec.ImportWithGlobalFallback =>
-      // nothing to do
-  }
-
-  def registerForGlobals(jsNativeLoadSpec: Option[JSNativeLoadSpec]): Unit =
-    jsNativeLoadSpec.foreach(registerForGlobals(_))
 
   /** Adds an input of an arbitrary Wasm type, to be evaluated on the Wasm
    *  stack.
@@ -169,7 +137,7 @@ class CustomJSHelperBuilder()(implicit ctx: WasmContext, pos: Position) {
   }
 
   def genGlobalRef(name: String): js.VarRef = {
-    assert(registeredGlobalRefs.contains(name), s"Global ref '$name' was not registered")
+    usedGlobalRefs += name
     js.VarRef(js.Ident(name))
   }
 
@@ -191,7 +159,7 @@ class CustomJSHelperBuilder()(implicit ctx: WasmContext, pos: Position) {
   }
 
   def genJSParamDef(param: ParamDef): js.ParamDef =
-    js.ParamDef(freshLocalIdent(param.name.name))
+    js.ParamDef(newLocalIdent(param.name.name))
 
   def genJSParamDefs(params: List[ParamDef],
       restParam: Option[ParamDef]): (List[js.ParamDef], Option[js.ParamDef]) = {
@@ -199,6 +167,18 @@ class CustomJSHelperBuilder()(implicit ctx: WasmContext, pos: Position) {
   }
 
   def build(resultType: Type)(body: js.Tree): wanme.FunctionID = {
+    // Allocate names for the local ident resolvers
+    val usedLocalNames = usedGlobalRefs.clone()
+    for (resolver <- allocatedLocalIdentResolvers) {
+      var allocatedName = resolver.origName
+      var index = 0
+      while (!usedLocalNames.add(allocatedName)) {
+        index += 1
+        allocatedName = resolver.origName + index
+      }
+      resolver.setResolved(allocatedName)
+    }
+
     val helperFun = js.Function(arrow = true, jsParamDefs.toList, None, body)
     val wasmFunType = watpe.FunctionType(wasmParamTypes.toList, transformResultType(resultType))
     ctx.addCustomJSHelper(helperFun, wasmFunType)
@@ -206,6 +186,24 @@ class CustomJSHelperBuilder()(implicit ctx: WasmContext, pos: Position) {
 }
 
 object CustomJSHelperBuilder {
+
+  private final class LocalResolver(val origName: String) extends js.DelayedIdent.Resolver {
+    private var resolved: Option[String] = None
+
+    def debugString: String = origName
+
+    def resolve(): String = {
+      resolved.getOrElse {
+        throw new IllegalStateException(s"Local JS ident '$origName' not resolved")
+      }
+    }
+
+    def setResolved(resolved: String): Unit = {
+      if (this.resolved.isDefined)
+        throw new IllegalStateException(s"Local JS ident '$origName' was already resolved")
+      this.resolved = Some(resolved)
+    }
+  }
 
   abstract class WithTreeEval()(implicit ctx: WasmContext, pos: Position) extends CustomJSHelperBuilder {
     /** Evaluates an arbitrary `Tree` with the given expected type and puts it
@@ -222,24 +220,6 @@ object CustomJSHelperBuilder {
      *  - `SelectJSNativeMember`
      */
     protected def evalTreeAtCallSite(tree: Tree, expectedType: Type): Unit
-
-    def registerForGlobals(tree: TreeOrJSSpread): Unit = tree match {
-      case JSSpread(items) =>
-        registerForGlobals(items)
-      case JSGlobalRef(name) =>
-        registerGlobalRef(name)
-      case LoadJSConstructor(cls) =>
-        registerForGlobals(ctx.getClassInfo(cls).jsNativeLoadSpec)
-      case LoadJSModule(cls) =>
-        registerForGlobals(ctx.getClassInfo(cls).jsNativeLoadSpec)
-      case SelectJSNativeMember(className, MethodIdent(memberName)) =>
-        registerForGlobals(ctx.getClassInfo(className).jsNativeMembers.get(memberName))
-      case _ =>
-        // nothing to do
-    }
-
-    def registerForGlobals(trees: List[TreeOrJSSpread]): Unit =
-      trees.foreach(registerForGlobals(_))
 
     def addInput(tree: TreeOrJSSpread): js.Tree = {
       tree match {
