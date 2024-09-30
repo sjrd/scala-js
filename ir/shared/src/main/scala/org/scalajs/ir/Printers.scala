@@ -349,6 +349,26 @@ object Printers {
           print(fun)
           printArgs(args)
 
+        case NewLambda(descriptor, fun) =>
+          import descriptor._
+          print("<newLambda>(")
+          print(superClass)
+          for (intf <- interfaces) {
+            print(", ")
+            print(intf)
+          }
+          print(", ")
+          print(methodName)
+          for (paramType <- paramTypes) {
+            print(", ")
+            print(paramType)
+          }
+          print(", ")
+          print(resultType)
+          print(", ")
+          print(fun)
+          print(")")
+
         case UnaryOp(op, lhs) =>
           import UnaryOp._
 
