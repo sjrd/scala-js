@@ -316,6 +316,17 @@ object Hashers {
           mixTree(fun)
           mixTrees(args)
 
+        case NewLambda(descriptor, fun) =>
+          import descriptor._
+          mixTag(TagNewLambda)
+          mixName(superClass)
+          mixNames(interfaces)
+          mixMethodName(methodName)
+          mixTypes(paramTypes)
+          mixType(resultType)
+          mixTree(fun)
+          mixType(tree.tpe)
+
         case UnaryOp(op, lhs) =>
           mixTag(TagUnaryOp)
           mixInt(op)
@@ -705,6 +716,11 @@ object Hashers {
 
     def mixName(name: Name): Unit =
       mixBytes(name.encoded.bytes)
+
+    def mixNames(names: List[Name]): Unit = {
+      mixInt(names.size)
+      names.foreach(mixName(_))
+    }
 
     def mixMethodName(name: MethodName): Unit = {
       mixName(name.simpleName)

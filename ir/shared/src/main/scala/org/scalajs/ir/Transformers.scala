@@ -111,6 +111,9 @@ object Transformers {
         case ApplyTypedClosure(flags, fun, args) =>
           ApplyTypedClosure(flags, transformExpr(fun), args.map(transformExpr))
 
+        case NewLambda(descriptor, fun) =>
+          NewLambda(descriptor, transformExpr(fun))(tree.tpe)
+
         case UnaryOp(op, lhs) =>
           UnaryOp(op, transformExpr(lhs))
 
@@ -270,14 +273,8 @@ object Transformers {
         case jsMethodDef: JSMethodDef =>
           transformJSMethodDef(jsMethodDef)
 
-        case JSPropertyDef(flags, name, getterBody, setterArgAndBody) =>
-          JSPropertyDef(
-              flags,
-              transformExpr(name),
-              getterBody.map(transformStat),
-              setterArgAndBody map { case (arg, body) =>
-                (arg, transformStat(body))
-              })(Unversioned)(jsMethodPropDef.pos)
+        case jsPropertyDef: JSPropertyDef =>
+          transformJSPropertyDef(jsPropertyDef)
       }
     }
 
@@ -285,6 +282,18 @@ object Transformers {
       val JSMethodDef(flags, name, args, restParam, body) = jsMethodDef
       JSMethodDef(flags, transformExpr(name), args, restParam, transformExpr(body))(
           jsMethodDef.optimizerHints, Unversioned)(jsMethodDef.pos)
+    }
+
+    def transformJSPropertyDef(jsPropertyDef: JSPropertyDef): JSPropertyDef = {
+      val JSPropertyDef(flags, name, getterBody, setterArgAndBody) = jsPropertyDef
+      JSPropertyDef(
+        flags,
+        transformExpr(name),
+        getterBody.map(transformExpr(_)),
+        setterArgAndBody.map { case (arg, body) =>
+          (arg, transformStat(body))
+        }
+      )(Unversioned)(jsPropertyDef.pos)
     }
 
     def transformJSConstructorBody(body: JSConstructorBody): JSConstructorBody = {
