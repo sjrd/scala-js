@@ -248,6 +248,18 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       )(withNewLocalNameScope(body))
     }
 
+    // Global state for tracking methods that reference `this` -----------------
+
+    private var liftedMethodsThatReferenceThis: scala.collection.Set[Symbol] = null
+
+    private def compileAsStaticMethod(sym: Symbol): Boolean = {
+      sym.isStaticMember || {
+        (sym.isLiftedMethod || sym.isDelambdafyTarget) &&
+        !liftedMethodsThatReferenceThis.contains(sym) &&
+        !isJSType(sym.owner)
+      }
+    }
+
     // Global class generation state -------------------------------------------
 
     private val lazilyGeneratedAnonClasses = mutable.Map.empty[Symbol, ClassDef]
@@ -306,6 +318,9 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
      */
     override def apply(cunit: CompilationUnit): Unit = {
       try {
+        liftedMethodsThatReferenceThis =
+          new delambdafy.ThisReferringMethodsTraverser().methodReferencesThisIn(cunit.body)
+
         def collectClassDefs(tree: Tree): List[ClassDef] = {
           tree match {
             case EmptyTree => Nil
@@ -450,11 +465,12 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         case ex: Throwable =>
           if (settings.debug.value)
             ex.printStackTrace()
-          globalError(s"Error while emitting ${cunit.source}\n${ex.getMessage}")
+          globalError(s"Error while emitting ${cunit.source}\n${ex.getMessage}\n${ex.getStackTrace().mkString("\n")}")
       } finally {
         lazilyGeneratedAnonClasses.clear()
         generatedStaticForwarderClasses.clear()
         generatedClasses.clear()
+        liftedMethodsThatReferenceThis = null
         pos2irPosCache.clear()
       }
     }
@@ -1144,7 +1160,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
       assert(moduleClass.isModuleClass, moduleClass)
 
-      val hasAnyExistingPublicStaticMethod =
+      /*val hasAnyExistingPublicStaticMethod =
         existingMethods.exists(_.flags.namespace == js.MemberNamespace.PublicStatic)
       if (hasAnyExistingPublicStaticMethod) {
         reporter.error(pos,
@@ -1152,7 +1168,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             s"the class ${moduleClass.fullName} while trying to generate " +
             "static forwarders for its companion object. " +
             "Please report this as a bug in Scala.js.")
-      }
+      }*/
 
       def listMembersBasedOnFlags = {
         // Copy-pasted from BCodeHelpers.
@@ -1964,7 +1980,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             } else {
               val resultIRType = toIRType(sym.tpe.resultType)
               val namespace = {
-                if (sym.isStaticMember) {
+                if (compileAsStaticMethod(sym)) {
                   if (sym.isPrivate) js.MemberNamespace.PrivateStatic
                   else js.MemberNamespace.PublicStatic
                 } else {
@@ -3446,6 +3462,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         fun.hasAttachment[NoInlineCallsiteAttachment.type]  // nullary methods
       }
 
+      //println(s"${sym.fullName}, ${sym.isStaticMember}, ${sym.isLiftedMethod}, ${compileAsStaticMethod(sym)}")
+
       if (isJSType(receiver.tpe) && sym.owner != ObjectClass) {
         if (!isNonNativeJSClass(sym.owner) || isExposed(sym))
           genPrimitiveJSCall(tree, isStat)
@@ -3453,7 +3471,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           genApplyJSClassMethod(genExpr(receiver), sym, genActualArgs(sym, args))
       } else if (sym.hasAnnotation(JSNativeAnnotation)) {
         genJSNativeMemberCall(tree, isStat)
-      } else if (sym.isStaticMember) {
+      } else if (compileAsStaticMethod(sym)) {
         if (sym.isMixinConstructor) {
           /* Do not emit a call to the $init$ method of JS traits.
            * This exception is necessary because optional JS fields cause the
@@ -6333,7 +6351,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
       val formalArgs = params.map(genParamDef(_))
 
-      val (allFormalCaptures, body, allActualCaptures) = if (!target.isStaticMember) {
+      val (allFormalCaptures, body, allActualCaptures) = if (!compileAsStaticMethod(target)) {
         val thisActualCapture = genExpr(receiver)
         val thisFormalCapture = js.ParamDef(
             freshLocalIdent("this")(receiver.pos), thisOriginalName,
