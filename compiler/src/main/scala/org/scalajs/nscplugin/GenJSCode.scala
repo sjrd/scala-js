@@ -6311,12 +6311,32 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       val Function(paramTrees, Apply(
           targetTree @ Select(receiver, _), allArgs0)) = originalFunction
 
+      println("-----------")
+
       val captureSyms =
         global.delambdafy.FreeVarTraverser.freeVarsOf(originalFunction)
       val target = targetTree.symbol
       val params = paramTrees.map(_.symbol)
+      println(target.tpe)
+      println(params.map(_.info))
 
       val allArgs = allArgs0 map genExpr
+
+      // Extract information about the SAM type we are implementing
+      val samClassSym = originalFunction.tpe.typeSymbolDirect
+      val (superClass, interfaces, sam, synthCls) = if (isFunctionSymbol(samClassSym)) {
+        // This is a scala.FunctionN SAM; extend the corresponding AbstractFunctionN class
+        val arity = params.size
+        val superClass = AbstractFunctionClass(arity)
+        val sam = superClass.info.decl(nme.apply)
+        (superClass, Nil, sam, NoSymbol)
+      } else {
+        // This is an arbitrary SAM interface
+        val samInfo = originalFunction.attachments.get[SAMFunction].getOrElse {
+          abort(s"Cannot find the SAMFunction attachment on $originalFunction at $pos")
+        }
+        (ObjectClass, samClassSym :: Nil, samInfo.sam, samInfo.synthCls)
+      }
 
       val formalCaptures = captureSyms.toList.map(genParamDef(_, pos))
       val actualCaptures = formalCaptures.map(_.ref)
@@ -6369,6 +6389,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
       // Wrap the closure in the appropriate box for the SAM type
       val funSym = originalFunction.tpe.typeSymbolDirect
+      println(originalFunction.tpe)
       if (isFunctionSymbol(funSym)) {
         /* This is a scala.FunctionN. We use a NewLambda.
          */
@@ -6389,6 +6410,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         val sam = originalFunction.attachments.get[SAMFunction].getOrElse {
           abort(s"Cannot find the SAMFunction attachment on $originalFunction at $pos")
         }
+        println(sam.sam)
+        println(sam.sam.info)
 
         val samWrapperClassName = synthesizeSAMWrapper(funSym, sam, ctorName)
         js.New(samWrapperClassName, js.MethodIdent(ctorName), List(closure))
