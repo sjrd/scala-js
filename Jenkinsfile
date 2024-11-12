@@ -64,7 +64,7 @@ rm -rf $TEST_LOCAL_IVY_HOME
 mkdir $TEST_LOCAL_IVY_HOME
 ln -s "$LOC_IVY_HOME/cache" "$TEST_LOCAL_IVY_HOME/cache"
 
-export SBT_OPTS="-J-Xmx5G -J-XX:MaxPermSize=512M -Dsbt.boot.directory=$LOC_SBT_BOOT -Dsbt.ivy.home=$TEST_LOCAL_IVY_HOME -Divy.home=$TEST_LOCAL_IVY_HOME -Dsbt.global.base=$LOC_SBT_BASE"
+export SBT_OPTS="-J-Xmx5G -Dsbt.boot.directory=$LOC_SBT_BOOT -Dsbt.ivy.home=$TEST_LOCAL_IVY_HOME -Divy.home=$TEST_LOCAL_IVY_HOME -Dsbt.global.base=$LOC_SBT_BASE"
 export COURSIER_CACHE="$LOC_CS_CACHE"
 
 export NODE_PATH="$HOME/node_modules/"
@@ -539,7 +539,7 @@ def Tasks = [
 ]
 
 def mainJavaVersion = "1.8"
-def otherJavaVersions = ["11", "16"]
+def otherJavaVersions = ["11", "17", "21"]
 def allJavaVersions = otherJavaVersions.clone()
 allJavaVersions << mainJavaVersion
 
@@ -577,7 +577,7 @@ def otherScalaVersions = [
   "2.13.12"
 ]
 
-def scala3Version = "3.2.1"
+def scala3Version = "3.3.4"
 
 def allESVersions = [
   "ES5_1",
