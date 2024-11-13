@@ -94,6 +94,12 @@ class LinkedHashMap[K, V](initialCapacity: Int, loadFactor: Float,
       younger.older = older
   }
 
+  override def putFirst(k: K, v: V): V =
+    throw new Error("todo")
+
+  override def putLast(k: K, v: V): V =
+    throw new Error("todo")
+
   override def clear(): Unit = {
     super.clear()
 
@@ -106,6 +112,18 @@ class LinkedHashMap[K, V](initialCapacity: Int, loadFactor: Float,
   }
 
   protected def removeEldestEntry(eldest: Map.Entry[K, V]): Boolean = false
+
+  override def sequencedKeySet(): SequencedSet[K] =
+    throw new Error("todo")
+
+  override def sequencedValues(): SequencedCollection[V] =
+    throw new Error("todo")
+
+  override def sequencedEntrySet(): SequencedSet[Map.Entry[K, V]] =
+    throw new Error("todo")
+
+  def reversed(): SequencedMap[K,V] =
+    throw new Error("todo")
 
   override def forEach(action: BiConsumer[_ >: K, _ >: V]): Unit = {
     var node = eldest

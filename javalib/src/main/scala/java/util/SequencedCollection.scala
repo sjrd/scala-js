@@ -12,4 +12,32 @@
 
 package java.util
 
-trait SequencedCollection[E] extends Collection[E]
+trait SequencedCollection[E] extends Collection[E] {
+  def reversed(): SequencedCollection[E]
+
+  def addFirst(e: E): Unit =
+    throw new UnsupportedOperationException()
+
+  def addLast(e: E): Unit =
+    throw new UnsupportedOperationException()
+
+  def getFirst(): E =
+    iterator().next()
+
+  def getLast(): E =
+    reversed().iterator().next()
+
+  def removeFirst(): E = {
+    val iter = iterator()
+    val elem = iter.next()
+    iter.remove()
+    elem
+  }
+
+  def removeLast(): E = {
+    val iter = reversed().iterator()
+    val elem = iter.next()
+    iter.remove()
+    elem
+  }
+}

@@ -12,4 +12,6 @@
 
 package java.util
 
-trait SequencedSet[E] extends SequencedCollection[E] with Set[E]
+trait SequencedSet[E] extends SequencedCollection[E] with Set[E] {
+  def reversed(): SequencedSet[E]
+}

@@ -42,10 +42,10 @@ class ArrayDeque[E] private (initialCapacity: Int)
   @inline
   override def isEmpty(): Boolean = empty
 
-  def addFirst(e: E): Unit =
+  override def addFirst(e: E): Unit =
     offerFirst(e)
 
-  def addLast(e: E): Unit =
+  override def addLast(e: E): Unit =
     offerLast(e)
 
   def offerFirst(e: E): Boolean = {
@@ -78,14 +78,14 @@ class ArrayDeque[E] private (initialCapacity: Int)
     }
   }
 
-  def removeFirst(): E = {
+  override def removeFirst(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
     else
       pollFirst()
   }
 
-  def removeLast(): E = {
+  override def removeLast(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
     else
@@ -123,14 +123,14 @@ class ArrayDeque[E] private (initialCapacity: Int)
     }
   }
 
-  def getFirst(): E = {
+  override def getFirst(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
     else
       peekFirst()
   }
 
-  def getLast(): E = {
+  override def getLast(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
     else

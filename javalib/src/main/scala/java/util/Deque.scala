@@ -40,4 +40,6 @@ trait Deque[E] extends Queue[E] with SequencedCollection[E] {
   def size(): Int
   def iterator(): Iterator[E]
   def descendingIterator(): Iterator[E]
+
+  def reversed(): Deque[E] = throw new Error("todo")
 }

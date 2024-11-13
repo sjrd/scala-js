@@ -31,4 +31,5 @@ class LinkedHashSet[E] private[util] (inner: LinkedHashMap[E, Any])
     addAll(c)
   }
 
+  def reversed(): SequencedSet[E] = throw new Error("todo")
 }

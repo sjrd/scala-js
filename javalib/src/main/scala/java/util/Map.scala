@@ -148,4 +148,25 @@ object Map {
     def hashCode(): Int
   }
 
+  private[util] final class SimpleImmutableEntry[K, V](key: K, value: V) extends Entry[K, V] {
+    def this(other: Entry[K, V]) = this(other.getKey(), other.getValue())
+
+    def getKey(): K = key
+    def getValue(): V = value
+
+    def setValue(value: V): V =
+      throw new UnsupportedOperationException()
+
+    override def equals(that: Any): Boolean = that match {
+      case that: Entry[_, _] =>
+        Objects.equals(this.getKey(), that.getKey()) &&
+        Objects.equals(this.getValue(), that.getValue())
+      case _ =>
+        false
+    }
+
+    override def hashCode(): Int =
+      Objects.hashCode(key) ^ Objects.hashCode(value) // by spec
+  }
+
 }

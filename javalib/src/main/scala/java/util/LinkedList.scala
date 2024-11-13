@@ -36,21 +36,21 @@ class LinkedList[E]() extends AbstractSequentialList[E]
    */
   private var _size: Double = 0
 
-  def getFirst(): E = {
+  override def getFirst(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
     else
       peekFirst()
   }
 
-  def getLast(): E = {
+  override def getLast(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
     else
       peekLast()
   }
 
-  def removeFirst(): E = {
+  override def removeFirst(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
 
@@ -66,7 +66,7 @@ class LinkedList[E]() extends AbstractSequentialList[E]
     oldHead.value
   }
 
-  def removeLast(): E = {
+  override def removeLast(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
 
@@ -82,7 +82,7 @@ class LinkedList[E]() extends AbstractSequentialList[E]
     oldLast.value
   }
 
-  def addFirst(e: E): Unit = {
+  override def addFirst(e: E): Unit = {
     val oldHead = head
 
     head = new Node(e, next = oldHead)
@@ -95,7 +95,7 @@ class LinkedList[E]() extends AbstractSequentialList[E]
       last = head
   }
 
-  def addLast(e: E): Unit = {
+  override def addLast(e: E): Unit = {
     val oldLast = last
 
     last = new Node(e, prev = oldLast)
@@ -364,42 +364,14 @@ class LinkedList[E]() extends AbstractSequentialList[E]
     }
   }
 
-  def descendingIterator(): Iterator[E] = {
-    new Iterator[E] {
-
-      private var removeEnabled = false
-      private var nextNode: Node[E] =
-        LinkedList.this.last
-
-      def hasNext(): Boolean =
-        nextNode ne null
-
-      def next(): E = {
-        if (!hasNext())
-          throw new NoSuchElementException()
-
-        removeEnabled = true
-        val ret = nextNode
-        nextNode = nextNode.prev
-        ret.value
-      }
-
-      override def remove(): Unit = {
-        if (!removeEnabled)
-          throw new IllegalStateException()
-
-        removeEnabled = false
-        if (nextNode eq null)
-          removeFirst()
-        else
-          removeNode(nextNode.next)
-      }
-    }
-  }
+  def descendingIterator(): Iterator[E] =
+    reversed().iterator()
 
   override def clone(): AnyRef =
     new LinkedList[E](this)
 
+  override def reversed(): LinkedList[E] =
+    new ReverseView(this)
 }
 
 object LinkedList {
@@ -408,5 +380,90 @@ object LinkedList {
       var value: T,
       var prev: Node[T] = null,
       var next: Node[T] = null)
+
+  // This is horrible; the JavaDoc specification made us do it
+  private class ReverseView[E](underlying: LinkedList[E]) extends LinkedList[E] {
+    override def size(): Int =
+      underlying.size()
+
+    override def isEmpty(): scala.Boolean =
+      underlying.isEmpty()
+
+    override def contains(o: Any): scala.Boolean =
+      underlying.contains(o)
+
+    override def add(e: E): scala.Boolean = {
+      underlying.addFirst(e)
+      true
+    }
+
+    override def containsAll(c: Collection[_]): scala.Boolean =
+      underlying.containsAll(c)
+
+    override def removeAll(c: java.util.Collection[_]): scala.Boolean =
+      underlying.removeAll(c)
+
+    override def retainAll(c: java.util.Collection[_]): scala.Boolean =
+      underlying.retainAll(c)
+
+    override def clear(): Unit =
+      underlying.clear()
+
+    override def get(index: Int): E =
+      underlying.get(size() - 1 - index)
+
+    override def set(index: Int, element: E): E =
+      underlying.set(size() - 1 - index, element)
+
+    override def add(index: Int, element: E): Unit = {
+      // no -1 here; insert before 0 in this means insert before size() in underlying
+      underlying.add(size() - index, element)
+    }
+
+    override def remove(index: Int): E =
+      underlying.remove(size() - 1 - index)
+
+    override def indexOf(o: Any): Int = {
+      val underlyingResult = underlying.lastIndexOf(o)
+      if (underlyingResult < 0) -1
+      else size() - 1 - underlyingResult
+    }
+
+    override def lastIndexOf(o: Any): Int = {
+      val underlyingResult = underlying.indexOf(o)
+      if (underlyingResult < 0) -1
+      else size() - 1 - underlyingResult
+    }
+
+    override def peekFirst(): E =
+      underlying.peekLast()
+
+    override def peekLast(): E =
+      underlying.peekFirst()
+
+    override def listIterator(index: Int): ListIterator[E] =
+      new List.ReverseListIterator(underlying.listIterator(size() - index), underlying)
+
+    override def addFirst(e: E): Unit =
+      underlying.addLast(e)
+
+    override def addLast(e: E): Unit =
+      underlying.addFirst(e)
+
+    override def getFirst(): E =
+      underlying.getLast()
+
+    override def getLast(): E =
+      underlying.getFirst()
+
+    override def removeFirst(): E =
+      underlying.removeLast()
+
+    override def removeLast(): E =
+      underlying.removeFirst()
+
+    override def reversed(): LinkedList[E] =
+      underlying
+  }
 
 }
