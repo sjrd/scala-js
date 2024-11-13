@@ -36,21 +36,21 @@ class LinkedList[E]() extends AbstractSequentialList[E]
    */
   private var _size: Double = 0
 
-  def getFirst(): E = {
+  override def getFirst(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
     else
       peekFirst()
   }
 
-  def getLast(): E = {
+  override def getLast(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
     else
       peekLast()
   }
 
-  def removeFirst(): E = {
+  override def removeFirst(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
 
@@ -66,7 +66,7 @@ class LinkedList[E]() extends AbstractSequentialList[E]
     oldHead.value
   }
 
-  def removeLast(): E = {
+  override def removeLast(): E = {
     if (isEmpty())
       throw new NoSuchElementException()
 
@@ -82,7 +82,7 @@ class LinkedList[E]() extends AbstractSequentialList[E]
     oldLast.value
   }
 
-  def addFirst(e: E): Unit = {
+  override def addFirst(e: E): Unit = {
     val oldHead = head
 
     head = new Node(e, next = oldHead)
@@ -95,7 +95,7 @@ class LinkedList[E]() extends AbstractSequentialList[E]
       last = head
   }
 
-  def addLast(e: E): Unit = {
+  override def addLast(e: E): Unit = {
     val oldLast = last
 
     last = new Node(e, prev = oldLast)
@@ -400,6 +400,7 @@ class LinkedList[E]() extends AbstractSequentialList[E]
   override def clone(): AnyRef =
     new LinkedList[E](this)
 
+  override def reversed(): LinkedList[E] = throw new Error("todo")
 }
 
 object LinkedList {
