@@ -203,8 +203,9 @@ private[ir] object Tags {
   final val TagClassRef = TagNothingRef + 1
   final val TagArrayTypeRef = TagClassRef + 1
 
-  // New in 1.17
-  final val TagClosureTypeRef = TagArrayTypeRef + 1
+  // New in 1.18
+
+  final val TagTransientTypeRefHashingOnly = TagArrayTypeRef + 1
 
   // Tags for JS native loading specs
 

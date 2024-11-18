@@ -501,6 +501,15 @@ private final class ClassDefChecker(classDef: ClassDef,
 
     if ((name.isStaticInitializer || name.isClassInitializer) != (namespace == MemberNamespace.StaticConstructor))
       reportError("a member can have a static constructor name iff it is in the static constructor namespace")
+
+    if ((name.resultTypeRef :: name.paramTypeRefs).exists(_.isInstanceOf[TransientTypeRef])) {
+      //if (postBaseLinker) {
+      if (namespace == MemberNamespace.Public)
+        reportError(i"Illegal special type ref in public method $name")
+      /*} else {
+        reportError(i"Illegal special type ref in method name $name")
+      }*/
+    }
   }
 
   private def checkCaptureParamDefs(params: List[ParamDef])(
@@ -1006,6 +1015,8 @@ private final class ClassDefChecker(classDef: ClassDef,
             reportError(i"Invalid classOf[$typeRef]")
           case typeRef: ArrayTypeRef =>
             checkArrayTypeRef(typeRef)
+          case typeRef: TransientTypeRef =>
+            reportError(i"Illegal special type ref in classOf[$typeRef]")
           case _ =>
             // ok
         }

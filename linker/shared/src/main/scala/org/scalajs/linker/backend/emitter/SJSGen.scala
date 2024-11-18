@@ -781,7 +781,7 @@ private[emitter] final class SJSGen(
           Apply(DotSelect(prev, Ident(cpn.getArrayOf)), Nil)
         }
 
-      case typeRef: ClosureTypeRef =>
+      case typeRef: TransientTypeRef =>
         throw new IllegalArgumentException(s"Illegal classOf[$typeRef]")
     }
   }

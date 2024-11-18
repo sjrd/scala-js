@@ -281,21 +281,16 @@ object Types {
           case that: ArrayTypeRef =>
             if (thiz.dimensions != that.dimensions) thiz.dimensions - that.dimensions
             else thiz.base.compareTo(that.base)
-          case _: ClosureTypeRef =>
+          case _: TransientTypeRef =>
             -1
           case _ =>
             1
         }
-      case thiz: ClosureTypeRef =>
+      case thiz: TransientTypeRef =>
         that match {
-          case that: ClosureTypeRef =>
-            import Ordering.Implicits._
-            implicit val typeRefOrdering: Ordering[TypeRef] =
-              Ordering.comparatorToOrdering(java.util.Comparator.naturalOrder())
-            val cmp = implicitly[Ordering[List[TypeRef]]]
-              .compare(thiz.paramTypeRefs, that.paramTypeRefs)
-            if (cmp != 0) cmp
-            else thiz.resultTypeRef.compareTo(that.resultTypeRef)
+          case that: TransientTypeRef =>
+            // FIXME Take the wrapped `tpe` into account -- currently not consistent with equals()
+            0
           case _ =>
             1
         }
@@ -400,20 +395,19 @@ object Types {
 
   object ArrayTypeRef {
     def of(innerType: TypeRef): ArrayTypeRef = innerType match {
-      case innerType: NonArrayTypeRef => ArrayTypeRef(innerType, 1)
-      case ArrayTypeRef(base, dim)    => ArrayTypeRef(base, dim + 1)
-      case innerType: ClosureTypeRef  => throw new IllegalArgumentException(innerType.toString())
+      case innerType: NonArrayTypeRef  => ArrayTypeRef(innerType, 1)
+      case ArrayTypeRef(base, dim)     => ArrayTypeRef(base, dim + 1)
+      case innerType: TransientTypeRef => throw new IllegalArgumentException(innerType.toString())
     }
   }
 
-  /** Closure type. */
-  final case class ClosureTypeRef(paramTypeRefs: List[TypeRef], resultTypeRef: TypeRef)
-      extends TypeRef {
-
-    def displayName: String = {
-      paramTypeRefs.map(_.displayName)
-        .mkString("(", ",", ")" + resultTypeRef.displayName)
-    }
+  /** Transient TypeRef to store any type as a method parameter or result type.
+   *
+   *  `TransientTypeRef` cannot be serialized. It is only used in the linker to
+   *  support some of its desugarings and/or optimizations.
+   */
+  final case class TransientTypeRef(tpe: Type) extends TypeRef {
+    def displayName: String = tpe.show()
   }
 
   /** Generates a literal zero of the given type. */
