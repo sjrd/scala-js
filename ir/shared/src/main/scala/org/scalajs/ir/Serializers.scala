@@ -150,9 +150,20 @@ object Serializers {
             encodedNameToIndex(className.encoded)
           case ArrayTypeRef(base, _) =>
             reserveTypeRef(base)
-          case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
-            paramTypeRefs.foreach(reserveTypeRef(_))
-            reserveTypeRef(resultTypeRef)
+          case SpecialTypeRef(tpe) =>
+            // FIXME Get rid of this
+            def reserveType(tpe: Type): Unit = tpe match {
+              case ClassType(cls, _) =>
+                reserveTypeRef(ClassRef(cls))
+              case ArrayType(arrayTypeRef, _) =>
+                reserveTypeRef(arrayTypeRef)
+              case ClosureType(paramTypes, resultType, _) =>
+                paramTypes.foreach(reserveType(_))
+                reserveType(resultType)
+              case _ =>
+                ()
+            }
+            reserveType(tpe)
         }
 
         encodedNameToIndex(methodName.simpleName.encoded)
@@ -199,6 +210,44 @@ object Serializers {
         s.write(encodedName.bytes)
       }
 
+      // FIXME Get rid of this
+      def writeType(tpe: Type): Unit = {
+        tpe match {
+          case AnyType        => s.writeByte(TagAnyType)
+          case AnyNotNullType => s.writeByte(TagAnyNotNullType)
+          case NothingType    => s.writeByte(TagNothingType)
+          case UndefType      => s.writeByte(TagUndefType)
+          case BooleanType    => s.writeByte(TagBooleanType)
+          case CharType       => s.writeByte(TagCharType)
+          case ByteType       => s.writeByte(TagByteType)
+          case ShortType      => s.writeByte(TagShortType)
+          case IntType        => s.writeByte(TagIntType)
+          case LongType       => s.writeByte(TagLongType)
+          case FloatType      => s.writeByte(TagFloatType)
+          case DoubleType     => s.writeByte(TagDoubleType)
+          case StringType     => s.writeByte(TagStringType)
+          case NullType       => s.writeByte(TagNullType)
+          case VoidType       => s.writeByte(TagVoidType)
+
+          case ClassType(className, nullable) =>
+            s.writeByte(if (nullable) TagClassType else TagNonNullClassType)
+            s.writeInt(encodedNameIndexMap(new EncodedNameKey(className.encoded)))
+
+          case ArrayType(arrayTypeRef, nullable) =>
+            s.writeByte(if (nullable) TagArrayType else TagNonNullArrayType)
+            writeTypeRef(arrayTypeRef)
+
+          case ClosureType(paramTypes, resultType, nullable) =>
+            s.writeByte(if (nullable) TagClosureType else TagNonNullClosureType)
+            s.writeInt(paramTypes.size)
+            paramTypes.foreach(writeType(_))
+            writeType(resultType)
+
+          case RecordType(fields) =>
+            throw new IllegalArgumentException(s"Unexpected $tpe")
+        }
+      }
+
       def writeTypeRef(typeRef: TypeRef): Unit = typeRef match {
         case PrimRef(tpe) =>
           tpe match {
@@ -221,10 +270,9 @@ object Serializers {
           s.writeByte(TagArrayTypeRef)
           writeTypeRef(base)
           s.writeInt(dimensions)
-        case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
-          s.writeByte(TagClosureTypeRef)
-          writeTypeRefs(paramTypeRefs)
-          writeTypeRef(resultTypeRef)
+        case SpecialTypeRef(tpe) =>
+          s.writeByte(TagSpecialTypeRef)
+          writeType(tpe)
       }
 
       def writeTypeRefs(typeRefs: List[TypeRef]): Unit = {
@@ -966,19 +1014,14 @@ object Serializers {
       case typeRef: ArrayTypeRef =>
         buffer.writeByte(TagArrayTypeRef)
         writeArrayTypeRef(typeRef)
-      case typeRef: ClosureTypeRef =>
-        buffer.writeByte(TagClosureTypeRef)
-        writeClosureTypeRef(typeRef)
+      case SpecialTypeRef(tpe) =>
+        buffer.writeByte(TagSpecialTypeRef)
+        writeType(tpe)
     }
 
     def writeArrayTypeRef(typeRef: ArrayTypeRef): Unit = {
       writeTypeRef(typeRef.base)
       buffer.writeInt(typeRef.dimensions)
-    }
-
-    def writeClosureTypeRef(typeRef: ClosureTypeRef): Unit = {
-      writeTypeRefs(typeRef.paramTypeRefs)
-      writeTypeRef(typeRef.resultTypeRef)
     }
 
     def writeTypeRefs(typeRefs: List[TypeRef]): Unit = {
@@ -2340,25 +2383,20 @@ object Serializers {
 
     def readTypeRef(): TypeRef = {
       readByte() match {
-        case TagVoidRef      => VoidRef
-        case TagBooleanRef   => BooleanRef
-        case TagCharRef      => CharRef
-        case TagByteRef      => ByteRef
-        case TagShortRef     => ShortRef
-        case TagIntRef       => IntRef
-        case TagLongRef      => LongRef
-        case TagFloatRef     => FloatRef
-        case TagDoubleRef    => DoubleRef
-        case TagNullRef      => NullRef
-        case TagNothingRef   => NothingRef
-        case TagClassRef     => ClassRef(readClassName())
-        case TagArrayTypeRef => readArrayTypeRef()
-
-        case TagClosureTypeRef =>
-          val arity = readInt()
-          val paramTypeRefs = List.fill(arity)(readTypeRef())
-          val resultTypeRef = readTypeRef()
-          ClosureTypeRef(paramTypeRefs, resultTypeRef)
+        case TagVoidRef        => VoidRef
+        case TagBooleanRef     => BooleanRef
+        case TagCharRef        => CharRef
+        case TagByteRef        => ByteRef
+        case TagShortRef       => ShortRef
+        case TagIntRef         => IntRef
+        case TagLongRef        => LongRef
+        case TagFloatRef       => FloatRef
+        case TagDoubleRef      => DoubleRef
+        case TagNullRef        => NullRef
+        case TagNothingRef     => NothingRef
+        case TagClassRef       => ClassRef(readClassName())
+        case TagArrayTypeRef   => readArrayTypeRef()
+        case TagSpecialTypeRef => SpecialTypeRef(readType())
       }
     }
 

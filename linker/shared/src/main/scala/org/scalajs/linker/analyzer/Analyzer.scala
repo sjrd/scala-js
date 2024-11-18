@@ -1270,9 +1270,9 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
 
       lookupClass(lambdaClassName) { lambdaClassInfo =>
         val methodName = descriptor.methodName
-        val closureTypeRef =
-          ir.Types.ClosureTypeRef(methodName.paramTypeRefs, methodName.resultTypeRef)
-        val ctorName = MethodName.constructor(closureTypeRef :: Nil)
+        val closureType =
+          ir.Types.ClosureType(descriptor.paramTypes, descriptor.resultType, nullable = false)
+        val ctorName = MethodName.constructor(ir.Types.SpecialTypeRef(closureType) :: Nil)
 
         lambdaClassInfo.instantiated()
         lambdaClassInfo.callMethodStatically(MemberNamespace.Constructor, ctorName)

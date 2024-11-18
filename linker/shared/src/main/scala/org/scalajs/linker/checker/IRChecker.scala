@@ -828,9 +828,7 @@ private final class IRChecker(unit: LinkingUnit, reporter: ErrorReporter,
       case PrimRef(tpe)               => tpe
       case ClassRef(className)        => classNameToType(className)
       case arrayTypeRef: ArrayTypeRef => ArrayType(arrayTypeRef, nullable = true)
-
-      case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
-        ClosureType(paramTypeRefs.map(typeRefToType(_)), typeRefToType(resultTypeRef), nullable = true)
+      case SpecialTypeRef(tpe)        => tpe
     }
   }
 

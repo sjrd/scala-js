@@ -49,7 +49,7 @@ object SWasmGen {
   def genLoadTypeData(fb: FunctionBuilder, typeRef: TypeRef): Unit = typeRef match {
     case typeRef: NonArrayTypeRef => genLoadNonArrayTypeData(fb, typeRef)
     case typeRef: ArrayTypeRef    => genLoadArrayTypeData(fb, typeRef)
-    case typeRef: ClosureTypeRef  => throw new IllegalArgumentException(typeRef.toString())
+    case typeRef: SpecialTypeRef  => throw new IllegalArgumentException(typeRef.toString())
   }
 
   def genLoadNonArrayTypeData(fb: FunctionBuilder, typeRef: NonArrayTypeRef): Unit = {

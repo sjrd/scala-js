@@ -555,9 +555,7 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
       case typeRef: PrimRef      => typeRef
       case typeRef: ClassRef     => transformClassRef(typeRef)
       case typeRef: ArrayTypeRef => transformArrayTypeRef(typeRef)
-
-      case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
-        ClosureTypeRef(paramTypeRefs.map(transformTypeRef(_)), transformTypeRef(resultTypeRef))
+      case SpecialTypeRef(tpe)   => SpecialTypeRef(transformType(tpe))
     }
 
     private def postTransformChecks(classDef: ClassDef): Unit = {

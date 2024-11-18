@@ -122,9 +122,10 @@ private[frontend] object BaseLinker {
 
           synthesizedClasses.get(SyntheticClassKind.Lambda(descriptor)) match {
             case Some(className) =>
-              val closureTypeRef = ir.Types.ClosureTypeRef(
-                  descriptor.methodName.paramTypeRefs, descriptor.methodName.resultTypeRef)
-              val ctorName = ir.Names.MethodName.constructor(List(closureTypeRef))
+              val closureType = ir.Types.ClosureType(
+                  descriptor.paramTypes, descriptor.resultType, nullable = false)
+              val ctorName = ir.Names.MethodName.constructor(
+                  List(ir.Types.SpecialTypeRef(closureType)))
 
               New(className, MethodIdent(ctorName), List(transformExpr(fun)))
 

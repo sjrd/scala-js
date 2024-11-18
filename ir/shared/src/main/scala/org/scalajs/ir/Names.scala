@@ -414,18 +414,8 @@ object Names {
             i += 1
           }
           appendTypeRef(base)
-        case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
-          builder.append('(')
-          var first = true
-          for (paramTypeRef <- paramTypeRefs) {
-            if (first)
-              first = false
-            else
-              builder.append(',')
-            appendTypeRef(paramTypeRef)
-          }
-          builder.append(')')
-          appendTypeRef(resultTypeRef)
+        case SpecialTypeRef(tpe) =>
+          builder.append('s')
       }
 
       builder.append(simpleName.nameString)
