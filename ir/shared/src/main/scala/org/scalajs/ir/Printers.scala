@@ -1130,18 +1130,10 @@ object Printers {
         print(base)
         for (i <- 1 to dims)
           print("[]")
-      case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
-        print('(')
-        var first = true
-        for (paramTypeRef <- paramTypeRefs) {
-          if (first)
-            first = false
-          else
-            print(", ")
-          print(paramTypeRef)
-        }
-        print(") => ")
-        print(resultTypeRef)
+      case SpecialTypeRef(tpe) =>
+        print("special<")
+        print(tpe)
+        print('>')
     }
 
     def print(tpe: Type): Unit = tpe match {

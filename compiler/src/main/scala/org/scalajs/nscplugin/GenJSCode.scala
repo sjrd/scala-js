@@ -3404,8 +3404,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             genNewArray(arr, args.map(genExpr))
           case prim: jstpe.PrimRef =>
             abort(s"unexpected primitive type $prim in New at $pos")
-          case typeRef: jstpe.ClosureTypeRef =>
-            abort(s"unexpected closure type $typeRef in New at $pos")
+          case typeRef: jstpe.SpecialTypeRef =>
+            abort(s"unexpected special type ref $typeRef in New at $pos")
         }
       }
     }
@@ -6478,12 +6478,6 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           allActualCaptures)
 
       val arity = params.size
-      val ctorName = {
-        val objectClassRef = jstpe.ClassRef(ir.Names.ObjectClass)
-        val closureTypeRef =
-          jstpe.ClosureTypeRef(List.fill(arity)(objectClassRef), objectClassRef)
-        ir.Names.MethodName.constructor(closureTypeRef :: Nil)
-      }
 
       // Wrap the closure in the appropriate box for the SAM type
       val funSym = originalFunction.tpe.typeSymbolDirect
@@ -6506,6 +6500,13 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
          */
         val sam = originalFunction.attachments.get[SAMFunction].getOrElse {
           abort(s"Cannot find the SAMFunction attachment on $originalFunction at $pos")
+        }
+
+        val ctorName = {
+          val objectClassRef = jstpe.ClassRef(ir.Names.ObjectClass)
+          val closureType =
+            jstpe.ClosureType(List.fill(arity)(jstpe.AnyType), jstpe.AnyType, nullable = true)
+          ir.Names.MethodName.constructor(jstpe.SpecialTypeRef(closureType) :: Nil)
         }
 
         val samWrapperClassName = synthesizeSAMWrapper(funSym, sam, ctorName)

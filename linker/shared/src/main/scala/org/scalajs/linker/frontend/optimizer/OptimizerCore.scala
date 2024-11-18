@@ -4062,7 +4062,7 @@ private[optimizer] abstract class OptimizerCore(
         "[" * dimensions + primRef.charCode
       case ArrayTypeRef(ClassRef(className), dimensions) =>
         "[" * dimensions + "L" + mappedClassName(className) + ";"
-      case typeRef: ClosureTypeRef =>
+      case typeRef: SpecialTypeRef =>
         throw new IllegalArgumentException(typeRef.toString())
     }
   }

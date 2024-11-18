@@ -624,19 +624,14 @@ object Hashers {
       case typeRef: ArrayTypeRef =>
         mixTag(TagArrayTypeRef)
         mixArrayTypeRef(typeRef)
-      case typeRef: ClosureTypeRef =>
-        mixTag(TagClosureTypeRef)
-        mixClosureTypeRef(typeRef)
+      case SpecialTypeRef(tpe) =>
+        mixTag(TagSpecialTypeRef)
+        mixType(tpe)
     }
 
     def mixArrayTypeRef(arrayTypeRef: ArrayTypeRef): Unit = {
       mixTypeRef(arrayTypeRef.base)
       mixInt(arrayTypeRef.dimensions)
-    }
-
-    def mixClosureTypeRef(closureTypeRef: ClosureTypeRef): Unit = {
-      closureTypeRef.paramTypeRefs.foreach(mixTypeRef(_))
-      mixTypeRef(closureTypeRef.resultTypeRef)
     }
 
     def mixType(tpe: Type): Unit = tpe match {

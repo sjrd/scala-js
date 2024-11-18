@@ -150,9 +150,12 @@ object Serializers {
             encodedNameToIndex(className.encoded)
           case ArrayTypeRef(base, _) =>
             reserveTypeRef(base)
-          case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
-            paramTypeRefs.foreach(reserveTypeRef(_))
-            reserveTypeRef(resultTypeRef)
+          case SpecialTypeRef(tpe) =>
+            tpe match {
+              case ClassType(cls, _)          => reserveTypeRef(ClassRef(cls))
+              case ArrayType(arrayTypeRef, _) => reserveTypeRef(arrayTypeRef)
+              case _                          => ()
+            }
         }
 
         encodedNameToIndex(methodName.simpleName.encoded)
@@ -221,10 +224,9 @@ object Serializers {
           s.writeByte(TagArrayTypeRef)
           writeTypeRef(base)
           s.writeInt(dimensions)
-        case ClosureTypeRef(paramTypeRefs, resultTypeRef) =>
-          s.writeByte(TagClosureTypeRef)
-          writeTypeRefs(paramTypeRefs)
-          writeTypeRef(resultTypeRef)
+        case SpecialTypeRef(tpe) =>
+          s.writeByte(TagSpecialTypeRef)
+          writeType(tpe)
       }
 
       def writeTypeRefs(typeRefs: List[TypeRef]): Unit = {
@@ -966,19 +968,14 @@ object Serializers {
       case typeRef: ArrayTypeRef =>
         buffer.writeByte(TagArrayTypeRef)
         writeArrayTypeRef(typeRef)
-      case typeRef: ClosureTypeRef =>
-        buffer.writeByte(TagClosureTypeRef)
-        writeClosureTypeRef(typeRef)
+      case SpecialTypeRef(tpe) =>
+        buffer.writeByte(TagSpecialTypeRef)
+        writeType(tpe)
     }
 
     def writeArrayTypeRef(typeRef: ArrayTypeRef): Unit = {
       writeTypeRef(typeRef.base)
       buffer.writeInt(typeRef.dimensions)
-    }
-
-    def writeClosureTypeRef(typeRef: ClosureTypeRef): Unit = {
-      writeTypeRefs(typeRef.paramTypeRefs)
-      writeTypeRef(typeRef.resultTypeRef)
     }
 
     def writeTypeRefs(typeRefs: List[TypeRef]): Unit = {
@@ -2340,25 +2337,20 @@ object Serializers {
 
     def readTypeRef(): TypeRef = {
       readByte() match {
-        case TagVoidRef      => VoidRef
-        case TagBooleanRef   => BooleanRef
-        case TagCharRef      => CharRef
-        case TagByteRef      => ByteRef
-        case TagShortRef     => ShortRef
-        case TagIntRef       => IntRef
-        case TagLongRef      => LongRef
-        case TagFloatRef     => FloatRef
-        case TagDoubleRef    => DoubleRef
-        case TagNullRef      => NullRef
-        case TagNothingRef   => NothingRef
-        case TagClassRef     => ClassRef(readClassName())
-        case TagArrayTypeRef => readArrayTypeRef()
-
-        case TagClosureTypeRef =>
-          val arity = readInt()
-          val paramTypeRefs = List.fill(arity)(readTypeRef())
-          val resultTypeRef = readTypeRef()
-          ClosureTypeRef(paramTypeRefs, resultTypeRef)
+        case TagVoidRef        => VoidRef
+        case TagBooleanRef     => BooleanRef
+        case TagCharRef        => CharRef
+        case TagByteRef        => ByteRef
+        case TagShortRef       => ShortRef
+        case TagIntRef         => IntRef
+        case TagLongRef        => LongRef
+        case TagFloatRef       => FloatRef
+        case TagDoubleRef      => DoubleRef
+        case TagNullRef        => NullRef
+        case TagNothingRef     => NothingRef
+        case TagClassRef       => ClassRef(readClassName())
+        case TagArrayTypeRef   => readArrayTypeRef()
+        case TagSpecialTypeRef => SpecialTypeRef(readType())
       }
     }
 

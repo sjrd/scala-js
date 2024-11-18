@@ -36,23 +36,23 @@ object SyntheticClassKind {
 
       val className = makeClassName()
 
-      val fFieldName = FieldName(className, SimpleFieldName("f"))
-      val closureTypeRef =
-        ClosureTypeRef(methodName.paramTypeRefs, methodName.resultTypeRef)
-      val ctorName = MethodName.constructor(closureTypeRef :: Nil)
-
       val thisType = ClassType(className, nullable = false)
-      val closureType = ClosureType(paramTypes, resultType, nullable = true)
+      val closureTypeNull = ClosureType(paramTypes, resultType, nullable = true)
+      val closureTypeNonNull = closureTypeNull.toNonNullable
+
+      val fFieldName = FieldName(className, SimpleFieldName("f"))
+      val ctorName = MethodName.constructor(SpecialTypeRef(closureTypeNonNull) :: Nil)
 
       val thiz = This()(thisType)
 
-      val fFieldDef = FieldDef(MemberFlags.empty, FieldIdent(fFieldName), NoOriginalName, closureType)
+      val fFieldDef = FieldDef(MemberFlags.empty, FieldIdent(fFieldName), NoOriginalName, closureTypeNull)
 
       val methodParamDefs = paramTypes.zipWithIndex.map { case (paramType, index) =>
         ParamDef(LocalIdent(LocalName("x" + index)), NoOriginalName, paramType, mutable = false)
       }
 
-      val ctorParamDef = ParamDef(LocalIdent(LocalName("f")), NoOriginalName, closureType, mutable = false)
+      val ctorParamDef = ParamDef(LocalIdent(LocalName("f")), NoOriginalName,
+          closureTypeNonNull, mutable = false)
 
       val ctorDef = MethodDef(
         MemberFlags.empty.withNamespace(MemberNamespace.Constructor),
@@ -62,7 +62,7 @@ object SyntheticClassKind {
         VoidType,
         Some(
           Block(
-            Assign(Select(thiz, FieldIdent(fFieldName))(closureType), ctorParamDef.ref),
+            Assign(Select(thiz, FieldIdent(fFieldName))(closureTypeNull), ctorParamDef.ref),
             ApplyStatically(ApplyFlags.empty.withConstructor(true), thiz,
                 superClass, MethodIdent(NoArgConstructorName), Nil)(VoidType)
           )
@@ -78,7 +78,7 @@ object SyntheticClassKind {
         Some(
           ApplyTypedClosure(
             ApplyFlags.empty,
-            Select(thiz, FieldIdent(fFieldName))(closureType),
+            Select(thiz, FieldIdent(fFieldName))(closureTypeNull),
             methodParamDefs.map(_.ref)
           )
         )
