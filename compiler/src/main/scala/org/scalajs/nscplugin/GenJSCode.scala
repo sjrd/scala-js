@@ -6471,16 +6471,18 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         (ObjectClass, samClassSym :: Nil, samInfo.sam, samInfo.synthCls)
       }
 
+      val formalCaptureTypeRefs = captureSyms.toList.map(sym => toTypeRef(sym.info))
       val formalCaptures = captureSyms.toList.map(genParamDef(_, pos))
       val actualCaptures = formalCaptures.map(_.ref)
 
       val formalArgs = params.map(genParamDef(_))
 
-      val (allFormalCaptures, body, allActualCaptures) = if (!compileAsStaticMethod(target)) {
+      val (allFormalCaptureTypeRefs, allFormalCaptures, body, allActualCaptures) = if (!compileAsStaticMethod(target)) {
         val thisActualCapture = genExpr(receiver)
+        val thisFormalCaptureTypeRef = toTypeRef(receiver.tpe)
         val thisFormalCapture = js.ParamDef(
             freshLocalIdent("this")(receiver.pos), thisOriginalName,
-            thisActualCapture.tpe, mutable = false)(receiver.pos)
+            toIRType(receiver.tpe), mutable = false)(receiver.pos)
         val thisCaptureArg = thisFormalCapture.ref
 
         val body = if (isJSType(receiver.tpe) && target.owner != ObjectClass) {
@@ -6491,12 +6493,13 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           genApplyMethodMaybeStatically(thisCaptureArg, target, allArgs)
         }
 
-        (thisFormalCapture :: formalCaptures,
+        (thisFormalCaptureTypeRef :: formalCaptureTypeRefs,
+            thisFormalCapture :: formalCaptures,
             body, thisActualCapture :: actualCaptures)
       } else {
         val body = genApplyStatic(target, allArgs)
 
-        (formalCaptures, body, actualCaptures)
+        (formalCaptureTypeRefs, formalCaptures, body, actualCaptures)
       }
 
       val (samParamTypes, samResultType) = enteringPhase(currentRun.posterasurePhase) {
@@ -6520,13 +6523,11 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           patchedBody,
           allActualCaptures)
 
-      val arity = params.size
-
       // Wrap the closure in the appropriate box for the SAM type
       val funSym = originalFunction.tpe.typeSymbolDirect
       if (isFunctionSymbol(funSym)) {
-        /* This is a scala.FunctionN. We use a NewLambda.
-         */
+        // This is a scala.FunctionN. We use a NewLambda.
+        val arity = params.size
         val superClass = ir.Names.ClassName("scala.runtime.AbstractFunction" + arity)
         val objectClassRef = jstpe.ClassRef(ir.Names.ObjectClass)
         val applyMethodName = ir.Names.MethodName(ir.Names.SimpleMethodName("apply"),
@@ -6537,9 +6538,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             applyMethodName, paramTypes, resultType)
         js.NewLambda(descriptor, closure)(jstpe.ClassType(superClass, nullable = false))
       } else {
-        /* This is an arbitrary SAM type (can only happen in 2.12).
-         * We have to synthesize a class like LambdaMetaFactory would do on
-         * the JVM.
+        /* This is an LMF-capable SAM type. Use a `NewLambda` if we do not need
+         * any bridges; otherwise synthesize a SAM wrapper class.
          */
         val sam = originalFunction.attachments.get[SAMFunction].getOrElse {
           abort(s"Cannot find the SAMFunction attachment on $originalFunction at $pos")
@@ -6555,15 +6555,12 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
               closure.tpe.resultType)
           js.NewLambda(descriptor, closure)(encodeClassType(samClassSym).toNonNullable)
         } else {
-          val ctorName = {
-            val samMethodName = encodeMethodSym(sam.sam).name
-            val closureTypeRef =
-              jstpe.ClosureTypeRef(samMethodName.paramTypeRefs, samMethodName.resultTypeRef)
-            ir.Names.MethodName.constructor(closureTypeRef :: Nil)
-          }
-          val samWrapperClassName = synthesizeSAMWrapper(funSym, sam, samBridges,
-              closure.tpe, ctorName)
-          js.New(samWrapperClassName, js.MethodIdent(ctorName), List(closure))
+          /* We need bridges; synthesize a SAM wrapper.
+           * Captures of the TypedClosure are turned into fields of the wrapper class.
+           */
+          val ctorName = ir.Names.MethodName.constructor(allFormalCaptureTypeRefs)
+          val samWrapperClassName = synthesizeSAMWrapper(funSym, sam, samBridges, closure, ctorName)
+          js.New(samWrapperClassName, js.MethodIdent(ctorName), allActualCaptures)
         }
       }
     }
@@ -6605,7 +6602,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
     }
 
     private def synthesizeSAMWrapper(funSym: Symbol, samInfo: SAMFunction,
-        samBridges: List[Symbol], closureType0: jstpe.ClosureType,
+        samBridges: List[Symbol], closure: js.TypedClosure,
         ctorName: ir.Names.MethodName)(
         implicit pos: Position): ClassName = {
       val intfName = encodeClassName(funSym)
@@ -6620,27 +6617,31 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       val thisType = jstpe.ClassType(className, nullable = false)
 
       val arity = samInfo.sam.tpe.params.size
-      val closureType = closureType0.copy(nullable = true)
 
-      // val f: ((T1, ..., Tn) => R)
-      val fFieldIdent = js.FieldIdent(FieldName(className, SimpleFieldName("f")))
-      val fFieldDef = js.FieldDef(js.MemberFlags.empty, fFieldIdent,
-          NoOriginalName, closureType)
+      // val captureI: CaptureTypeI
+      val captureFieldDefs = for (captureParam <- closure.captureParams) yield {
+        val simpleFieldName = SimpleFieldName(captureParam.name.name.encoded)
+        val ident = js.FieldIdent(FieldName(className, simpleFieldName))
+        js.FieldDef(js.MemberFlags.empty, ident, captureParam.originalName, captureParam.ptpe)
+      }
 
-      // def this(f: Any) = { this.f = f; super() }
+      // def this(f: Any) = { ...this.captureI = captureI; super() }
       val ctorDef = {
-        val fParamDef = js.ParamDef(js.LocalIdent(LocalName("f")),
-            NoOriginalName, closureType, mutable = false)
+        val captureFieldAssignments = for {
+          (captureFieldDef, captureParam) <- captureFieldDefs.zip(closure.captureParams)
+        } yield {
+          js.Assign(
+              js.Select(js.This()(thisType), captureFieldDef.name)(captureFieldDef.ftpe),
+              captureParam.ref)
+        }
         js.MethodDef(
             js.MemberFlags.empty.withNamespace(js.MemberNamespace.Constructor),
             js.MethodIdent(ctorName),
             NoOriginalName,
-            List(fParamDef),
+            closure.captureParams,
             jstpe.VoidType,
             Some(js.Block(List(
-                js.Assign(
-                    js.Select(js.This()(thisType), fFieldIdent)(closureType),
-                    fParamDef.ref),
+                js.Block(captureFieldAssignments),
                 js.ApplyStatically(js.ApplyFlags.empty.withConstructor(true),
                     js.This()(thisType),
                     ir.Names.ObjectClass,
@@ -6649,19 +6650,25 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             js.OptimizerHints.empty, Unversioned)
       }
 
-      // def samMethod(...params): resultType = this.f(...params)
+      /* def samMethod(...closure.params): closure.resultType = {
+       *   val captureI: CaptureTypeI = this.captureI;
+       *   ...
+       *   closure.body
+       * }
+       */
       val sam = samInfo.sam
       val samMethodDef: js.MethodDef = {
-        val jsParams = sam.tpe.params.map(genParamDef(_, pos))
-        val resultType = toIRType(sam.tpe.finalResultType)
+        val localCaptureVarDefs = for {
+          (captureParam, captureFieldDef) <- closure.captureParams.zip(captureFieldDefs)
+        } yield {
+          js.VarDef(captureParam.name, captureParam.originalName, captureParam.ptpe, mutable = false,
+              js.Select(js.This()(thisType), captureFieldDef.name)(captureFieldDef.ftpe))
+        }
 
-        val body = js.ApplyTypedClosure(
-            js.ApplyFlags.empty,
-            js.Select(js.This()(thisType), fFieldIdent)(closureType),
-            jsParams.map(_.ref))
+        val body = js.Block(localCaptureVarDefs, closure.body)
 
         js.MethodDef(js.MemberFlags.empty, encodeMethodSym(sam),
-            originalNameOfMethod(sam), jsParams, resultType,
+            originalNameOfMethod(sam), closure.params, closure.resultType,
             Some(body))(
             js.OptimizerHints.empty, Unversioned)
       }
@@ -6701,7 +6708,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           List(js.ClassIdent(intfName)),
           None,
           None,
-          fields = fFieldDef :: Nil,
+          fields = captureFieldDefs,
           methods = ctorDef :: samMethodDef :: samBridgeMethodDefs,
           jsConstructor = None,
           Nil,
