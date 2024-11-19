@@ -5204,6 +5204,24 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       }
     }
 
+    /** Adapt boxes on a tree from and to the given types after posterasure.
+     *
+     *  @param expr
+     *    Tree to be adapted.
+     *  @param fromTpeEnteringPosterasure
+     *    The type of `expr` as it was entering the posterasure phase.
+     *  @param toTpeEnteringPosterausre
+     *    The type of the adapted tree as it would be entering the posterasure phase.
+     */
+    def adaptBoxes(expr: js.Tree, fromTpeEnteringPosterasure: Type,
+        toTpeEnteringPosterasure: Type)(
+        implicit pos: Position): js.Tree = {
+      if (fromTpeEnteringPosterasure =:= toTpeEnteringPosterasure)
+        expr
+      else
+        fromAny(ensureBoxed(expr, fromTpeEnteringPosterasure), toTpeEnteringPosterasure)
+    }
+
     /** Gen a boxing operation (tpe is the primitive type) */
     def makePrimitiveBox(expr: js.Tree, tpe: Type)(
         implicit pos: Position): js.Tree = {
@@ -6320,7 +6338,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             if (hasRepeatedParam) params.init
             else params
           patchFunParamsWithBoxes(applyDef.symbol, nonRepeatedParams,
-              useParamsBeforeLambdaLift = false)
+              useParamsBeforeLambdaLift = false,
+              fromParamTypes = nonRepeatedParams.map(_ => ObjectTpe))
         }
 
         val (patchedRepeatedParam, repeatedParamLocal) = {
@@ -6328,7 +6347,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
            * But that lowers the type to iterable.
            */
           if (hasRepeatedParam) {
-            val (p, l) = genPatchedParam(params.last, genJSArrayToVarArgs(_))
+            val (p, l) = genPatchedParam(params.last, genJSArrayToVarArgs(_), ObjectTpe)
             (Some(p), Some(l))
           } else {
             (None, None)
@@ -6436,6 +6455,22 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
 
       val allArgs = allArgs0 map genExpr
 
+      // Extract information about the SAM type we are implementing
+      val samClassSym = originalFunction.tpe.typeSymbolDirect
+      val (superClass, interfaces, sam, synthCls) = if (isFunctionSymbol(samClassSym)) {
+        // This is a scala.FunctionN SAM; extend the corresponding AbstractFunctionN class
+        val arity = params.size
+        val superClass = AbstractFunctionClass(arity)
+        val sam = superClass.info.member(nme.apply)
+        (superClass, Nil, sam, NoSymbol)
+      } else {
+        // This is an arbitrary SAM interface
+        val samInfo = originalFunction.attachments.get[SAMFunction].getOrElse {
+          abort(s"Cannot find the SAMFunction attachment on $originalFunction at $pos")
+        }
+        (ObjectClass, samClassSym :: Nil, samInfo.sam, samInfo.synthCls)
+      }
+
       val formalCaptures = captureSyms.toList.map(genParamDef(_, pos))
       val actualCaptures = formalCaptures.map(_.ref)
 
@@ -6464,26 +6499,28 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         (formalCaptures, body, actualCaptures)
       }
 
-      val (patchedFormalArgs, paramsLocals) =
-        patchFunParamsWithBoxes(target, formalArgs, useParamsBeforeLambdaLift = true)
+      val (samParamTypes, samResultType) = enteringPhase(currentRun.posterasurePhase) {
+        val methodType = sam.tpe.asInstanceOf[MethodType]
+        (methodType.params.map(_.info), methodType.resultType)
+      }
 
+      val (patchedFormalArgs, paramsLocals) =
+        patchFunParamsWithBoxes(target, formalArgs, useParamsBeforeLambdaLift = true, fromParamTypes = samParamTypes)
+
+      val targetResultType = enteringPhase(currentRun.posterasurePhase) {
+        target.tpe.finalResultType
+      }
       val patchedBody =
-        js.Block(paramsLocals :+ ensureResultBoxed(body, target))
+        js.Block(paramsLocals :+ adaptBoxes(body, targetResultType, samResultType))
 
       val closure = js.TypedClosure(
           allFormalCaptures,
           patchedFormalArgs,
-          resultType = jstpe.AnyType,
+          resultType = toIRType(underlyingOfEVT(samResultType)),
           patchedBody,
           allActualCaptures)
 
       val arity = params.size
-      val ctorName = {
-        val objectClassRef = jstpe.ClassRef(ir.Names.ObjectClass)
-        val closureTypeRef =
-          jstpe.ClosureTypeRef(List.fill(arity)(objectClassRef), objectClassRef)
-        ir.Names.MethodName.constructor(closureTypeRef :: Nil)
-      }
 
       // Wrap the closure in the appropriate box for the SAM type
       val funSym = originalFunction.tpe.typeSymbolDirect
@@ -6508,12 +6545,67 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           abort(s"Cannot find the SAMFunction attachment on $originalFunction at $pos")
         }
 
-        val samWrapperClassName = synthesizeSAMWrapper(funSym, sam, ctorName)
-        js.New(samWrapperClassName, js.MethodIdent(ctorName), List(closure))
+        val samBridges = samBridgesFor(sam)
+
+        if (samBridges.isEmpty) {
+          // No bridges are needed; we can use a NewLambda
+          val descriptor = js.NewLambda.Descriptor(
+              encodeClassName(superClass), interfaces.map(encodeClassName(_)),
+              encodeMethodSym(sam.sam).name, closure.tpe.paramTypes,
+              closure.tpe.resultType)
+          js.NewLambda(descriptor, closure)(encodeClassType(samClassSym).toNonNullable)
+        } else {
+          val ctorName = {
+            val samMethodName = encodeMethodSym(sam.sam).name
+            val closureTypeRef =
+              jstpe.ClosureTypeRef(samMethodName.paramTypeRefs, samMethodName.resultTypeRef)
+            ir.Names.MethodName.constructor(closureTypeRef :: Nil)
+          }
+          val samWrapperClassName = synthesizeSAMWrapper(funSym, sam, samBridges,
+              closure.tpe, ctorName)
+          js.New(samWrapperClassName, js.MethodIdent(ctorName), List(closure))
+        }
+      }
+    }
+
+    private def samBridgesFor(samInfo: SAMFunction)(implicit pos: Position): List[Symbol] = {
+      /* scala/bug#10512: any methods which `samInfo.sam` overrides need
+       * bridges made for them.
+       * On Scala < 2.12.5, `synthCls` is polyfilled to `NoSymbol` and hence
+       * `samBridges` will always be empty. This causes our compiler to be
+       * bug-compatible on these versions.
+       */
+      val synthCls = samInfo.synthCls
+      val samBridges = if (synthCls == NoSymbol) {
+        Nil
+      } else {
+        import scala.reflect.internal.Flags.BRIDGE
+        synthCls.info.findMembers(excludedFlags = 0L, requiredFlags = BRIDGE).toList
+      }
+
+      if (samBridges.isEmpty) {
+        // fast path
+        Nil
+      } else {
+        /* Remove duplicates, e.g., if we override the same method declared
+         * in two super traits.
+         */
+        val builder = List.newBuilder[Symbol]
+        val seenMethodNames = mutable.Set.empty[MethodName]
+
+        seenMethodNames.add(encodeMethodSym(samInfo.sam).name)
+
+        for (samBridge <- samBridges) {
+          if (seenMethodNames.add(encodeMethodSym(samBridge).name))
+            builder += samBridge
+        }
+
+        builder.result()
       }
     }
 
     private def synthesizeSAMWrapper(funSym: Symbol, samInfo: SAMFunction,
+        samBridges: List[Symbol], closureType0: jstpe.ClosureType,
         ctorName: ir.Names.MethodName)(
         implicit pos: Position): ClassName = {
       val intfName = encodeClassName(funSym)
@@ -6528,10 +6620,9 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       val thisType = jstpe.ClassType(className, nullable = false)
 
       val arity = samInfo.sam.tpe.params.size
-      val closureType = jstpe.ClosureType(List.fill(arity)(jstpe.AnyType),
-          jstpe.AnyType, nullable = true)
+      val closureType = closureType0.copy(nullable = true)
 
-      // val f: ((any, ..., any) => any)
+      // val f: ((T1, ..., Tn) => R)
       val fFieldIdent = js.FieldIdent(FieldName(className, SimpleFieldName("f")))
       val fFieldDef = js.FieldDef(js.MemberFlags.empty, fFieldIdent,
           NoOriginalName, closureType)
@@ -6558,57 +6649,44 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             js.OptimizerHints.empty, Unversioned)
       }
 
-      // Compute the set of method symbols that we need to implement
-      val sams = {
-        val samsBuilder = List.newBuilder[Symbol]
-        val seenMethodNames = mutable.Set.empty[MethodName]
-
-        /* scala/bug#10512: any methods which `samInfo.sam` overrides need
-         * bridges made for them.
-         * On Scala < 2.12.5, `synthCls` is polyfilled to `NoSymbol` and hence
-         * `samBridges` will always be empty. This causes our compiler to be
-         * bug-compatible on these versions.
-         */
-        val synthCls = samInfo.synthCls
-        val samBridges = if (synthCls == NoSymbol) {
-          Nil
-        } else {
-          import scala.reflect.internal.Flags.BRIDGE
-          synthCls.info.findMembers(excludedFlags = 0L, requiredFlags = BRIDGE).toList
-        }
-
-        for (sam <- samInfo.sam :: samBridges) {
-          /* Remove duplicates, e.g., if we override the same method declared
-           * in two super traits.
-           */
-          if (seenMethodNames.add(encodeMethodSym(sam).name))
-            samsBuilder += sam
-        }
-
-        samsBuilder.result()
-      }
-
       // def samMethod(...params): resultType = this.f(...params)
-      val samMethodDefs = for (sam <- sams) yield {
+      val sam = samInfo.sam
+      val samMethodDef: js.MethodDef = {
         val jsParams = sam.tpe.params.map(genParamDef(_, pos))
         val resultType = toIRType(sam.tpe.finalResultType)
 
-        val actualParams = enteringPhase(currentRun.posterasurePhase) {
-          for ((formal, param) <- jsParams.zip(sam.tpe.params))
-            yield (formal.ref, param.tpe)
-        }.map((ensureBoxed _).tupled)
-
-        val call = js.ApplyTypedClosure(
+        val body = js.ApplyTypedClosure(
             js.ApplyFlags.empty,
             js.Select(js.This()(thisType), fFieldIdent)(closureType),
-            actualParams)
-
-        val body = fromAny(call, enteringPhase(currentRun.posterasurePhase) {
-          sam.tpe.finalResultType
-        })
+            jsParams.map(_.ref))
 
         js.MethodDef(js.MemberFlags.empty, encodeMethodSym(sam),
             originalNameOfMethod(sam), jsParams, resultType,
+            Some(body))(
+            js.OptimizerHints.empty, Unversioned)
+      }
+
+      val adaptBoxesTupled = (adaptBoxes(_, _, _)).tupled
+
+      // def samBridgeMethod(...params): resultType = this.samMethod(...params) // (with adaptBoxes)
+      val samBridgeMethodDefs = for (samBridge <- samBridges) yield {
+        val jsParams = samBridge.tpe.params.map(genParamDef(_, pos))
+        val resultType = toIRType(samBridge.tpe.finalResultType)
+
+        val actualParams = enteringPhase(currentRun.posterasurePhase) {
+          for (((formal, bridgeParam), samParam) <- jsParams.zip(samBridge.tpe.params).zip(sam.tpe.params))
+            yield (formal.ref, bridgeParam.tpe, samParam.tpe)
+        }.map(adaptBoxesTupled)
+
+        val call = js.Apply(js.ApplyFlags.empty, js.This()(thisType),
+            samMethodDef.name, actualParams)(samMethodDef.resultType)
+
+        val body = adaptBoxesTupled(enteringPhase(currentRun.posterasurePhase) {
+          (call, sam.tpe.finalResultType, samBridge.tpe.finalResultType)
+        })
+
+        js.MethodDef(js.MemberFlags.empty, encodeMethodSym(samBridge),
+            originalNameOfMethod(samBridge), jsParams, resultType,
             Some(body))(
             js.OptimizerHints.empty, Unversioned)
       }
@@ -6624,7 +6702,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           None,
           None,
           fields = fFieldDef :: Nil,
-          methods = ctorDef :: samMethodDefs,
+          methods = ctorDef :: samMethodDef :: samBridgeMethodDefs,
           jsConstructor = None,
           Nil,
           Nil,
@@ -6637,7 +6715,8 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
     }
 
     private def patchFunParamsWithBoxes(methodSym: Symbol,
-        params: List[js.ParamDef], useParamsBeforeLambdaLift: Boolean)(
+        params: List[js.ParamDef], useParamsBeforeLambdaLift: Boolean,
+        fromParamTypes: List[Type])(
         implicit pos: Position): (List[js.ParamDef], List[js.VarDef]) = {
       // See the comment in genPrimitiveJSArgs for a rationale about this
       val paramTpes = enteringPhase(currentRun.posterasurePhase) {
@@ -6662,24 +6741,30 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
       }
 
       (for {
-        (param, paramSym) <- params zip paramSyms
+        ((param, paramSym), fromParamType) <- params.zip(paramSyms).zip(fromParamTypes)
       } yield {
         val paramTpe = paramTpes.getOrElse(paramSym.name, paramSym.tpe)
-        genPatchedParam(param, fromAny(_, paramTpe))
+        genPatchedParam(param, adaptBoxes(_, fromParamType, paramTpe), fromParamType)
       }).unzip
     }
 
-    private def genPatchedParam(param: js.ParamDef, rhs: js.VarRef => js.Tree)(
+    private def genPatchedParam(param: js.ParamDef, rhs: js.VarRef => js.Tree,
+        fromParamType: Type)(
         implicit pos: Position): (js.ParamDef, js.VarDef) = {
       val paramNameIdent = param.name
       val origName = param.originalName
       val newNameIdent = freshLocalIdent(paramNameIdent.name)(paramNameIdent.pos)
       val newOrigName = origName.orElse(paramNameIdent.name)
-      val patchedParam = js.ParamDef(newNameIdent, newOrigName, jstpe.AnyType,
-          mutable = false)(param.pos)
+      val patchedParam = js.ParamDef(newNameIdent, newOrigName,
+          toIRType(underlyingOfEVT(fromParamType)), mutable = false)(param.pos)
       val paramLocal = js.VarDef(paramNameIdent, origName, param.ptpe,
           mutable = false, rhs(patchedParam.ref))
       (patchedParam, paramLocal)
+    }
+
+    private def underlyingOfEVT(tpe: Type): Type = tpe match {
+      case tpe: ErasedValueType => tpe.erasedUnderlying
+      case _                    => tpe
     }
 
     /** Generates a static method instantiating and calling this
