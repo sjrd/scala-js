@@ -125,7 +125,12 @@ object SyntheticClassKind {
 
       val digest = digestBuilder.finalizeDigest()
 
-      val suffixBuilder = new java.lang.StringBuilder(".Lambda")
+      /* The "$$Lambda" segment is meant to match the way LambdaMetaFactory
+       * names generated classes. This is mostly for test compatibility
+       * purposes (like partest's that test the class name to tell whether a
+       * lambda was indeed encoded as an LMF).
+       */
+      val suffixBuilder = new java.lang.StringBuilder(".$$Lambda$")
       for (b <- digest) {
         val i = b & 0xff
         suffixBuilder.append(Character.forDigit(i >> 4, 16)).append(Character.forDigit(i & 0x0f, 16))
