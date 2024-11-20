@@ -1111,9 +1111,9 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
         beforeSuper ::: superCall ::: afterSuper
       }
 
-      val closure = js.Closure(arrow = true, jsClassCaptures, Nil, None,
+      val closure = js.TypedClosure(jsClassCaptures, Nil, jstpe.AnyType,
           js.Block(inlinedCtorStats, selfRef), jsSuperClassValue :: args)
-      js.JSFunctionApply(closure, Nil)
+      js.ApplyTypedClosure(js.ApplyFlags.empty, closure, Nil)
     }
 
     // Generate the class data of a JS class -----------------------------------
