@@ -242,6 +242,15 @@ object Hashers {
           mixTree(default)
           mixType(tree.tpe)
 
+        case JSAwait(arg) =>
+          mixTag(TagJSAwait)
+          mixTree(arg)
+
+        case JSYield(arg, star) =>
+          mixTag(TagJSYield)
+          mixTree(arg)
+          mixBoolean(star)
+
         case Debugger() =>
           mixTag(TagDebugger)
 

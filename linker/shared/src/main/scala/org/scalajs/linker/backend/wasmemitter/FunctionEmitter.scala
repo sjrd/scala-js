@@ -594,6 +594,8 @@ private class FunctionEmitter private (
       case t: TryCatch            => genTryCatch(t, expectedType)
       case t: TryFinally          => unwinding.genTryFinally(t, expectedType)
       case t: Match               => genMatch(t, expectedType)
+      case t: JSAwait             => genJSAwait(t)
+      case t: JSYield             => genJSYield(t)
       case t: Debugger            => VoidType // ignore
       case t: Skip                => VoidType
 
@@ -3184,6 +3186,9 @@ private class FunctionEmitter private (
 
     implicit val pos = tree.pos
 
+    if (flags.generator)
+      throw new IllegalArgumentException(s"Unsupported function* in WebAssembly: $tree")
+
     val dataStructTypeID = ctx.getClosureDataStructType(captureParams.map(_.ptpe))
 
     // Define the function where captures are reified as a `__captureData` argument.
@@ -3215,11 +3220,20 @@ private class FunctionEmitter private (
     }
 
     val helperID = builder.build(AnyNotNullType) {
-      js.Return {
-        val (argsParamDefs, restParamDef) = builder.genJSParamDefs(params, restParam)
-        js.Function(flags.arrow, argsParamDefs, restParamDef, {
+      val (argsParamDefs, restParamDef) = builder.genJSParamDefs(params, restParam)
+
+      val promisingFVarDef = if (flags.async) {
+        Some(js.VarDef(builder.newLocalIdent("pf"), Some({
+          js.Apply(js.DotSelect(builder.genGlobalRef("WebAssembly"), js.Ident("promising")), List(fRef))
+        })))
+      } else {
+        None
+      }
+
+      val ret = js.Return {
+        js.Function(flags.withAsync(false), argsParamDefs, restParamDef, {
           js.Return(js.Apply(
-              fRef,
+              promisingFVarDef.fold(fRef)(_.ref),
               dataRef ::
               (if (flags.arrow) Nil else List(js.This())) :::
               argsParamDefs.map(_.ref) :::
@@ -3227,6 +3241,8 @@ private class FunctionEmitter private (
           ))
         })
       }
+
+      promisingFVarDef.fold[js.Tree](ret)(vd => js.Block(vd, ret))
     }
 
     markPosition(tree)
@@ -3290,6 +3306,24 @@ private class FunctionEmitter private (
       fb += wa.Unreachable
 
     expectedType
+  }
+
+  private def genJSAwait(tree: JSAwait): Type = {
+    val JSAwait(arg) = tree
+
+    genTree(arg, AnyType)
+    markPosition(tree)
+    fb += wa.Call(genFunctionID.jsAwait)
+
+    AnyType
+  }
+
+  private def genJSYield(tree: JSYield): Type = {
+    val JSYield(arg, star) = tree
+
+    throw new IllegalArgumentException(s"Unsupported yield in WebAssembly: $tree")
+
+    AnyType
   }
 
   private def genCreateJSClass(tree: CreateJSClass): Type = {

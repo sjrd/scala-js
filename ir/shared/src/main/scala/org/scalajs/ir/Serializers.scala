@@ -327,6 +327,15 @@ object Serializers {
           writeTree(default)
           writeType(tree.tpe)
 
+        case JSAwait(arg) =>
+          writeTagAndPos(TagJSAwait)
+          writeTree(arg)
+
+        case JSYield(arg, star) =>
+          writeTagAndPos(TagJSYield)
+          writeTree(arg)
+          writeBoolean(star)
+
         case Debugger() =>
           writeTagAndPos(TagDebugger)
 
@@ -1217,6 +1226,12 @@ object Serializers {
           Match(readTree(), List.fill(readInt()) {
             (readTrees().map(_.asInstanceOf[MatchableLiteral]), readTree())
           }, readTree())(readType())
+
+        case TagJSAwait =>
+          JSAwait(readTree())
+        case TagJSYield =>
+          JSYield(readTree(), readBoolean())
+
         case TagDebugger => Debugger()
 
         case TagNew          => New(readClassName(), readMethodIdent(), readTrees())

@@ -5317,6 +5317,48 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           // js.import.meta
           js.JSImportMeta()
 
+        case JS_ASYNC =>
+          // js.async(arg)
+          assert(args.size == 1,
+              s"Expected exactly 1 argument for JS primitive $code but got " +
+              s"${args.size} at $pos")
+          val Block(stats, fun: Function) = args.head
+          val genStats = stats.map(genStat(_))
+          val asyncExpr = genAnonFunction(fun) match {
+            case js.NewLambda(_, closure: js.Closure) =>
+              val newFlags = closure.flags.withTyped(false).withAsync(true)
+              js.JSFunctionApply(closure.copy(flags = newFlags), Nil)
+            case other =>
+              abort(s"oops: $other")
+          }
+          js.Block(genStats, asyncExpr)
+
+        case JS_AWAIT =>
+          // js.await(arg)
+          val arg = genArgs1
+          js.JSAwait(arg)
+
+        case JS_GENERATOR =>
+          // js.Generator.apply(arg)
+          assert(args.size == 1,
+              s"Expected exactly 1 argument for JS primitive $code but got " +
+              s"${args.size} at $pos")
+          val Block(stats, fun: Function) = args.head
+          val genStats = stats.map(genStat(_))
+          val asyncExpr = genAnonFunction(fun) match {
+            case js.NewLambda(_, closure: js.Closure) =>
+              val newFlags = closure.flags.withTyped(false).withArrow(false).withGenerator(true)
+              js.JSFunctionApply(closure.copy(flags = newFlags), js.Undefined() :: Nil)
+            case other =>
+              abort(s"oops: $other")
+          }
+          js.Block(genStats, asyncExpr)
+
+        case JS_YIELD | JS_YIELD_STAR =>
+          // js.yield(arg, evidence)
+          val (arg, yieldEvidence) = genArgs2
+          js.JSYield(arg, star = code == JS_YIELD_STAR)
+
         case DYNAMIC_IMPORT =>
           assert(args.size == 1,
               s"Expected exactly 1 argument for JS primitive $code but got " +

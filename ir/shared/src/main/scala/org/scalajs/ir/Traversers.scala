@@ -69,6 +69,12 @@ object Traversers {
         cases foreach (c => (c._1 map traverse, traverse(c._2)))
         traverse(default)
 
+      case JSAwait(arg) =>
+        traverse(arg)
+
+      case JSYield(arg, star) =>
+        traverse(arg)
+
       // Scala expressions
 
       case New(_, _, args) =>

@@ -278,6 +278,19 @@ object Printers {
           undent()
           undent(); println(); print('}')
 
+        case JSAwait(arg) =>
+          print("await(")
+          print(arg)
+          print(")")
+
+        case JSYield(arg, star) =>
+          if (star)
+            print("yield*(")
+          else
+            print("yield(")
+          print(arg)
+          print(")")
+
         case Debugger() =>
           print("debugger")
 
@@ -873,12 +886,18 @@ object Printers {
             print(name)
 
         case Closure(flags, captureParams, params, restParam, resultType, body, captureValues) =>
+          print("(")
+          if (flags.async)
+            print("async ")
           if (flags.typed)
-            print("(typed-lambda<")
+            print("typed-lambda")
           else if (flags.arrow)
-            print("(arrow-lambda<")
+            print("arrow-lambda")
           else
-            print("(lambda<")
+            print("lambda")
+          if (flags.generator)
+            print("*")
+          print("<")
           var first = true
           for ((param, value) <- captureParams.zip(captureValues)) {
             if (first)
