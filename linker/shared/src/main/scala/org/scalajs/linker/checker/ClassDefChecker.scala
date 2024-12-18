@@ -683,7 +683,7 @@ private final class ClassDefChecker(classDef: ClassDef,
         checkTree(rhs, env)
 
         lhs match {
-          case VarRef(LocalIdent(name)) =>
+          case VarRef(name) =>
             if (env.locals.get(name).exists(!_.mutable))
               reportError(i"Assignment to immutable variable $name.")
 
@@ -965,7 +965,7 @@ private final class ClassDefChecker(classDef: ClassDef,
 
       // Atomic expressions
 
-      case VarRef(LocalIdent(name)) =>
+      case VarRef(name) =>
         env.locals.get(name).fold[Unit] {
           reportError(i"Cannot find variable $name in scope")
         } { localDef =>

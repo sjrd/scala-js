@@ -868,8 +868,11 @@ object Printers {
 
         // Atomic expressions
 
-        case VarRef(ident) =>
-          print(ident)
+        case VarRef(name) =>
+          if (name.isThis)
+            print("this")
+          else
+            print(name)
 
         case Closure(arrow, captureParams, params, restParam, body, captureValues) =>
           if (arrow)
@@ -1131,12 +1134,8 @@ object Printers {
         print(')')
     }
 
-    def print(ident: LocalIdent): Unit = {
-      if (ident.name.isThis)
-        print("this")
-      else
-        print(ident.name)
-    }
+    def print(ident: LocalIdent): Unit =
+      print(ident.name)
 
     def print(ident: LabelIdent): Unit =
       print(ident.name)

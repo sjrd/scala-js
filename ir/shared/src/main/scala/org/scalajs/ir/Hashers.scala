@@ -524,10 +524,13 @@ object Hashers {
           mixTag(TagClassOf)
           mixTypeRef(typeRef)
 
-        case VarRef(ident) =>
-          // Here we don't use the "optimized" representation with TagThis
-          mixTag(TagVarRef)
-          mixLocalIdent(ident)
+        case VarRef(name) =>
+          if (name.isThis) {
+            mixTag(TagThis)
+          } else {
+            mixTag(TagVarRef)
+            mixName(name)
+          }
           mixType(tree.tpe)
 
         case Closure(arrow, captureParams, params, restParam, body, captureValues) =>

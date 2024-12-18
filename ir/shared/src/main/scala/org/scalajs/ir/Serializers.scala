@@ -551,13 +551,13 @@ object Serializers {
           writeTagAndPos(TagClassOf)
           writeTypeRef(typeRef)
 
-        case VarRef(ident) =>
-          if (ident.name.isThis && ident.pos == tree.pos) {
+        case VarRef(name) =>
+          if (name.isThis) {
             // "Optimized" representation that is compatible with IR < 1.18
             writeTagAndPos(TagThis)
           } else {
             writeTagAndPos(TagVarRef)
-            writeLocalIdent(ident)
+            writeName(name)
           }
           writeType(tree.tpe)
 
@@ -1392,7 +1392,10 @@ object Serializers {
         case TagClassOf        => ClassOf(readTypeRef())
 
         case TagVarRef =>
-          VarRef(readLocalIdent())(readType())
+          val name =
+            if (hacks.use17) readLocalIdent().name
+            else readLocalName()
+          VarRef(name)(readType())
 
         case TagThis =>
           val tpe = readType()
