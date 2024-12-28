@@ -186,6 +186,9 @@ object Transformers {
         case JSTypeOfGlobalRef(globalRef) =>
           JSTypeOfGlobalRef(transform(globalRef).asInstanceOf[JSGlobalRef])
 
+        case ComponentFunctionApply(receiver, module, name, args) =>
+          ComponentFunctionApply(receiver.map(transform), module, name, args.map(transform))(tree.tpe)
+
         // Atomic expressions
 
         case Closure(flags, captureParams, params, restParam, resultType, body, captureValues) =>
@@ -217,8 +220,9 @@ object Transformers {
           interfaces, transformTreeOpt(jsSuperClass), jsNativeLoadSpec,
           fields.map(transformAnyFieldDef(_)),
           methods.map(transformMethodDef), jsConstructor.map(transformJSConstructorDef),
-          jsMethodProps.map(transformJSMethodPropDef), jsNativeMembers,
-          topLevelExportDefs.map(transformTopLevelExportDef))(
+          jsMethodProps.map(transformJSMethodPropDef), jsNativeMembers, componentNativeMembers,
+          topLevelExportDefs.map(transformTopLevelExportDef)
+      )(
           tree.optimizerHints)(tree.pos)
     }
 
@@ -288,6 +292,10 @@ object Transformers {
 
         case TopLevelMethodExportDef(moduleID, methodDef) =>
           TopLevelMethodExportDef(moduleID, transformJSMethodDef(methodDef))
+
+        case WasmComponentExportDef(moduleID, name, methodDef, signature) =>
+          WasmComponentExportDef(exportDef.moduleID, name,
+              transformMethodDef(methodDef), signature)
       }
     }
   }

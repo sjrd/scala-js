@@ -936,6 +936,12 @@ object Printers {
           print(name)
           print(")")
 
+        case ComponentFunctionApply(receiver, className, method, args) =>
+          print(className)
+          print(".")
+          print(method)
+          printArgs(args)
+
         // Transient
 
         case Transient(value) =>
@@ -968,6 +974,8 @@ object Printers {
         case ClassKind.JSModuleClass       => print("js module class ")
         case ClassKind.NativeJSClass       => print("native js class ")
         case ClassKind.NativeJSModuleClass => print("native js module class ")
+        case ClassKind.NativeWasmComponentResourceClass => print("native wasm resource class ")
+        case ClassKind.NativeWasmComponentInterfaceClass => print("native wasm interface class ")
       }
       print(name)
       print(originalName)
@@ -996,7 +1004,7 @@ object Printers {
       }
       print(" ")
       printColumn(fields ::: methods ::: jsConstructor.toList :::
-          jsMethodProps ::: jsNativeMembers ::: topLevelExportDefs, "{", "", "}")
+          jsMethodProps ::: jsNativeMembers ::: componentNativeMembers ::: topLevelExportDefs, "{", "", "}")
     }
 
     def print(memberDef: MemberDef): Unit = {
@@ -1080,6 +1088,17 @@ object Printers {
           print(name)
           print(" loadfrom ")
           print(jsNativeLoadSpec)
+
+        case ComponentNativeMemberDef(flags, name, importModule, importName, tpe) =>
+          print(flags.namespace.prefixString)
+          print("component ")
+          print(name)
+          print(" importfrom \"")
+          print(importModule)
+          print("\" \"")
+          print(importName)
+          print("\"")
+          // TODO
       }
     }
 
@@ -1108,7 +1127,31 @@ object Printers {
           print(" as \"")
           printEscapeJS(exportName, out)
           print("\"")
+
+        case WasmComponentExportDef(_, exportName, methodDef, signature) =>
+          print("wasm \"")
+          printEscapeJS(exportName, out)
+          print("\" :")
+          // TODO: print signature
+          // var first = true
+          // for (ty <- paramTypes) {
+          //   if (first) first = false
+          //   else print(", ")
+          //   print(ty)
+          // }
+          // print("-> ")
+          // print(resultType)
+          // print(" = ")
+          // print(methodDef)
       }
+    }
+
+    def print(wasmExport: WasmComponentExportDef): Unit = {
+      print("(export \"")
+      print(wasmExport.exportName)
+      print("\" ")
+      print(wasmExport.methodDef)
+      print(")")
     }
 
     def print(typeRef: TypeRef): Unit = typeRef match {
