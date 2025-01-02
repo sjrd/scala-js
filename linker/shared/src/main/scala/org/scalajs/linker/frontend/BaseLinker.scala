@@ -20,6 +20,7 @@ import org.scalajs.logging._
 import org.scalajs.linker.interface._
 import org.scalajs.linker.standard._
 import org.scalajs.linker.standard.ModuleSet.ModuleID
+import org.scalajs.linker.caching._
 import org.scalajs.linker.checker._
 import org.scalajs.linker.analyzer._
 
@@ -40,8 +41,7 @@ final class BaseLinker(config: CommonPhaseConfig, checkIR: Boolean) {
   private val analyzer =
     new Analyzer(config, initial = true, checkIR = checkIR, failOnError = true, irLoader)
   private val desugarTransformer = new DesugarTransformer(config.coreSpec)
-  private val desugaredClassCaches =
-    new java.util.concurrent.ConcurrentHashMap[ClassName, DesugaredClassCache]
+  private val desugaredClassCaches = new DesugaredClassCaches(desugarTransformer)
   private val methodSynthesizer = new MethodSynthesizer(irLoader)
 
   def link(irInput: Seq[IRFile],
@@ -72,22 +72,13 @@ final class BaseLinker(config: CommonPhaseConfig, checkIR: Boolean) {
     }
 
     result.andThen { case _ =>
+      desugaredClassCaches.cleanAfterRun()
       irLoader.cleanAfterRun()
     }
   }
 
   private def assemble(moduleInitializers: Seq[ModuleInitializer],
       analysis: Analysis)(implicit ec: ExecutionContext): Future[LinkingUnit] = {
-
-    /* Remove stale entries from the desugared class cache.
-     * Note that we do not remove individual stale *methods* inside a live
-     * class. This has the potential for memory leaks if methods requiring
-     * desugaring keep being added and removed across runs.
-     * It does not seem worth guarding against, though.
-     */
-    desugaredClassCaches.keySet().removeIf { (className: ClassName) =>
-      !analysis.classInfos.contains(className)
-    }
 
     def assembleClass(info: ClassInfo) = {
       val version = irLoader.irFileVersion(info.className)
@@ -97,12 +88,8 @@ final class BaseLinker(config: CommonPhaseConfig, checkIR: Boolean) {
         classDef <- irLoader.loadClassDef(info.className)
         syntheticMethods <- syntheticMethods
       } yield {
-        val desugaredClassCache = desugaredClassCaches.computeIfAbsent(info.className, {
-          (className: ClassName) =>
-            new DesugaredClassCache(desugarTransformer)
-        })
         BaseLinker.linkClassDef(classDef, version, syntheticMethods, analysis,
-            Some(desugaredClassCache))
+            Some(desugaredClassCaches))
       }
     }
 
@@ -168,25 +155,25 @@ private[frontend] object BaseLinker {
     }
   }
 
-  private final class DesugaredClassCache(desugarTransformer: DesugarTransformer) {
+  private final class DesugaredClassCaches(desugarTranformer: DesugarTransformer)
+      extends ConcurrentCacheMap[ClassName, DesugaredClassCache] {
+
+    protected def createValue(key: ClassName): DesugaredClassCache =
+      new DesugaredClassCache(desugarTranformer)
+  }
+
+  private final class DesugaredClassCache(desugarTransformer: DesugarTransformer)
+      extends NamespacedMethodCacheMap[SimpleVersionedValueCache[MethodDef]] {
+
     import ir.Trees._
 
-    private val methodCache = mutable.Map.empty[(MemberNamespace, MethodName), MethodDef]
+    protected def createValue(key: MethodName): SimpleVersionedValueCache[MethodDef] =
+      new SimpleVersionedValueCache()
 
     def desugarMethod(method: MethodDef): MethodDef = {
-      if (method.version == Version.Unversioned) {
+      this.get(method.flags.namespace, method.methodName).getOrElseUpdate(method.version, {
         desugarTransformer.transformMethodDef(method)
-      } else {
-        val key = (method.flags.namespace, method.methodName)
-        methodCache.get(key) match {
-          case Some(desugared) if desugared.version.sameVersion(method.version) =>
-            desugared
-          case _ =>
-            val desugared = desugarTransformer.transformMethodDef(method)
-            methodCache(key) = desugared
-            desugared
-        }
-      }
+      })
     }
 
     def desugarJSConstructor(jsConstructor: Option[JSConstructorDef]): Option[JSConstructorDef] = {
@@ -210,21 +197,23 @@ private[frontend] object BaseLinker {
   private[frontend] def refineClassDef(classDef: ClassDef, version: Version,
       analysis: Analysis): (LinkedClass, List[LinkedTopLevelExport]) = {
     linkClassDef(classDef, version, syntheticMethodDefs = Nil, analysis,
-        desugaredClassCache = None)
+        desugaredClassCaches = None)
   }
 
   /** Takes a ClassDef and DCE infos to construct a stripped down LinkedClass.
    */
   private[frontend] def linkClassDef(classDef: ClassDef, version: Version,
       syntheticMethodDefs: List[MethodDef], analysis: Analysis,
-      desugaredClassCache: Option[DesugaredClassCache]): (LinkedClass, List[LinkedTopLevelExport]) = {
+      desugaredClassCaches: Option[DesugaredClassCaches]): (LinkedClass, List[LinkedTopLevelExport]) = {
     import ir.Trees._
 
-    def requireDesugaredClassCache(): DesugaredClassCache = {
-      desugaredClassCache.getOrElse {
-        throw new AssertionError(
-            s"Unexpected desugaring needed in refiner in class ${classDef.className.nameString}")
-      }
+    lazy val requireDesugaredClassCache: DesugaredClassCache = {
+      desugaredClassCaches
+        .getOrElse {
+          throw new AssertionError(
+              s"Unexpected desugaring needed in refiner in class ${classDef.className.nameString}")
+        }
+        .get(classDef.className)
     }
 
     val classInfo = analysis.classInfos(classDef.className)
@@ -251,7 +240,7 @@ private[frontend] object BaseLinker {
         if (!info.needsDesugaring)
           m
         else
-          requireDesugaredClassCache().desugarMethod(m)
+          requireDesugaredClassCache.desugarMethod(m)
       }
       .toList
 
@@ -261,7 +250,7 @@ private[frontend] object BaseLinker {
       if (!anyJSMemberNeedsDesugaring) {
         (classDef.jsConstructor, classDef.jsMethodProps)
       } else {
-        val cache = requireDesugaredClassCache()
+        val cache = requireDesugaredClassCache
         (cache.desugarJSConstructor(classDef.jsConstructor),
             cache.desugarJSMethodProps(classDef.jsMethodProps))
       }
@@ -310,7 +299,7 @@ private[frontend] object BaseLinker {
         (ModuleID(topLevelExport.moduleID), topLevelExport.topLevelExportName))
       val desugared =
         if (!infos.needsDesugaring) topLevelExport
-        else requireDesugaredClassCache().desugarTopLevelExport(topLevelExport)
+        else requireDesugaredClassCache.desugarTopLevelExport(topLevelExport)
       new LinkedTopLevelExport(classDef.className, topLevelExport,
           infos.staticDependencies.toSet, infos.externalDependencies.toSet)
     }
