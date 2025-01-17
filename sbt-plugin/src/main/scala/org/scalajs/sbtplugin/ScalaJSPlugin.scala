@@ -25,6 +25,7 @@ import org.scalajs.linker.interface._
 
 import org.scalajs.jsenv.{Input, JSEnv}
 import org.scalajs.jsenv.nodejs.NodeJSEnv
+import java.util.Locale
 
 object ScalaJSPlugin extends AutoPlugin {
   override def requires: Plugins = plugins.JvmPlugin
@@ -274,6 +275,10 @@ object ScalaJSPlugin extends AutoPlugin {
         "Directory for linker output.",
         BSetting)
 
+    val scalaJSResolveWasmOpt = TaskKey[File]("scalaJSResolveWasmOpt",
+        "Path to the wasm-opt binary.",
+        DTask)
+
     /** Factory for logger (used to intercept timing in Scala.js core)
      *
      *  @note
@@ -344,6 +349,36 @@ object ScalaJSPlugin extends AutoPlugin {
           scalaJSLinkerImplBox.value.ensure {
             LinkerImpl.reflect(Attributed.data(linkerImplClasspath))
           }
+        },
+
+        target in scalaJSResolveWasmOpt := (target in LocalRootProject).value / "scalajs-wasmopt",
+        scalaJSResolveWasmOpt := {
+          val targetDir = (target in scalaJSResolveWasmOpt).value
+
+          val binaryenVersion = "version_121"
+
+          val archAndOSSuffix = {
+            val arch = System.getProperty("os.arch").toLowerCase(Locale.ROOT) match {
+              case "x86_64" | "amd64" => "x86_64"
+              case "aarch64"          => "aarch64"
+              case "arm64"            => "arm64"
+              case _                  => null
+            }
+            val os = System.getProperty("os.name").toLowerCase(Locale.ROOT) match {
+              case name if name.startsWith("windows") => "windows"
+              case name if name.startsWith("linux")   => "linux"
+              case name if name.startsWith("mac")     => "macos"
+            }
+            if (arch == null || os == null)
+              "node"
+            else
+              s"$arch-$os"
+          }
+          val url = new URL(s"https://github.com/WebAssembly/binaryen/releases/download/$binaryenVersion/binaryen-$binaryenVersion-$archAndOSSuffix.tar.gz")
+          sbt.io.Using.urlInputStream(url) { stream =>
+            ???
+          }
+          ??? //sbt.io.Using.urlInputStream()
         },
 
         scalaJSGlobalIRCacheConfig := IRFileCacheConfig(),

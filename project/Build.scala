@@ -1417,6 +1417,10 @@ object Build {
       libraryDependencies += "org.scala-js" %% "scalajs-js-envs" % "1.4.0",
       libraryDependencies += "org.scala-js" %% "scalajs-env-nodejs" % "1.4.0",
 
+      // to resolve and uncompress wasm-opt
+      libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.17.0",
+      libraryDependencies += "org.apache.commons" % "commons-compress" % "1.27.1",
+
       scriptedLaunchOpts += "-Dplugin.version=" + version.value,
 
       scriptedLaunchOpts ++= {
