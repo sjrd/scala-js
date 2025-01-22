@@ -27,6 +27,7 @@ import org.scalajs.logging._
 
 import org.scalajs.junit.async._
 
+import org.scalajs.linker.checker.CheckingPhase
 import org.scalajs.linker.interface._
 import org.scalajs.linker.interface.unstable.IRFileImpl
 import org.scalajs.linker.standard._
@@ -469,7 +470,8 @@ object IRCheckerTest {
 
     TestIRRepo.minilib.flatMap { stdLibFiles =>
       if (postOptimizer) {
-        val refiner = new Refiner(CommonPhaseConfig.fromStandardConfig(config), checkIR = true)
+        val checkIRFor = Some(CheckingPhase.Emitter(afterOptimizer = true))
+        val refiner = new Refiner(CommonPhaseConfig.fromStandardConfig(config), checkIRFor)
 
         Future.traverse(stdLibFiles)(f => IRFileImpl.fromIRFile(f).tree).flatMap { stdLibClassDefs =>
           val allClassDefs = (
