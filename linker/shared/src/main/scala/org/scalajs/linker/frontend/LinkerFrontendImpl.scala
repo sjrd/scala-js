@@ -45,7 +45,7 @@ final class LinkerFrontendImpl private (config: LinkerFrontendImpl.Config)
   private[this] val linker: BaseLinker = {
     val nextPhase =
       if (config.optimizer) CheckingPhase.Optimizer
-      else CheckingPhase.Emitter(afterOptimizer = false)
+      else CheckingPhase.Emitter
     new BaseLinker(config.commonConfig, ifCheckIR(nextPhase))
   }
 
@@ -53,7 +53,7 @@ final class LinkerFrontendImpl private (config: LinkerFrontendImpl.Config)
     LinkerFrontendImplPlatform.createOptimizer(config)
 
   private[this] val refiner: Refiner =
-    new Refiner(config.commonConfig, ifCheckIR(CheckingPhase.Emitter(afterOptimizer = true)))
+    new Refiner(config.commonConfig, ifCheckIR(CheckingPhase.Emitter))
 
   private[this] val splitter: ModuleSplitter = config.moduleSplitStyle match {
     case ModuleSplitStyle.FewestModules             => ModuleSplitter.fewestModules()

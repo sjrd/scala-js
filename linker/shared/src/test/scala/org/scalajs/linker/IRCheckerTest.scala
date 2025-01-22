@@ -470,7 +470,7 @@ object IRCheckerTest {
 
     TestIRRepo.minilib.flatMap { stdLibFiles =>
       if (postOptimizer) {
-        val checkIRFor = Some(CheckingPhase.Emitter(afterOptimizer = true))
+        val checkIRFor = Some(CheckingPhase.Emitter)
         val refiner = new Refiner(CommonPhaseConfig.fromStandardConfig(config), checkIRFor)
 
         Future.traverse(stdLibFiles)(f => IRFileImpl.fromIRFile(f).tree).flatMap { stdLibClassDefs =>

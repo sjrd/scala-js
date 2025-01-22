@@ -71,8 +71,8 @@ private[checker] object FeatureSet {
 
   /** The set of features supported (as input) by the given phase. */
   def supportedBy(phase: CheckingPhase): FeatureSet = phase match {
-    case BaseLinker                 => Empty
-    case Emitter(false) | Optimizer => Linked
-    case Emitter(true)              => Linked | Optimized
+    case BaseLinker => Empty
+    case Optimizer  => Linked
+    case Emitter    => Linked | Optimized
   }
 }

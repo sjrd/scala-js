@@ -23,6 +23,6 @@ sealed abstract class CheckingPhase
 
 object CheckingPhase {
   case object BaseLinker extends CheckingPhase
-  final case class Emitter(afterOptimizer: Boolean) extends CheckingPhase
   case object Optimizer extends CheckingPhase
+  case object Emitter extends CheckingPhase
 }

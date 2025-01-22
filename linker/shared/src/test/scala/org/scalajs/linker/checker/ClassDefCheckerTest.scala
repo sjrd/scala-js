@@ -817,7 +817,7 @@ class ClassDefCheckerTest {
     assertError(
         mainTestClassDef(Assign(RecordSelect(int(5), "i")(IntType), int(6))),
         "Assignment to RecordSelect of illegal tree: org.scalajs.ir.Trees$IntLiteral",
-        nextPhase = CheckingPhase.Emitter(afterOptimizer = true))
+        nextPhase = CheckingPhase.Emitter)
   }
 }
 

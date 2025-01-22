@@ -86,7 +86,7 @@ class BaseLinkerTest {
 
     for (moduleSet <- linkToModuleSet(classDefs, MainTestModuleInitializers, config = config)) yield {
       val clazz = findClass(moduleSet, BoxedIntegerClass).get
-      val nextPhase = CheckingPhase.Emitter(afterOptimizer = false)
+      val nextPhase = CheckingPhase.Emitter
       val errorCount = ClassDefChecker.check(clazz, nextPhase,
           new ScalaConsoleLogger(Level.Error))
       assertEquals(0, errorCount)
