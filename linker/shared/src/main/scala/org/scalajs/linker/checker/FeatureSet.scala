@@ -69,10 +69,10 @@ private[checker] object FeatureSet {
   private val Optimized =
     OptimizedTransients | Records | RelaxedCtorBodies
 
-  /** The set of features supported (as input) by the given phase. */
-  def supportedBy(phase: CheckingPhase): FeatureSet = phase match {
-    case BaseLinker => Empty
-    case Optimizer  => Linked
-    case Emitter    => Linked | Optimized
+  /** The set of features allowed as output of the given phase. */
+  def allowedAfter(phase: CheckingPhase): FeatureSet = phase match {
+    case Compiler   => Empty
+    case BaseLinker => Linked
+    case Optimizer  => Linked | Optimized
   }
 }

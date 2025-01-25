@@ -12,17 +12,17 @@
 
 package org.scalajs.linker.checker
 
-/** A phase *before which* we are checking IR for.
+/** A phase *after which* we are checking IR.
  *
  *  When checking IR (with `ClassDefChecker` or `IRChecker`), different nodes
  *  and transients are allowed between different phases. The `CheckingPhase`
- *  records the *next* phase to run after the check. We are therefore checking
- *  that the IR is a valid *input* to the target phase.
+ *  records the *previous* phase to run before the check. We are therefore
+ *  checking that the IR is a valid *output* to the target phase.
  */
 sealed abstract class CheckingPhase
 
 object CheckingPhase {
+  case object Compiler extends CheckingPhase
   case object BaseLinker extends CheckingPhase
   case object Optimizer extends CheckingPhase
-  case object Emitter extends CheckingPhase
 }

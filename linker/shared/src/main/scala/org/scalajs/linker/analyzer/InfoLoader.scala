@@ -80,10 +80,10 @@ private[analyzer] object InfoLoader {
         if (!version.sameVersion(newVersion)) {
           version = newVersion
           info = irLoader.loadClassDef(className).map { tree =>
-            for (nextPhase <- checkIRFor) {
-              val errorCount = ClassDefChecker.check(tree, nextPhase, logger)
+            for (previousPhase <- checkIRFor) {
+              val errorCount = ClassDefChecker.check(tree, previousPhase, logger)
               if (errorCount != 0) {
-                if (nextPhase == CheckingPhase.BaseLinker) {
+                if (previousPhase == CheckingPhase.Compiler) {
                   throw new LinkingException(
                       s"There were $errorCount ClassDef checking errors.")
                 } else {

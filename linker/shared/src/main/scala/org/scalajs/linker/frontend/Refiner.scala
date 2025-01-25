@@ -27,21 +27,23 @@ import org.scalajs.linker.standard.ModuleSet.ModuleID
 import org.scalajs.linker.analyzer._
 
 /** Does a dead code elimination pass on a [[LinkingUnit]]. */
-final class Refiner(config: CommonPhaseConfig, checkIRFor: Option[CheckingPhase]) {
+final class Refiner(config: CommonPhaseConfig, checkIR: Boolean) {
   import Refiner._
 
   private val irLoader = new ClassDefIRLoader
-  private val analyzer =
-    new Analyzer(config, initial = false, checkIRFor = checkIRFor, failOnError = true, irLoader)
+  private val analyzer = {
+    val checkIRFor = Some(CheckingPhase.Optimizer).filter(_ => checkIR)
+    new Analyzer(config, initial = false, checkIRFor, failOnError = true, irLoader)
+  }
 
-  /* TODO: Remove this and replace with `checkIRFor` once the optimizer generates
+  /* TODO: Remove this and replace with `checkIR` once the optimizer generates
    * well-typed IR with runtime longs.
    */
-  private val checkIRForAmended = {
+  private val shouldRunIRChecker = {
     val optimizerUsesRuntimeLong =
       !config.coreSpec.esFeatures.allowBigIntsForLongs &&
       !config.coreSpec.targetIsWebAssembly
-    checkIRFor.filter(_ => !optimizerUsesRuntimeLong)
+    checkIR && !optimizerUsesRuntimeLong
   }
 
   def refine(classDefs: Seq[(ClassDef, Version)],
@@ -77,9 +79,9 @@ final class Refiner(config: CommonPhaseConfig, checkIRFor: Option[CheckingPhase]
             linkedTopLevelExports.flatten.toList, moduleInitializers, globalInfo)
       }
 
-      for (nextPhase <- checkIRForAmended) {
+      if (shouldRunIRChecker) {
         logger.time("Refiner: Check IR") {
-          val errorCount = IRChecker.check(result, logger, nextPhase)
+          val errorCount = IRChecker.check(result, logger, CheckingPhase.Optimizer)
           if (errorCount != 0) {
             throw new AssertionError(
                 s"There were $errorCount IR checking errors after optimization (this is a Scala.js bug)")

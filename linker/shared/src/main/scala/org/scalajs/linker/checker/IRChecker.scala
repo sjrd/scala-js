@@ -29,12 +29,12 @@ import org.scalajs.linker.checker.ErrorReporter._
 
 /** Checker for the validity of the IR. */
 private final class IRChecker(unit: LinkingUnit, reporter: ErrorReporter,
-    nextPhase: CheckingPhase) {
+    previousPhase: CheckingPhase) {
 
   import IRChecker._
   import reporter.reportError
 
-  private val featureSet = FeatureSet.supportedBy(nextPhase)
+  private val featureSet = FeatureSet.allowedAfter(previousPhase)
 
   private val classes: mutable.Map[ClassName, CheckedClass] = {
     val tups = for (classDef <- unit.classDefs) yield {
@@ -928,9 +928,9 @@ object IRChecker {
    *
    *  @return Count of IR checking errors (0 in case of success)
    */
-  def check(unit: LinkingUnit, logger: Logger, nextPhase: CheckingPhase): Int = {
+  def check(unit: LinkingUnit, logger: Logger, previousPhase: CheckingPhase): Int = {
     val reporter = new LoggerErrorReporter(logger)
-    new IRChecker(unit, reporter, nextPhase).check()
+    new IRChecker(unit, reporter, previousPhase).check()
     reporter.errorCount
   }
 }

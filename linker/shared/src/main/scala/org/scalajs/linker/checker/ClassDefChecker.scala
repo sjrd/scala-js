@@ -28,12 +28,12 @@ import org.scalajs.linker.standard.LinkedClass
 
 /** Checker for the validity of the IR. */
 private final class ClassDefChecker(classDef: ClassDef,
-    nextPhase: CheckingPhase, reporter: ErrorReporter) {
+    previousPhase: CheckingPhase, reporter: ErrorReporter) {
   import ClassDefChecker._
 
   import reporter.reportError
 
-  private val featureSet = FeatureSet.supportedBy(nextPhase)
+  private val featureSet = FeatureSet.allowedAfter(previousPhase)
 
   private[this] val isJLObject = classDef.name.name == ObjectClass
 
@@ -1037,13 +1037,13 @@ object ClassDefChecker {
    *
    *  @return Count of IR checking errors (0 in case of success)
    */
-  def check(classDef: ClassDef, nextPhase: CheckingPhase, logger: Logger): Int = {
+  def check(classDef: ClassDef, previousPhase: CheckingPhase, logger: Logger): Int = {
     val reporter = new LoggerErrorReporter(logger)
-    new ClassDefChecker(classDef, nextPhase, reporter).checkClassDef()
+    new ClassDefChecker(classDef, previousPhase, reporter).checkClassDef()
     reporter.errorCount
   }
 
-  def check(linkedClass: LinkedClass, nextPhase: CheckingPhase, logger: Logger): Int = {
+  def check(linkedClass: LinkedClass, previousPhase: CheckingPhase, logger: Logger): Int = {
     // Rebuild a ClassDef out of the LinkedClass
     import linkedClass._
     implicit val pos = linkedClass.pos
@@ -1064,7 +1064,7 @@ object ClassDefChecker {
       topLevelExportDefs = Nil
     )(optimizerHints)
 
-    check(classDef, nextPhase, logger)
+    check(classDef, previousPhase, logger)
   }
 
   private class Env(

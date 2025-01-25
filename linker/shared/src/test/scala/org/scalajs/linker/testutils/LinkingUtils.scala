@@ -102,7 +102,7 @@ object LinkingUtils {
     val injectedIRFiles = StandardLinkerBackend(config).injectedIRFiles
 
     val irLoader = new FileIRLoader
-    val checkIRFor = Some(CheckingPhase.BaseLinker)
+    val checkIRFor = Some(CheckingPhase.Compiler)
     val analyzer = new Analyzer(CommonPhaseConfig.fromStandardConfig(config),
         initial = true, checkIRFor, failOnError = false, irLoader)
     val logger = new ScalaConsoleLogger(Level.Error)

@@ -32,14 +32,13 @@ import Analysis._
 /** Links the information from [[interface.IRFile IRFile]]s into
  *  [[standard.LinkedClass LinkedClass]]es. Does a dead code elimination pass.
  */
-final class BaseLinker(config: CommonPhaseConfig, checkIRFor: Option[CheckingPhase]) {
+final class BaseLinker(config: CommonPhaseConfig, checkIR: Boolean) {
   import BaseLinker._
 
   private val irLoader = new FileIRLoader
   private val analyzer = {
-    // Irrespective of the next phase, the analyzer checks IR as *input* to the BaseLinker
-    val checkIRForMe = checkIRFor.map(_ => CheckingPhase.BaseLinker)
-    new Analyzer(config, initial = true, checkIRFor = checkIRForMe, failOnError = true, irLoader)
+    val checkIRFor = Some(CheckingPhase.Compiler).filter(_ => checkIR)
+    new Analyzer(config, initial = true, checkIRFor, failOnError = true, irLoader)
   }
   private val methodSynthesizer = new MethodSynthesizer(irLoader)
 
@@ -57,9 +56,9 @@ final class BaseLinker(config: CommonPhaseConfig, checkIRFor: Option[CheckingPha
         assemble(moduleInitializers, analysis)
       }
     } yield {
-      for (nextPhase <- checkIRFor) {
+      if (checkIR) {
         logger.time("Linker: Check IR") {
-          val errorCount = IRChecker.check(linkResult, logger, nextPhase)
+          val errorCount = IRChecker.check(linkResult, logger, CheckingPhase.BaseLinker)
           if (errorCount != 0) {
             throw new LinkingException(
                 s"There were $errorCount IR checking errors.")
