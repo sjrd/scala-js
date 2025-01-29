@@ -648,7 +648,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
       fb += wa.GlobalGet(genGlobalID.emptyITable)
 
     classInfo.allFieldDefs.foreach { f =>
-      fb += genZeroOf(f.ftpe)
+      val ftpe = f.ftpe match {
+        case ClosureType(paramTypes, resultType, _) =>
+          // ClosureType's in fields are stored as nullable, but always retrieved with cast-to-non-nullable
+          ClosureType(paramTypes, resultType, nullable = true)
+        case ftpe =>
+          ftpe
+      }
+      fb += genZeroOf(ftpe)
     }
     for (dataParam <- dataParamOpt)
       fb += wa.LocalGet(dataParam)

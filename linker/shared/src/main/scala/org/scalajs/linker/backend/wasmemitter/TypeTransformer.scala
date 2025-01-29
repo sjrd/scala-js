@@ -27,7 +27,13 @@ object TypeTransformer {
    *  valid types for fields.
    */
   def transformFieldType(tpe: Type)(implicit ctx: WasmContext): watpe.Type = {
-    transformSingleType(tpe)
+    val tpe1 = tpe match {
+      case ClosureType(paramTypes, resultType, _) =>
+        ClosureType(paramTypes, resultType, nullable = true)
+      case _ =>
+        tpe
+    }
+    transformSingleType(tpe1)
   }
 
   /** Transforms an IR type for a parameter definition.

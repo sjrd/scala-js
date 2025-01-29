@@ -1402,6 +1402,14 @@ private class FunctionEmitter private (
         genTypeID.forClass(className),
         genFieldID.forClassInstanceField(fieldName)
       )
+
+      // Cast away the nullability of closure types in fields
+      tree.tpe match {
+        case ClosureType(_, _, /* nullable = */ false) =>
+          fb += wa.RefAsNonNull
+        case _ =>
+          () // do nothing
+      }
     }
 
     tree.tpe

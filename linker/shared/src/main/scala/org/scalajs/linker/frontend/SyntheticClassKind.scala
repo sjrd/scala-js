@@ -38,10 +38,8 @@ object SyntheticClassKind {
   final case class Lambda(descriptor: NewLambda.Descriptor) extends SyntheticClassKind {
     val className: ClassName = Lambda.makeClassName(descriptor)
 
-    private val closureTypeNull =
-      ClosureType(descriptor.paramTypes, descriptor.resultType, nullable = true)
     private val closureTypeNonNull =
-      closureTypeNull.toNonNullable
+      ClosureType(descriptor.paramTypes, descriptor.resultType, nullable = false)
 
     private val fFieldName = FieldName(className, SimpleFieldName("f"))
 
@@ -83,7 +81,7 @@ object SyntheticClassKind {
       val thisType = ClassType(className, nullable = false)
       val thiz = This()(thisType)
 
-      val fFieldDef = FieldDef(MemberFlags.empty, FieldIdent(fFieldName), NoOriginalName, closureTypeNull)
+      val fFieldDef = FieldDef(MemberFlags.empty, FieldIdent(fFieldName), NoOriginalName, closureTypeNonNull)
 
       val methodParamDefs = paramTypes.zipWithIndex.map { case (paramType, index) =>
         ParamDef(LocalIdent(LocalName("x" + index)), NoOriginalName, paramType, mutable = false)
@@ -100,7 +98,7 @@ object SyntheticClassKind {
         VoidType,
         Some(
           Block(
-            Assign(Select(thiz, FieldIdent(fFieldName))(closureTypeNull), ctorParamDef.ref),
+            Assign(Select(thiz, FieldIdent(fFieldName))(closureTypeNonNull), ctorParamDef.ref),
             ApplyStatically(ApplyFlags.empty.withConstructor(true), thiz,
                 superClass, MethodIdent(NoArgConstructorName), Nil)(VoidType)
           )
@@ -116,7 +114,7 @@ object SyntheticClassKind {
         Some(
           ApplyTypedClosure(
             ApplyFlags.empty,
-            UnaryOp(UnaryOp.CheckNotNull, Select(thiz, FieldIdent(fFieldName))(closureTypeNull)),
+            Select(thiz, FieldIdent(fFieldName))(closureTypeNonNull),
             methodParamDefs.map(_.ref)
           )
         )
