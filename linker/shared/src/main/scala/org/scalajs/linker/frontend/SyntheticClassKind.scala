@@ -116,7 +116,7 @@ object SyntheticClassKind {
         Some(
           ApplyTypedClosure(
             ApplyFlags.empty,
-            Select(thiz, FieldIdent(fFieldName))(closureTypeNull),
+            UnaryOp(UnaryOp.CheckNotNull, Select(thiz, FieldIdent(fFieldName))(closureTypeNull)),
             methodParamDefs.map(_.ref)
           )
         )

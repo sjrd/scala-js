@@ -468,10 +468,10 @@ private final class IRChecker(unit: LinkingUnit, reporter: ErrorReporter,
       case ApplyTypedClosure(_, fun, args) if featureSet.supports(FeatureSet.TypedClosures) =>
         typecheck(fun, env)
         fun.tpe match {
-          case ClosureType(paramTypes, resultType, _) =>
+          case ClosureType(paramTypes, resultType, /* nullable = */ false) =>
             for ((paramType, arg) <- paramTypes.zip(args))
               typecheckExpect(arg, env, paramType)
-          case NothingType | NullType =>
+          case NothingType =>
             for (arg <- args)
               typecheckExpr(arg, env)
           case funTpe =>
@@ -483,6 +483,15 @@ private final class IRChecker(unit: LinkingUnit, reporter: ErrorReporter,
       case NewLambda(descriptor, fun) if featureSet.supports(FeatureSet.NewLambda) =>
         val closureType = ClosureType(descriptor.paramTypes, descriptor.resultType, nullable = false)
         typecheckExpect(fun, env, closureType)
+
+      case UnaryOp(UnaryOp.CheckNotNull, lhs) =>
+        // CheckNotNull accepts any closure type in addition to `AnyType`
+        lhs.tpe match {
+          case _: ClosureType =>
+            typecheck(lhs, env)
+          case _ =>
+            typecheckAny(lhs, env)
+        }
 
       case UnaryOp(UnaryOp.Array_length, lhs) =>
         // Array_length is a bit special because it allows any non-nullable array type
@@ -515,7 +524,7 @@ private final class IRChecker(unit: LinkingUnit, reporter: ErrorReporter,
             DoubleType
           case String_length =>
             StringType
-          case CheckNotNull | IdentityHashCode | WrapAsThrowable | Throw =>
+          case IdentityHashCode | WrapAsThrowable | Throw =>
             AnyType
           case Class_name | Class_isPrimitive | Class_isInterface |
               Class_isArray | Class_componentType | Class_superClass =>

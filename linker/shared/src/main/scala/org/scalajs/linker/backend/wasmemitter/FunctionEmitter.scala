@@ -1302,18 +1302,12 @@ private class FunctionEmitter private (
         genTree(tree.fun, NothingType)
         NothingType
 
-      case NullType =>
-        genTree(tree.fun, NullType)
-        genNPE()
-        NothingType
-
-      case closureType @ ClosureType(paramTypes, resultType, _) =>
+      case closureType @ ClosureType(paramTypes, resultType, /* nullable = */ false) =>
         genTreeAuto(tree.fun)
 
         val (funTypeID, typedClosureTypeID) = ctx.genTypedClosureStructType(closureType)
         val funLocal = addSyntheticLocal(watpe.RefType(typedClosureTypeID))
 
-        genAsNonNullOrNPEFor(tree.fun)
         fb += wa.LocalTee(funLocal)
         fb += wa.StructGet(typedClosureTypeID, genFieldID.typedClosure.data)
 
