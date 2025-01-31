@@ -468,10 +468,10 @@ private final class IRChecker(unit: LinkingUnit, reporter: ErrorReporter,
       case ApplyTypedClosure(_, fun, args) if featureSet.supports(FeatureSet.TypedClosures) =>
         typecheck(fun, env)
         fun.tpe match {
-          case ClosureType(paramTypes, resultType, _) =>
+          case ClosureType(paramTypes, resultType, /* nullable = */ false) =>
             for ((paramType, arg) <- paramTypes.zip(args))
               typecheckExpect(arg, env, paramType)
-          case NothingType | NullType =>
+          case NothingType =>
             for (arg <- args)
               typecheckExpr(arg, env)
           case funTpe =>

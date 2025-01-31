@@ -1773,7 +1773,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           }
 
         case ApplyTypedClosure(flags, fun, args) =>
-          unnest(checkNotNull(fun), args) { (newFun, newArgs, env) =>
+          unnest(fun, args) { (newFun, newArgs, env) =>
             redo(ApplyTypedClosure(flags, newFun, newArgs))(env)
           }
 
@@ -2349,7 +2349,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           transformApplyDynamicImport(tree)
 
         case ApplyTypedClosure(_, fun, args) =>
-          val newFun = transformExprNoChar(checkNotNull(fun))
+          val newFun = transformExprNoChar(fun)
           val newArgs = fun.tpe match {
             case ClosureType(paramTypes, resultType, _) =>
               for ((arg, paramType) <- args.zip(paramTypes)) yield
