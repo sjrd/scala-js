@@ -145,4 +145,111 @@ class JSAsyncAwaitTest {
           buf.toArray[AnyRef])
     }
   }
+
+  private val instanceFieldPromise = js.Promise.resolve[Int](654)
+
+  @noinline
+  def publicInstanceMethod(buf: ArrayBuffer[String], px: js.Promise[Int]): js.Promise[Int] = js.async {
+    buf += "publicInstanceMethod"
+    val x = js.await(px)
+    val y = js.await(instanceFieldPromise)
+    val z = (x + y) * 5
+    buf += s"publicInstanceMethod: $z"
+    z
+  }
+
+  /* Optimizable cases where js.async { ... } is the full body of a method or closure. */
+  @Test
+  def fullMethodBodyAsync(): AsyncResult = await {
+    val buf = new ArrayBuffer[String]()
+
+    // takes both an explicit param (px) and an implicit capture (buf)
+    @noinline
+    def privateStaticMethod(px: js.Promise[Int]): js.Promise[Int] = js.async {
+      buf += "privateStaticMethod"
+      val z = js.await(px) * 2
+      buf += s"privateStaticMethod: $z"
+      z
+    }
+
+    @noinline
+    def privateInstanceMethod(px: js.Promise[Int]): js.Promise[Int] = js.async {
+      buf += "privateInstanceMethod"
+      val x = js.await(px)
+      val y = js.await(instanceFieldPromise)
+      val z = (x + y) * 3
+      buf += s"privateInstanceMethod: $z"
+      z
+    }
+
+    @noinline
+    def arrowClosure: js.Function1[js.Promise[Int], js.Promise[Int]] = { px =>
+      js.async {
+        buf += "arrowClosure"
+        val x = js.await(px)
+        val y = js.await(instanceFieldPromise)
+        val z = (x + y) * 7
+        buf += s"arrowClosure: $z"
+        z
+      }
+    }
+
+    @noinline
+    def functionClosure: js.ThisFunction0[js.Promise[Int], js.Promise[Int]] = { px =>
+      js.async {
+        buf += "functionClosure"
+        val x = js.await(px)
+        val y = js.await(instanceFieldPromise)
+        val z = (x + y) * 11
+        buf += s"functionClosure: $z"
+        z
+      }
+    }
+
+    val px = js.Promise.resolve[Int](17)
+
+    buf += "before"
+    val p = {
+      val pa = privateStaticMethod(px)
+      val pb = privateInstanceMethod(pa)
+      val pc = publicInstanceMethod(buf, pb)
+      val pd = arrowClosure(pc)
+      val pe = functionClosure(pd)
+      pe
+    }
+    buf += "after"
+
+    assertArrayEquals(
+        Array[AnyRef](
+          "before",
+          "privateStaticMethod",
+          "privateInstanceMethod",
+          "publicInstanceMethod",
+          "arrowClosure",
+          "functionClosure",
+          "after"
+        ),
+        buf.toArray[AnyRef])
+
+    p.toFuture.map { (result: Int) =>
+      assertEquals(((((((((17*2)+654)*3)+654)*5)+654)*7)+654)*11, result)
+
+      assertArrayEquals(
+          Array[AnyRef](
+            "before",
+            "privateStaticMethod",
+            "privateInstanceMethod",
+            "publicInstanceMethod",
+            "arrowClosure",
+            "functionClosure",
+            "after",
+            "privateStaticMethod: 34",
+            "privateInstanceMethod: 2064",
+            "publicInstanceMethod: 13590",
+            "arrowClosure: 99708",
+            "functionClosure: 1103982"
+          ),
+          buf.toArray[AnyRef])
+    }
+  }
 }

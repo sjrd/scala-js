@@ -15,8 +15,9 @@ package org.scalajs.linker.backend.closure
 import scala.annotation.switch
 
 import org.scalajs.ir
-import ir.Position
-import ir.Position.NoPosition
+import org.scalajs.ir.Position
+import org.scalajs.ir.Position.NoPosition
+import org.scalajs.ir.Trees.ClosureFlags
 
 import org.scalajs.linker.backend.javascript.Trees._
 import org.scalajs.linker.backend.javascript.SourceFileUtil
@@ -178,9 +179,9 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
       case Debugger() =>
         new Node(Token.DEBUGGER)
 
-      case FunctionDef(name, args, restParam, body) =>
+      case FunctionDef(flags, name, args, restParam, body) =>
         val node = transformName(name)
-        val rhs = genFunction(name.resolveName(), args, restParam, body)
+        val rhs = genFunction(flags, name.resolveName(), args, restParam, body)
         node.addChildToFront(rhs)
         new Node(Token.VAR, node)
 
@@ -232,8 +233,8 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
     }
 
     wrapTransform(member) {
-      case MethodDef(static, name, args, restParam, body) =>
-        val function = genFunction("", args, restParam, body)
+      case MethodDef(static, flags, name, args, restParam, body) =>
+        val function = genFunction(flags, "", args, restParam, body)
         name match {
           case ComputedName(nameExpr) =>
             val node = newComputedPropNode(static, nameExpr, function)
@@ -263,7 +264,7 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
         }
 
       case GetterDef(static, name, body) =>
-        val function = genFunction("", Nil, None, body)
+        val function = genFunction(ClosureFlags.function, "", Nil, None, body)
         name match {
           case ComputedName(nameExpr) =>
             val node = newComputedPropNode(static, nameExpr, function)
@@ -279,7 +280,7 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
         }
 
       case SetterDef(static, name, param, body) =>
-        val function = genFunction("", param :: Nil, None, body)
+        val function = genFunction(ClosureFlags.function, "", param :: Nil, None, body)
         name match {
           case ComputedName(nameExpr) =>
             val node = newComputedPropNode(static, nameExpr, function)
@@ -388,12 +389,9 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
         new Node(Token.SUPER)
 
       case Function(flags, args, restParam, body) =>
-        val node = genFunction("", args, restParam, body)
-        node.setIsArrowFunction(flags.arrow)
-        node.setIsAsyncFunction(flags.async)
-        node
-      case FunctionDef(name, args, restParam, body) =>
-        genFunction(name.resolveName(), args, restParam, body)
+        genFunction(flags, "", args, restParam, body)
+      case FunctionDef(flags, name, args, restParam, body) =>
+        genFunction(flags, name.resolveName(), args, restParam, body)
 
       case classDef: ClassDef =>
         transformClassDef(classDef)
@@ -406,7 +404,8 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
     }
   }
 
-  private def genFunction(name: String, params: List[ParamDef], restParam: Option[ParamDef], body: Tree)(
+  private def genFunction(flags: ClosureFlags, name: String,
+      params: List[ParamDef], restParam: Option[ParamDef], body: Tree)(
       implicit pos: Position): Node = {
     val paramList = new Node(Token.PARAM_LIST)
     for (param <- params) {
@@ -421,7 +420,10 @@ private class ClosureAstTransformer(featureSet: FeatureSet,
 
     val nameNode = setNodePosition(Node.newString(Token.NAME, name), pos)
 
-    new Node(Token.FUNCTION, nameNode, paramList, transformBlock(body))
+    val functionNode = new Node(Token.FUNCTION, nameNode, paramList, transformBlock(body))
+    functionNode.setIsArrowFunction(flags.arrow)
+    functionNode.setIsAsyncFunction(flags.async)
+    functionNode
   }
 
   def transformName(ident: MaybeDelayedIdent)(implicit parentPos: Position): Node =

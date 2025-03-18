@@ -438,9 +438,17 @@ object Trees {
 
   // Named function definition
 
-  sealed case class FunctionDef(name: MaybeDelayedIdent, args: List[ParamDef],
-      restParam: Option[ParamDef], body: Tree)(
+  sealed case class FunctionDef(flags: ClosureFlags, name: MaybeDelayedIdent,
+      args: List[ParamDef], restParam: Option[ParamDef], body: Tree)(
       implicit val pos: Position) extends Tree
+
+  object FunctionDef {
+    def apply(name: MaybeDelayedIdent, args: List[ParamDef],
+        restParam: Option[ParamDef], body: Tree)(
+        implicit pos: Position): FunctionDef = {
+      FunctionDef(ClosureFlags.function, name, args, restParam, body)
+    }
+  }
 
   // ECMAScript 6 classes
 
@@ -449,10 +457,18 @@ object Trees {
       implicit val pos: Position)
       extends Tree
 
-  sealed case class MethodDef(static: Boolean, name: PropertyName,
+  sealed case class MethodDef(static: Boolean, flags: ClosureFlags, name: PropertyName,
       args: List[ParamDef], restParam: Option[ParamDef], body: Tree)(
       implicit val pos: Position)
       extends Tree
+
+  object MethodDef {
+    def apply(static: Boolean, name: PropertyName, args: List[ParamDef],
+        restParam: Option[ParamDef], body: Tree)(
+        implicit pos: Position): MethodDef = {
+      MethodDef(static, ClosureFlags.function, name, args, restParam, body)
+    }
+  }
 
   sealed case class GetterDef(static: Boolean, name: PropertyName, body: Tree)(
       implicit val pos: Position)

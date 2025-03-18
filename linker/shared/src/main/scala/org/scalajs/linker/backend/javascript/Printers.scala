@@ -625,9 +625,11 @@ object Printers {
 
         // Named function definition
 
-        case FunctionDef(name, args, restParam, body) =>
+        case FunctionDef(flags, name, args, restParam, body) =>
           if (!isStat)
             print('(')
+          if (flags.async)
+            print("async ")
           print("function ")
           print(name)
           printSig(args, restParam)
@@ -655,9 +657,11 @@ object Printers {
           }
           undent(); printIndent(); print('}')
 
-        case MethodDef(static, name, params, restParam, body) =>
+        case MethodDef(static, flags, name, params, restParam, body) =>
           if (static)
             print("static ")
+          if (flags.async)
+            print("async ")
           print(name)
           printSig(params, restParam)
           printBlock(body)

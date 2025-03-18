@@ -2124,10 +2124,10 @@ private[emitter] object CoreJSLib {
 
     private def assignES5ClassMembers(classRef: Tree, members: List[MethodDef]): List[Tree] = {
       for {
-        MethodDef(static, name, args, restParam, body) <- members
+        MethodDef(static, flags, name, args, restParam, body) <- members
       } yield {
         val target = if (static) classRef else prototypeFor(classRef)
-        genPropSelect(target, name) := Function(ClosureFlags.function, args, restParam, body)
+        genPropSelect(target, name) := Function(flags, args, restParam, body)
       }
     }
 

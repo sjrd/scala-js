@@ -67,8 +67,17 @@ private[emitter] final class VarGen(jsGen: JSGen, nameGen: NameGen,
       origName: OriginalName = NoOriginalName)(
       implicit moduleContext: ModuleContext,
       globalRefTracking: GlobalRefTracking, pos: Position): WithGlobals[List[Tree]] = {
+    globalFunctionDef(field, scope, ClosureFlags.function, args, restParam,
+        body, origName)
+  }
+
+  def globalFunctionDef[T: Scope](field: VarField, scope: T, flags: ClosureFlags,
+      args: List[ParamDef], restParam: Option[ParamDef], body: Tree,
+      origName: OriginalName)(
+      implicit moduleContext: ModuleContext,
+      globalRefTracking: GlobalRefTracking, pos: Position): WithGlobals[List[Tree]] = {
     val ident = globalVarIdent(field, scope, origName)
-    maybeExport(ident, FunctionDef(ident, args, restParam, body), mutable = false)
+    maybeExport(ident, FunctionDef(flags, ident, args, restParam, body), mutable = false)
   }
 
   def globalVarDef[T: Scope](field: VarField, scope: T, value: Tree,
@@ -102,7 +111,7 @@ private[emitter] final class VarGen(jsGen: JSGen, nameGen: NameGen,
     if (config.coreSpec.moduleKind == ModuleKind.ESModule && !moduleContext.public) {
       val setterIdent = globalVarIdent(setterField, scope)
       val x = Ident("x")
-      val setter = FunctionDef(setterIdent, List(ParamDef(x)), None, {
+      val setter = FunctionDef(ClosureFlags.function, setterIdent, List(ParamDef(x)), None, {
         Assign(VarRef(ident), VarRef(x))
       })
 

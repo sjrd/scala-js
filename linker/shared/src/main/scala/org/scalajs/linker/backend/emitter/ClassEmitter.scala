@@ -232,8 +232,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
 
     if (useESClass) {
       for (fun <- ctorFunWithGlobals) yield {
-        js.MethodDef(static = false, js.Ident("constructor"),
-            fun.args, fun.restParam, fun.body) :: Nil
+        js.MethodDef(static = false, js.Ident("constructor"), fun.args, fun.restParam, fun.body) :: Nil
       }
     } else {
       for {
@@ -494,7 +493,8 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
       val jsMethodName = genMethodIdentForDef(method.name, method.originalName)
 
       if (useESClass) {
-        js.MethodDef(static = false, jsMethodName, methodFun.args, methodFun.restParam, methodFun.body)
+        js.MethodDef(static = false, methodFun.flags, jsMethodName,
+            methodFun.args, methodFun.restParam, methodFun.body)
       } else {
         val targetObject = exportTargetES5(className, isJSClass, MemberNamespace.Public)
         js.Assign(genPropSelect(targetObject, jsMethodName), methodFun)
@@ -524,7 +524,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     methodFun0WithGlobals.flatMap { methodFun0 =>
       val methodFun = if (namespace == MemberNamespace.Constructor) {
         // init methods have to return `this` so that we can chain them to `new`
-        js.Function(ClosureFlags.function, methodFun0.args, methodFun0.restParam, {
+        js.Function(methodFun0.flags, methodFun0.args, methodFun0.restParam, {
           implicit val pos = methodFun0.body.pos
           js.Block(
               methodFun0.body,
@@ -545,7 +545,7 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
 
       val methodName = method.name.name
 
-      globalFunctionDef(field, (className, methodName), methodFun.args,
+      globalFunctionDef(field, (className, methodName), methodFun.flags, methodFun.args,
           methodFun.restParam, methodFun.body, method.originalName.orElse(methodName))
     }
   }
@@ -565,7 +565,8 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
       propName <- genMemberNameTree(method.name)
     } yield {
       if (useESClass) {
-        js.MethodDef(static = namespace.isStatic, propName, methodFun.args, methodFun.restParam, methodFun.body)
+        js.MethodDef(static = namespace.isStatic, methodFun.flags, propName,
+            methodFun.args, methodFun.restParam, methodFun.body)
       } else {
         val targetObject = exportTargetES5(className, isJSClass, namespace)
         js.Assign(genPropSelect(targetObject, propName), methodFun)

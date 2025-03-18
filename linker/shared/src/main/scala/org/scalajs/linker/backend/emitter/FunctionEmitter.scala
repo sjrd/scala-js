@@ -515,6 +515,10 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
       val env = env0.withParams(params ++ restParam)
 
+      var jsFlags = // var mutated in the async body optimization case
+        if (esFeatures.useECMAScript2015Semantics) flags
+        else flags.withArrow(false)
+
       val newBody = if (isStat) {
         body match {
           // Necessary to optimize away top-level _return: {} blocks
@@ -525,7 +529,31 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
             transformStat(body, Set.empty)(env)
         }
       } else {
-        pushLhsInto(Lhs.ReturnFromFunction, body, Set.empty)(env)
+        body match {
+          case JSFunctionApply(closure @ Closure(closureFlags, _, Nil, None, AnyType, _, _), Nil)
+              if closureFlags.async =>
+            /* Attempt to optimize a full-async body by fusing the `async` flag
+             * into the resulting js.Function.
+             */
+            transformClosure(closure)(env) match {
+              case jsFun @ js.Function(jsFunFlags, Nil, None, jsFunBody) =>
+                assert(jsFunFlags.async,
+                    s"Got a non-async JS function from transforming an async closure:\n" +
+                    s"${closure.show}\n${jsFun.show}")
+                jsFlags = jsFlags.withAsync(true)
+                jsFunBody
+
+              case jsFunAsIIFE =>
+                /* The closure had to be compiled as an IIFE because of a capture
+                 * value that could not be matched to its capture param. Re-emit
+                 * the real `JSFunctionApply around it.`
+                 */
+                js.Apply(jsFunAsIIFE, Nil)(body.pos)
+            }
+
+          case _ =>
+            pushLhsInto(Lhs.ReturnFromFunction, body, Set.empty)(env)
+        }
       }
 
       val cleanedNewBody = newBody match {
@@ -533,9 +561,6 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case other                                        => other
       }
 
-      val jsFlags =
-        if (esFeatures.useECMAScript2015Semantics) flags
-        else flags.withArrow(false)
       val jsParams = params.map(transformParamDef(_))
 
       if (es2015) {
@@ -3144,7 +3169,6 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
       val innerFunction = {
         val bodyEnv = Env.empty(resultType)
-          .withParams(params ++ restParam)
           .withVars(envVarsForCaptures)
 
         desugarToFunctionInternal(flags, params, restParam, body,
