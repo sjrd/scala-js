@@ -242,6 +242,7 @@ object VarGen {
       case object stringConcat extends FunctionID
       case object stringEquals extends FunctionID
     }
+    case object scalaValueType extends FunctionID
   }
 
   object genFieldID {
