@@ -145,4 +145,35 @@ class JSAsyncAwaitTest {
           buf.toArray[AnyRef])
     }
   }
+
+  @Test
+  def customThenable(): AsyncResult = await {
+    val buf = new ArrayBuffer[String]()
+
+    val px: js.Thenable[Int] = new js.Object {
+      def `then`(f: js.Function1[Int, Any]): js.Thenable[Any] =
+        js.Promise.resolve[Any](f(5))
+    }.asInstanceOf[js.Thenable[Int]]
+
+    buf += "before"
+    val p = js.async {
+      buf += "start async"
+      val x = js.await(px.asInstanceOf[js.Promise[Int]])
+      buf += s"got x: $x"
+      x + 13
+    }
+    buf += "after"
+
+    assertArrayEquals(
+        Array[AnyRef]("before", "start async", "after"),
+        buf.toArray[AnyRef])
+
+    p.toFuture.map { (result: Int) =>
+      assertEquals(18, result)
+
+      assertArrayEquals(
+          Array[AnyRef]("before", "start async", "after", "got x: 5"),
+          buf.toArray[AnyRef])
+    }
+  }
 }
