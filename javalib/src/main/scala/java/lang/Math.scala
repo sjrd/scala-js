@@ -53,28 +53,8 @@ object Math {
 
   // Wasm intrinsic
   def rint(a: scala.Double): scala.Double = {
-    // Is the integer-valued `x` even? Fused by hand of `(x.toLong & 1L) == 0L`.
-    @inline def isEven(x: scala.Double): scala.Boolean =
-      (x.asInstanceOf[js.Dynamic] & 1.asInstanceOf[js.Dynamic]).asInstanceOf[Int] == 0
-
-    if (a > -(1L << 52).toDouble && a < (1L << 52).toDouble) {
-      if (a >= -0.5 && a <= 0.5) {
-        // we need this branch to get -0.0 for -0.5 <= a <= -0.0
-        0.0 * a
-      } else {
-        val f = floor(a)
-        val fHalf = f + 0.5 // lossless because f integer in the [-2**52, 2**52) range
-        if (a < fHalf || (a == fHalf && isEven(f)))
-          f
-        else
-          f + 1.0
-      }
-    } else {
-      /* a is NaN, an Infinity, or already an integer (because all Double's
-       * starting with 2**52 are integers).
-       */
-      a
-    }
+    // Abuse the loss of precision and the round-to-even behavior of subnormals
+    (a * scala.Double.MinPositiveValue) / scala.Double.MinPositiveValue
   }
 
   @inline def round(a: scala.Float): scala.Int = js.Math.round(a).toInt
