@@ -35,7 +35,7 @@ object SWasmGen {
         if (ctx.coreSpec.wasmFeatures.targetPureWasm)
           GlobalGet(genGlobalID.emptyStringArray)
         else
-          GlobalGet(genGlobalID.emptyString)
+          ctx.stringPool.getEmptyStringInstr()
       case UndefType  => GlobalGet(genGlobalID.undef)
 
       case ClassType(className, nullable)

@@ -2037,6 +2037,7 @@ object Build {
       scalaJSUseMainModuleInitializer := true,
       scalaJSLinkerConfig ~= {
         _.withWasmFeatures(_.withExceptionHandling(true).withTargetPureWasm(true))
+         .withPrettyPrint(true)
          .withModuleKind(ModuleKind.ESModule)
          .withSemantics(
             _.withArrayIndexOutOfBounds(CheckedBehavior.Compliant)

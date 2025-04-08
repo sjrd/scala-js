@@ -230,8 +230,11 @@ class ClassEmitter(coreSpec: CoreSpec) {
       coreSpec.semantics.runtimeClassNameMapper,
       className.nameString
     )
-    val nameDataValue: List[wa.Instr] =
-      ctx.stringPool.getConstantStringDataInstr(nameStr)
+    val nameValue =
+      if (targetPureWasm)
+        ctx.stringPool.getConstantStringDataInstr(nameStr) :+
+            wa.RefNull(watpe.HeapType(genTypeID.i16Array))
+      else ctx.stringPool.getConstantStringDataInstr(nameStr)
 
     val kind = className match {
       case ObjectClass         => KindObject
@@ -319,7 +322,9 @@ class ClassEmitter(coreSpec: CoreSpec) {
       elemsInstrs :+ wa.ArrayNewFixed(genTypeID.reflectiveProxies, reflectiveProxies.size)
     }
 
-    nameDataValue :::
+    (
+      // name
+      nameValue :::
       List(
         // kind
         wa.I32Const(kind),
@@ -332,8 +337,6 @@ class ClassEmitter(coreSpec: CoreSpec) {
       List(
         // componentType - always `null` since this method is not used for array types
         wa.RefNull(watpe.HeapType(genTypeID.typeData)),
-        // name - initially `null`; filled in by the `typeDataName` helper
-        wa.RefNull(if (targetPureWasm) watpe.HeapType(genTypeID.i16Array) else watpe.HeapType.NoExtern), // scalastyle:ignore
         // the classOf instance - initially `null`; filled in by the `createClassOf` helper
         wa.RefNull(watpe.HeapType(genTypeID.ClassStruct)),
         // arrayOf, the typeData of an array of this type - initially `null`; filled in by the `arrayTypeData` helper
@@ -347,6 +350,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       // Generated instructions create an array of reflective proxy structs, where each struct
       // contains the ID of the reflective proxy and a reference to the actual method implementation.
       reflectiveProxiesInstrs
+    )
   }
 
   private def genTypeDataGlobal(className: ClassName, typeDataTypeID: wanme.TypeID,
@@ -1400,7 +1404,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
 
     ctx.moduleBuilder.addImport(
       wamod.Import(
-        "__scalaJSExportSetters",
+        ExportSettersModule,
         exportedName,
         wamod.ImportDesc.Func(
           functionID,

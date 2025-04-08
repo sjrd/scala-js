@@ -47,6 +47,9 @@ object SpecialNames {
   val WasmComponentResultClass =
     ClassName("scala.scalajs.component.Result")
 
+  val WasmRuntimeClass =
+    ClassName("org.scalajs.linker.runtime.WasmRuntime")
+
   // Field names
 
   val valueFieldSimpleName = SimpleFieldName("value")
@@ -61,6 +64,9 @@ object SpecialNames {
   val ThrowableArgConsructorName = MethodName.constructor(List(ClassRef(ThrowableClass)))
 
   val hashCodeMethodName = MethodName("hashCode", Nil, IntRef)
+
+  val fmodfMethodName = MethodName("fmodf", List(FloatRef, FloatRef), FloatRef)
+  val fmoddMethodName = MethodName("fmodd", List(DoubleRef, DoubleRef), DoubleRef)
 
   /** A unique simple method name to map all method *signatures* into `MethodName`s. */
   val normalizedSimpleMethodName = SimpleMethodName("m")
