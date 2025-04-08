@@ -99,13 +99,14 @@ final class Emitter(config: Emitter.Config) {
     /* Gen the string pool and the declarative elements at the very end, since
      * they depend on what instructions where produced by all the preceding codegen.
      */
-    ctx.stringPool.genPool()
+    val wtf16Strings = ctx.stringPool.genPool()
     genDeclarativeElements()
 
     val wasmModule = ctx.moduleBuilder.build()
 
     val jsFileContentInfo = new JSFileContentInfo(
-      customJSHelpers = ctx.getAllCustomJSHelpers()
+      customJSHelpers = ctx.getAllCustomJSHelpers(),
+      wtf16Strings = wtf16Strings
     )
 
     (wasmModule, jsFileContentInfo)
@@ -303,6 +304,13 @@ final class Emitter(config: Emitter.Config) {
     }
     val customJSHelpersDict = js.ObjectConstr(customJSHelpersItems)
 
+    // WTF-16 string constants
+
+    val wtf16StringsItems = for ((importName, str) <- info.wtf16Strings) yield {
+      js.StringLiteral(importName) -> js.StringLiteral(str)
+    }
+    val wtf16StringsDict = js.ObjectConstr(wtf16StringsItems)
+
     // Overall structure of the result
 
     val loadFunIdent = js.Ident("__load")
@@ -316,7 +324,8 @@ final class Emitter(config: Emitter.Config) {
       List(
         js.StringLiteral(config.internalWasmFileURIPattern(module.id)),
         exportSettersDict,
-        customJSHelpersDict
+        customJSHelpersDict,
+        wtf16StringsDict
       )
     )
 
@@ -376,7 +385,9 @@ object Emitter {
 
   private final class JSFileContentInfo(
       /** Custom JS helpers to generate: pairs of `(importName, jsFunction)`. */
-      val customJSHelpers: List[(String, js.Function)]
+      val customJSHelpers: List[(String, js.Function)],
+      /** WTF-16 string constants: pairs of `(importName, stringValue)`. */
+      val wtf16Strings: List[(String, String)]
   )
 
   final class Result(
@@ -459,7 +470,11 @@ object Emitter {
 
       // See genIdentityHashCode in HelperFunctions
       callMethodStatically(BoxedDoubleClass, hashCodeMethodName),
-      callMethodStatically(BoxedStringClass, hashCodeMethodName)
+      callMethodStatically(BoxedStringClass, hashCodeMethodName),
+
+      // Implementation of Float_% and Double_%
+      callStaticMethod(WasmRuntimeClass, fmodfMethodName),
+      callStaticMethod(WasmRuntimeClass, fmoddMethodName)
     )
   }
 
