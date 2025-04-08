@@ -51,8 +51,7 @@ object CompilerTest {
       `toInt`()
       toFloat()
       toFloatNoLoss()
-      // TODO: fmod
-      // testRemainder()
+      testRemainder()
 
       noReverseComparisons_Issue3575()
       negate_Issue4034()
@@ -64,8 +63,7 @@ object CompilerTest {
       val test = new FloatTest
       import test._
       toInt()
-      // TODO: fmod
-      // testRemainder()
+      testRemainder()
       noReverseComparisons_Issue3575()
       negate_Issue4034()
       noWrongSimplifications()
