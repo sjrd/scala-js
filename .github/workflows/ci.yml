@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
           cache: 'sbt'
       - uses: sbt/setup-sbt@v1
       - uses: actions/setup-node@v4
@@ -35,13 +35,13 @@ jobs:
       - name: npm install
         run: npm install
       - name: helloworld${{ matrix.suffix }}/run
-        run: sbt 'set scalaJSLinkerConfig in testSuite.v${{ matrix.suffix }} ~= (_.withESFeatures(_.withESVersion(ESVersion.${{ matrix.esVersion }}))) ' \
+        run: sbt 'set scalaJSLinkerConfig in helloworld.v${{ matrix.suffix }} ~= (_.withESFeatures(_.withESVersion(ESVersion.${{ matrix.esVersion }}))) ' \
             helloworld${{ matrix.suffix }}/run
       - name: testSuite${{ matrix.suffix }}/test
         run: sbt 'set scalaJSLinkerConfig in testSuite.v${{ matrix.suffix }} ~= (_.withESFeatures(_.withESVersion(ESVersion.${{ matrix.esVersion }}))) ' \
             testSuite${{ matrix.suffix }}/test
       - name: testSuiteEx${{ matrix.suffix }}/test
-        run: sbt 'set scalaJSLinkerConfig in testSuite.v${{ matrix.suffix }} ~= (_.withESFeatures(_.withESVersion(ESVersion.${{ matrix.esVersion }}))) ' \
+        run: sbt 'set scalaJSLinkerConfig in testSuiteEx.v${{ matrix.suffix }} ~= (_.withESFeatures(_.withESVersion(ESVersion.${{ matrix.esVersion }}))) ' \
             testSuiteEx${{ matrix.suffix }}/test
 
   test-suite-webassembly:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
           cache: 'sbt'
       - uses: sbt/setup-sbt@v1
       - uses: actions/setup-node@v4
@@ -81,7 +81,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
           cache: 'sbt'
       - uses: sbt/setup-sbt@v1
       - uses: actions/setup-node@v4
