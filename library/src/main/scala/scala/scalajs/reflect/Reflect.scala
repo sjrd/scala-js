@@ -18,7 +18,7 @@ import scala.scalajs.js
 
 final class LoadableModuleClass private[reflect] (
     val runtimeClass: Class[_],
-    loadModuleFun: js.Function0[Any]
+    loadModuleFun: () => Any
 ) {
   /** Loads the module instance and returns it. */
   def loadModule(): Any = loadModuleFun()
@@ -55,36 +55,59 @@ final class InstantiatableClass private[reflect] (
 
 final class InvokableConstructor private[reflect]  (
     val parameterTypes: List[Class[_]],
-    newInstanceFun: js.Function
+    newInstanceFun: Array[Any] => Any
 ) {
   def newInstance(args: Any*): Any = {
     /* Check the number of actual arguments. We let the casts and unbox
      * operations inside `newInstanceFun` take care of the rest.
      */
     require(args.size == parameterTypes.size)
-    newInstanceFun.asInstanceOf[js.Dynamic].apply(
-        args.asInstanceOf[Seq[js.Any]]: _*)
+    newInstanceFun(args.toArray)
   }
 }
 
 object Reflect {
   private val loadableModuleClasses =
-    js.Dictionary.empty[LoadableModuleClass]
+    mutable.HashMap.empty[String, LoadableModuleClass]
 
   private val instantiatableClasses =
-    js.Dictionary.empty[InstantiatableClass]
+    mutable.HashMap.empty[String, InstantiatableClass]
 
-  // `protected[reflect]` makes it public in the IR
+  @deprecated("used only by deprecated code", since = "1.19.0")
+  @js.native
+  private trait JSFunctionVarArgs extends js.Function {
+    def apply(args: Any*): Any
+  }
+
+  // `protected[reflect]` makes these methods public in the IR
+
+  @deprecated("use registerLoadableModuleClass2 instead", since = "1.19.0")
   protected[reflect] def registerLoadableModuleClass[T](
       fqcn: String, runtimeClass: Class[T],
       loadModuleFun: js.Function0[T]): Unit = {
+    registerLoadableModuleClass2(fqcn, runtimeClass, loadModuleFun)
+  }
+
+  @deprecated("use registerInstantiatableClass2 instead", since = "1.19.0")
+  protected[reflect] def registerInstantiatableClass[T](
+      fqcn: String, runtimeClass: Class[T],
+      constructors: js.Array[js.Tuple2[js.Array[Class[_]], JSFunctionVarArgs]]): Unit = {
+
+    registerInstantiatableClass2(fqcn, runtimeClass, constructors.map { c =>
+      (c._1.toArray, (args: Array[Any]) => c._2(args: _*))
+    }.toArray)
+  }
+
+  protected[reflect] def registerLoadableModuleClass2[T](
+      fqcn: String, runtimeClass: Class[T],
+      loadModuleFun: () => T): Unit = {
     loadableModuleClasses(fqcn) =
       new LoadableModuleClass(runtimeClass, loadModuleFun)
   }
 
-  protected[reflect] def registerInstantiatableClass[T](
+  protected[reflect] def registerInstantiatableClass2[T](
       fqcn: String, runtimeClass: Class[T],
-      constructors: js.Array[js.Tuple2[js.Array[Class[_]], js.Function]]): Unit = {
+      constructors: Array[(Array[Class[_]], Array[Any] => Any)]): Unit = {
     val invokableConstructors = constructors.map { c =>
       new InvokableConstructor(c._1.toList, c._2)
     }
