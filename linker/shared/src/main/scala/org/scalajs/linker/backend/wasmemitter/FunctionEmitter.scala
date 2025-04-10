@@ -1252,10 +1252,10 @@ private class FunctionEmitter private (
     // Generates an itable-based dispatch.
     def genITableDispatch(): Unit = {
       fb += wa.LocalGet(receiverLocalForDispatch)
-      fb += wa.StructGet(genTypeID.ObjectStruct, genFieldID.objStruct.itables)
+      fb += wa.StructGet(genTypeID.ObjectStruct, genFieldID.objStruct.vtable)
       fb += wa.StructGet(
-        genTypeID.itables,
-        genFieldID.itablesStruct.itableSlot(receiverClassInfo.itableIdx)
+        genTypeID.ObjectVTable,
+        genFieldID.vtableStruct.itableSlot(receiverClassInfo.itableIdx)
       )
       fb += wa.RefCast(watpe.RefType(genTypeID.forITable(receiverClassInfo.name)))
       fb += wa.StructGet(
@@ -2879,8 +2879,7 @@ private class FunctionEmitter private (
 
     fb += wa.LocalSet(primLocal)
     fb += wa.GlobalGet(genGlobalID.forVTable(boxClassName))
-    fb += wa.GlobalGet(genGlobalID.forITable(boxClassName))
-    if (targetPureWasm) fb += wa.I32Const(0)
+    if (targetPureWasm) fb += wa.I32Const(0) // idHashCode
     fb += wa.LocalGet(primLocal)
     fb += wa.StructNew(genTypeID.forClass(boxClassName))
 
@@ -3159,7 +3158,8 @@ private class FunctionEmitter private (
 
     markPosition(tree)
 
-    genLoadVTableAndITableForArray(fb, arrayTypeRef, targetPureWasm)
+    genLoadArrayTypeData(fb, arrayTypeRef) // vtable
+    if (targetPureWasm) fb += wa.I32Const(0)
 
     // Create the underlying array
     genTree(length, IntType)
