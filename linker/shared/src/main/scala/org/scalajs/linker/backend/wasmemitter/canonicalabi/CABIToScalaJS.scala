@@ -369,8 +369,8 @@ object CABIToScalaJS {
       }
     }
 
-    // TODO: we reach here only when targetPureWasm = treu
-    SWasmGen.genLoadVTableAndITableForArray(fb, arrayTypeRef, targetPureWasm = true)
+    SWasmGen.genLoadArrayTypeData(fb, arrayTypeRef)
+    fb += wa.I32Const(0) // idHashCode
     fb += wa.LocalGet(array)
     fb += wa.StructNew(genTypeID.forArrayClass(arrayTypeRef))
   }

@@ -156,7 +156,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       genCABIHelpers()
     }
 
-    genEmptyITable()
     genPrimitiveTypeDataGlobals()
 
     genHelperDefinitions()
@@ -223,20 +222,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     )
 
     genCoreType(
-      genTypeID.itables,
-      StructType(
-        (0 until ctx.itablesLength).map { i =>
-          StructField(
-            genFieldID.itablesStruct.itableSlot(i),
-            OriginalName.NoOriginalName,
-            RefType.nullable(HeapType.Struct),
-            isMutable = false
-          )
-        }.toList
-      )
-    )
-
-    genCoreType(
       genTypeID.reflectiveProxies,
       ArrayType(FieldType(RefType(genTypeID.reflectiveProxy), isMutable = false))
     )
@@ -281,13 +266,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       RefType(vtableTypeID),
       isMutable = false
     )
-    val itablesField = StructField(
-      genFieldID.objStruct.itables,
-      OriginalName(genFieldID.objStruct.itables.toString()),
-      RefType(genTypeID.itables),
-      isMutable = false
-    )
-    val idHashCodeField = if (targetPureWasm)
+    val idHashCodeFieldOpt = if (targetPureWasm)
       Some(StructField(
         genFieldID.objStruct.idHashCode,
         OriginalName(genFieldID.objStruct.idHashCode.toString()),
@@ -320,9 +299,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
       val superType = genTypeID.ObjectStruct
       val structType = StructType(
-        List(vtableField, itablesField) :::
-        idHashCodeField.toList :::
-        List(underlyingArrayField)
+        idHashCodeFieldOpt.fold(List(vtableField, underlyingArrayField)) { idHashCodeField =>
+          List(vtableField, idHashCodeField, underlyingArrayField)
+        }
       )
       val subType = SubType(structTypeID, origName, isFinal = true, Some(superType), structType)
       ctx.mainRecType.addSubType(subType)
@@ -654,17 +633,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
   // --- Global definitions ---
 
-  private def genEmptyITable()(implicit ctx: WasmContext): Unit = {
-    ctx.addGlobal(
-      Global(
-        genGlobalID.emptyITable,
-        OriginalName(genGlobalID.emptyITable.toString()),
-        isMutable = false,
-        RefType(genTypeID.itables),
-        Expr(List(StructNewDefault(genTypeID.itables)))
-      )
-    )
-  }
 
   private def genPrintMemory()(implicit ctx: WasmContext): Unit = {
     val fb = newFunctionBuilder(genFunctionID.dumpMemory)
@@ -974,7 +942,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       val boxStruct = genTypeID.forClass(boxClassName)
       val instrs: List[Instr] = List(
         GlobalGet(genGlobalID.forVTable(boxClassName)),
-        GlobalGet(genGlobalID.forITable(boxClassName)),
       ) :::
         (if (targetPureWasm) List(I32Const(0)) else Nil) :::
         List(
@@ -1446,7 +1413,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     }
 
     fb += GlobalGet(genGlobalID.forVTable(boxClass))
-    fb += GlobalGet(genGlobalID.forITable(boxClass))
     if (targetPureWasm) fb += I32Const(0)
     fb += LocalGet(xParam)
     fb += StructNew(genTypeID.forClass(boxClass))
@@ -2811,7 +2777,11 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
         // reflectiveProxies, empty since all methods of array classes exist in jl.Object
         fb += ArrayNewFixed(genTypeID.reflectiveProxies, 0)
 
+        // itable slots
         val objectClassInfo = ctx.getClassInfo(ObjectClass)
+        fb ++= ClassEmitter.genItableSlots(objectClassInfo, List(SerializableClass, CloneableClass))
+
+        // vtable items
         fb ++= objectClassInfo.tableEntries.map { methodName =>
           ctx.refFuncWithDeclaration(objectClassInfo.resolvedMethodInfos(methodName).tableEntryID)
         }
@@ -3537,18 +3507,17 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb += StructGet(genTypeID.ClassStruct, genFieldID.classData)
     fb += LocalTee(componentTypeDataLocal)
 
-    // Load the vtable and itables of the ArrayClass instance we will create
+    // Load the vtable of the ArrayClass instance we will create
     fb += I32Const(1)
-    fb += Call(genFunctionID.arrayTypeData) // vtable
-    fb += GlobalGet(genGlobalID.arrayClassITable) // itables
-    if (targetPureWasm) fb += I32Const(0)
+    fb += Call(genFunctionID.arrayTypeData)
+    if (targetPureWasm) fb += I32Const(0) // idHashCode
 
     // Load the length
     fb += LocalGet(lengthParam)
 
     val switchParams: List[Type] =
-      if (targetPureWasm) List(arrayTypeDataType, RefType(genTypeID.itables), Int32, Int32)
-      else List(arrayTypeDataType, RefType(genTypeID.itables), Int32)
+      if (targetPureWasm) List(arrayTypeDataType, Int32, Int32)
+      else List(arrayTypeDataType, Int32)
     // switch (componentTypeData.kind)
     val switchClauseSig = FunctionType(
       switchParams,
@@ -4163,8 +4132,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     // Build the result arrayStruct
     fb += LocalGet(fromLocal)
     fb += StructGet(arrayStructTypeID, genFieldID.objStruct.vtable) // vtable
-    fb += GlobalGet(genGlobalID.arrayClassITable) // itable
-    if (targetPureWasm) fb += I32Const(0)
+    if (targetPureWasm) fb += I32Const(0) // idHashCode
     fb += LocalGet(resultUnderlyingLocal)
     fb += StructNew(arrayStructTypeID)
 
