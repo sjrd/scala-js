@@ -312,4 +312,24 @@ object WasmTransients {
       out.printArgs(string :: start :: optEnd.toList)
     }
   }
+
+  final case class JSStartGenerator(locals: Tree, resumeFun: Tree)
+      extends Transient.Value {
+    val tpe: Type = AnyType
+
+    def traverse(traverser: Traverser): Unit = {
+      traverser.traverse(locals)
+      traverser.traverse(resumeFun)
+    }
+
+    def transform(transformer: Transformer)(implicit pos: Position): Tree = {
+      Transient(JSStartGenerator(transformer.transform(locals),
+          transformer.transform(resumeFun)))
+    }
+
+    def printIR(out: IRTreePrinter): Unit = {
+      out.print("$jsStartGenerator")
+      out.printArgs(List(locals, resumeFun))
+    }
+  }
 }

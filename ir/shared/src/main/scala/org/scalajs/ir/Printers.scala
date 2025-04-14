@@ -192,6 +192,9 @@ object Printers {
           }
           print(": ")
           printBlock(body)
+          print("/*")
+          print(label)
+          print("*/")
 
         case Assign(lhs, rhs) =>
           print(lhs)

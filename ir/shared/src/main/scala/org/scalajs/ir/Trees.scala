@@ -1629,7 +1629,7 @@ object Trees {
 
     def withGenerator(generator: Boolean): ClosureFlags =
       if (generator) new ClosureFlags(bits | GeneratorBit)
-      else new ClosureFlags(bits & GeneratorBit)
+      else new ClosureFlags(bits & ~GeneratorBit)
   }
 
   object ClosureFlags {

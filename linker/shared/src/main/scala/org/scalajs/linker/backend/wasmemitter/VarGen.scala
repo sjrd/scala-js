@@ -155,6 +155,7 @@ object VarGen {
     case object jsForInStart extends JSHelperFunctionID
     case object jsForInNext extends JSHelperFunctionID
     case object jsIsTruthy extends JSHelperFunctionID
+    case object jsStartGenerator extends JSHelperFunctionID
 
     case object newSymbol extends JSHelperFunctionID
     case object jsSuperSelect extends JSHelperFunctionID

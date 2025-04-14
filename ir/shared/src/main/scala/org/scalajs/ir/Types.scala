@@ -203,6 +203,9 @@ object Types {
    */
   final case class ClosureType(paramTypes: List[Type], resultType: Type,
       nullable: Boolean) extends Type {
+    def toNullable: ClosureType =
+      ClosureType(paramTypes, resultType, nullable = true)
+
     def toNonNullable: ClosureType =
       ClosureType(paramTypes, resultType, nullable = false)
   }
@@ -404,11 +407,14 @@ object Types {
         ClosureType(_, _, true) =>
       Null()
 
+    case AnyNotNullType =>
+      IntLiteral(0) // because why not
+
     case tpe: RecordType =>
       RecordValue(tpe, tpe.fields.map(f => zeroOf(f.tpe)))
 
     case NothingType | VoidType | ClassType(_, false) | ArrayType(_, false) |
-        ClosureType(_, _, false) | AnyNotNullType =>
+        ClosureType(_, _, false) =>
       throw new IllegalArgumentException(s"cannot generate a zero for $tpe")
   }
 

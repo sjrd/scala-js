@@ -392,6 +392,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     addHelperImport(genFunctionID.jsForInStart, List(anyref), List(anyref))
     addHelperImport(genFunctionID.jsForInNext, List(anyref), List(anyref, Int32))
     addHelperImport(genFunctionID.jsIsTruthy, List(anyref), List(Int32))
+    addHelperImport(genFunctionID.jsStartGenerator, List(anyref, anyref), List(anyref))
 
     addHelperImport(genFunctionID.newSymbol, Nil, List(anyref))
     addHelperImport(

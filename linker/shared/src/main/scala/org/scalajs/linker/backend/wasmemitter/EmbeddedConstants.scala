@@ -93,4 +93,10 @@ object EmbeddedConstants {
   final val KindJSTypeWithSuperClass = 24
 
   final val KindLastPrimitive = KindDouble
+
+  // Generator resume operation
+
+  final val GeneratorNext = 0
+  final val GeneratorReturn = 1
+  final val GeneratorThrow = 2
 }

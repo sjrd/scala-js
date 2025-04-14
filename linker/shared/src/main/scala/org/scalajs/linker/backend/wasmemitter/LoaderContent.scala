@@ -166,6 +166,24 @@ const scalaJSHelpers = {
   jsForInNext: (g) => { var r = g.next(); return [r.value, r.done]; },
   jsIsTruthy: (x) => !!x,
 
+  // locals: S, resume: (S, Int, Any) => js.Generator.Entry
+  jsStartGenerator: (locals, resume) => {
+    return {
+      next(param) {
+        return resume(locals, $GeneratorNext, param);
+      },
+      return(value) {
+        return resume(locals, $GeneratorReturn, value);
+      },
+      throw(exception) {
+        return resume(locals, $GeneratorThrow, exception);
+      },
+      [Symbol.iterator]() {
+        return this;
+      },
+    }
+  },
+
   // Non-native JS class support
   newSymbol: Symbol,
   jsSuperSelect: superSelect,

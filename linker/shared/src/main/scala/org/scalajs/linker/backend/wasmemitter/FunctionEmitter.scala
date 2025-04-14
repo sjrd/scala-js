@@ -3164,12 +3164,16 @@ private class FunctionEmitter private (
   }
 
   private def genJSClosure(tree: Closure): Type = {
+    // scalastyle:off return
+
     val Closure(flags, captureParams, params, restParam, resultType, body, captureValues) = tree
 
     implicit val pos = tree.pos
 
     if (flags.generator)
-      throw new IllegalArgumentException(s"Unsupported function* in WebAssembly: $tree")
+      return genJSClosure(GeneratorDesugaring.desugarGenerator(tree))
+
+    // scalastyle:on return
 
     val dataStructTypeID = ctx.getClosureDataStructType(captureParams.map(_.ptpe))
 
@@ -3505,6 +3509,13 @@ private class FunctionEmitter private (
           else
             fb += wa.Call(genFunctionID.checkedSubstringStartEnd)
         }
+        value.tpe
+
+      case value @ WasmTransients.JSStartGenerator(locals, resumeFun) =>
+        genTree(locals, AnyType)
+        genTree(resumeFun, AnyType)
+        markPosition(tree)
+        fb += wa.Call(genFunctionID.jsStartGenerator)
         value.tpe
 
       case other =>
