@@ -125,6 +125,7 @@ object Infos {
     final val FlagUsedOrphanAwait = 1 << 5
     final val FlagUsedClassSuperClass = 1 << 6
     final val FlagNeedsDesugaring = 1 << 7
+    final val FlagUsedJSInPureWasm = 1 << 8
   }
 
   /** Things from a given class that are reached by one method. */
@@ -408,6 +409,9 @@ object Infos {
     def markNeedsDesugaring(): this.type =
       setFlag(ReachabilityInfo.FlagNeedsDesugaring)
 
+    def markUsedJSInPureWasm(): this.type =
+      setFlag(ReachabilityInfo.FlagUsedJSInPureWasm)
+
     def addReferencedLinkTimeProperty(linkTimeProperty: LinkTimeProperty): this.type = {
       markNeedsDesugaring()
       linkTimeProperties.append((linkTimeProperty.name, linkTimeProperty.tpe))
@@ -539,7 +543,8 @@ object Infos {
     }
   }
 
-  final class InfoGenerator(linkTimeProperties: LinkTimeProperties) {
+  final class InfoGenerator(linkTimeProperties: LinkTimeProperties,
+      targetPureWasm: Boolean) {
     def genReferencedFieldClasses(fields: List[AnyFieldDef]): Map[FieldName, ClassName] = {
       val builder = Map.newBuilder[FieldName, ClassName]
 
@@ -565,25 +570,29 @@ object Infos {
      *  [[org.scalajs.ir.Trees.MethodDef Trees.MethodDef]].
      */
     def generateMethodInfo(methodDef: MethodDef): MethodInfo =
-      new GenInfoTraverser(methodDef.version, linkTimeProperties).generateMethodInfo(methodDef)
+      new GenInfoTraverser(methodDef.version, linkTimeProperties, targetPureWasm)
+          .generateMethodInfo(methodDef)
 
     /** Generates the [[ReachabilityInfo]] of a
      *  [[org.scalajs.ir.Trees.JSConstructorDef Trees.JSConstructorDef]].
      */
     def generateJSConstructorInfo(ctorDef: JSConstructorDef): ReachabilityInfo =
-      new GenInfoTraverser(ctorDef.version, linkTimeProperties).generateJSConstructorInfo(ctorDef)
+      new GenInfoTraverser(ctorDef.version, linkTimeProperties, targetPureWasm)
+          .generateJSConstructorInfo(ctorDef)
 
     /** Generates the [[ReachabilityInfo]] of a
      *  [[org.scalajs.ir.Trees.JSMethodDef Trees.JSMethodDef]].
      */
     def generateJSMethodInfo(methodDef: JSMethodDef): ReachabilityInfo =
-      new GenInfoTraverser(methodDef.version, linkTimeProperties).generateJSMethodInfo(methodDef)
+      new GenInfoTraverser(methodDef.version, linkTimeProperties, targetPureWasm)
+          .generateJSMethodInfo(methodDef)
 
     /** Generates the [[ReachabilityInfo]] of a
      *  [[org.scalajs.ir.Trees.JSPropertyDef Trees.JSPropertyDef]].
      */
     def generateJSPropertyInfo(propertyDef: JSPropertyDef): ReachabilityInfo =
-      new GenInfoTraverser(propertyDef.version, linkTimeProperties).generateJSPropertyInfo(propertyDef)
+      new GenInfoTraverser(propertyDef.version, linkTimeProperties, targetPureWasm)
+          .generateJSPropertyInfo(propertyDef)
 
     def generateJSMethodPropDefInfo(member: JSMethodPropDef): ReachabilityInfo = member match {
       case methodDef: JSMethodDef     => generateJSMethodInfo(methodDef)
@@ -593,7 +602,7 @@ object Infos {
     /** Generates the [[MethodInfo]] for the top-level exports. */
     def generateTopLevelExportInfo(enclosingClass: ClassName,
         topLevelExportDef: TopLevelExportDef): TopLevelExportInfo = {
-      val info = new GenInfoTraverser(Version.Unversioned, linkTimeProperties)
+      val info = new GenInfoTraverser(Version.Unversioned, linkTimeProperties, targetPureWasm)
           .generateTopLevelExportInfo(enclosingClass, topLevelExportDef)
       new TopLevelExportInfo(info,
           ModuleID(topLevelExportDef.moduleID),
@@ -601,11 +610,12 @@ object Infos {
     }
 
     def generateComponentNativeMember(member: ComponentNativeMemberDef): MethodInfo =
-      new GenInfoTraverser(Version.Unversioned, linkTimeProperties).generateComponentNativeMember(member)
+      new GenInfoTraverser(Version.Unversioned, linkTimeProperties, targetPureWasm)
+          .generateComponentNativeMember(member)
   }
 
   private final class GenInfoTraverser(version: Version,
-      linkTimeProperties: LinkTimeProperties) extends Traverser {
+      linkTimeProperties: LinkTimeProperties, targetPureWasm: Boolean) extends Traverser {
 
     private val builder = new ReachabilityInfoBuilder(version)
 
@@ -777,6 +787,9 @@ object Infos {
 
     override def traverse(tree: Tree): Unit = {
       builder.maybeAddReferencedClass(tree.tpe)
+
+      if (targetPureWasm)
+        checkJSInterop(tree)
 
       tree match {
         /* Do not call super.traverse() so that fields are not also marked as
@@ -989,6 +1002,21 @@ object Infos {
           super.traverse(tree)
       }
     }
-  }
 
+    private def checkJSInterop(tree: Tree): Unit = {
+      tree match {
+        case _:JSNew | _:JSSelect | _:JSFunctionApply | _:JSMethodApply |
+            _:JSImportCall | _:JSImportMeta | _:LoadJSConstructor |
+            _:LoadJSModule | _:SelectJSNativeMember | _:JSDelete |
+            _:JSUnaryOp | _:JSBinaryOp | _:JSArrayConstr | _:JSObjectConstr |
+            _:JSGlobalRef | _: JSTypeOfGlobalRef | _:CreateJSClass |
+            _:JSPrivateSelect | _:JSSuperSelect | _:JSSuperMethodCall |
+            _:JSNewTarget | _:JSSuperConstructorCall =>
+          builder.markUsedJSInPureWasm()
+        case closure: Closure if !closure.flags.typed =>
+          builder.markUsedJSInPureWasm()
+        case _ =>
+      }
+    }
+  }
 }
