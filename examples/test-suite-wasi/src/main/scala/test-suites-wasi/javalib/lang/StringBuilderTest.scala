@@ -14,7 +14,7 @@ package testSuiteWASI.javalib.lang
 
 import java.lang.StringBuilder
 
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 import testSuiteWASI.Platform._
 import testSuiteWASI.utils.AssertThrows.assertThrows
 

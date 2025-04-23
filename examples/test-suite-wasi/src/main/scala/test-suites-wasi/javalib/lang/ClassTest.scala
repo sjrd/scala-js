@@ -15,7 +15,7 @@ package testSuiteWASI.javalib.lang
 // import org.junit.Test
 // import org.junit.Assert._
 // import org.junit.Assume._
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 import testSuiteWASI.Platform._
 import testSuiteWASI.utils.AssertThrows.{assertThrows, assertThrowsNPEIfCompliant}
 

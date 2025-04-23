@@ -12,7 +12,7 @@
 
 package testSuiteWASI.compiler
 
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 
 class FloatTest {
   final def assertExactEquals(expected: Float, actual: Float): Unit =

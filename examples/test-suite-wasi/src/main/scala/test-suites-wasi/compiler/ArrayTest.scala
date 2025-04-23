@@ -13,7 +13,7 @@
 package testSuiteWASI.compiler
 
 import testSuiteWASI.utils.AssertThrows.assertThrows
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 import testSuiteWASI.Platform._
 
 class ArrayTest {
@@ -127,7 +127,6 @@ class ArrayTest {
     assertEquals(5, c(1))
     assertThrows(classOf[ArrayStoreException], c(1) = java.lang.Double.valueOf(5.5))
     assertEquals(5, c(1))
-    /*
     if (executingInJVM) {
       assertThrows(classOf[ArrayStoreException], c(2) = java.lang.Double.valueOf(5.0))
       assertNull(c(2))
@@ -161,7 +160,6 @@ class ArrayTest {
     assertThrows(classOf[ArrayStoreException], y(3) = str)
     y(1) = null
     assertNull(y(1))
-    */
   }
 
 

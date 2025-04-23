@@ -12,7 +12,7 @@
 
 package testSuiteWASI.javalib.util
 
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 import testSuiteWASI.Platform._
 import testSuiteWASI.utils.AssertThrows.assertThrows
 
@@ -31,9 +31,9 @@ class ArraysTest {
   def assertArrayEquals[T](expected: Array[T], actual: Array[T]): Unit = {
     (expected, actual) match {
       case (expected: Array[AnyRef], actual: Array[AnyRef]) =>
-        testSuiteWASI.junit.Assert.assertArrayEquals(expected, actual)
+        org.junit.Assert.assertArrayEquals(expected, actual)
       case _ =>
-        testSuiteWASI.junit.Assert.assertArrayEquals(
+        org.junit.Assert.assertArrayEquals(
             expected.map(_.asInstanceOf[AnyRef]),
             actual.map(_.asInstanceOf[AnyRef]))
     }

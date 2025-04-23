@@ -15,7 +15,7 @@ package testSuiteWASI.compiler
 import java.util.Comparator
 import java.util.concurrent.Callable
 
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 
 class SAMTest {
 

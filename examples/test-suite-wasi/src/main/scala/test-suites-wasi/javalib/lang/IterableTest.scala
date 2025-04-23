@@ -18,7 +18,7 @@ import java.util.function.Consumer
 
 import scala.reflect.ClassTag
 
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 import testSuiteWASI.Platform._
 import testSuiteWASI.utils.AssertThrows.assertThrows
 

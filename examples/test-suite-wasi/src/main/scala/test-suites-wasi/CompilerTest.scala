@@ -4,7 +4,17 @@ import compiler._
 
 object CompilerTest {
   def run(): Unit = {
-    // TODO: ArrayTest
+    locally {
+      val test = new ArrayTest
+      import test._
+      getArrayIndexOutOfBounds()
+      setArrayIndexOutOfBounds()
+      // TODO
+      // setArrayStoreExceptions()
+      arraySelectSideEffecting_Issue3848()
+      negativeArraySizes()
+      genericArrayNullsShortCircuited_Issue4755()
+    }
     BooleanTest.bitwiseAndOrXorOperators()
     ByteTest.toByteAndToCharAreInRange()
     CharTest.toIntNegativeToPositive()
@@ -28,9 +38,8 @@ object CompilerTest {
       test.minus()
       test.times()
       test.division()
-      // TODO: assert throws
-      // intTest.divisionByZero()
-      // intTest.moduloByZero()
+      test.divisionByZero()
+      test.moduloByZero()
       test.remainderNegative0_Issue1984()
       test.shiftLeft()
       test.shiftRight()

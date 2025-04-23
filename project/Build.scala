@@ -2044,9 +2044,10 @@ object Build {
              .withStringIndexOutOfBounds(CheckedBehavior.Compliant)
              .withNullPointers(CheckedBehavior.Compliant)
              .withArrayStores(CheckedBehavior.Compliant)
+             .withNegativeArraySizes(CheckedBehavior.Compliant)
          )
       },
-  ).withScalaJSCompiler.dependsOnLibrary
+  ).withScalaJSCompiler.dependsOnLibrary.dependsOn(jUnitRuntime)
 
   lazy val testComponentModel: MultiScalaProject = MultiScalaProject(
       id = "testComponentModel", base = file("examples") / "test-component-model"
