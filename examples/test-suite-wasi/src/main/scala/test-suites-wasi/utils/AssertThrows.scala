@@ -12,8 +12,8 @@
 
 package testSuiteWASI.utils
 
-import testSuiteWASI.junit.Assert
-import testSuiteWASI.junit.function.ThrowingRunnable
+import org.junit.Assert
+import org.junit.function.ThrowingRunnable
 
 object AssertThrows {
   def assertThrows[T <: Throwable, U](expectedThrowable: Class[T], code: => U): T = {

@@ -12,7 +12,7 @@
 
 package testSuiteWASI.javalib.lang
 
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 import testSuiteWASI.utils.AssertThrows.assertThrows
 
 import java.lang.{Boolean => JBoolean}

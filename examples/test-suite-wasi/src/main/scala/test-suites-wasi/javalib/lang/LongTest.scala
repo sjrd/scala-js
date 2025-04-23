@@ -15,7 +15,7 @@ package testSuiteWASI.javalib.lang
 import java.lang.{Long => JLong}
 
 import testSuiteWASI.utils.AssertThrows.assertThrows
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 import testSuiteWASI.Platform._
 
 /** Tests the implementation of the java standard library Long

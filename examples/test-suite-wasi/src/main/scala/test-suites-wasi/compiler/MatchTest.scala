@@ -13,7 +13,7 @@ package testSuiteWASI.compiler
 
 import scala.annotation.switch
 
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 
 class MatchTest {
   import MatchTest._

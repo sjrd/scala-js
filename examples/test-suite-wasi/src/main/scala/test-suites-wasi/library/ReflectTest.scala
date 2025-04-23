@@ -13,8 +13,8 @@
 package testSuiteWASI.library
 
 import testSuiteWASI.utils.AssertThrows.assertThrows
-import testSuiteWASI.junit.Assert._
-import testSuiteWASI.junit.function.ThrowingRunnable
+import org.junit.Assert._
+import org.junit.function.ThrowingRunnable
 
 import scala.scalajs.reflect._
 import scala.scalajs.reflect.annotation._

@@ -15,7 +15,7 @@ package testSuiteWASI.javalib.util
 import java.{util => ju}
 
 import testSuiteWASI.utils.AssertThrows.assertThrows
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
 import testSuiteWASI.Platform._
 
 

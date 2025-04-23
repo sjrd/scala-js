@@ -12,7 +12,8 @@
 
 package testSuiteWASI.compiler
 
-import testSuiteWASI.junit.Assert._
+import org.junit.Assert._
+import testSuiteWASI.utils.AssertThrows.assertThrows
 
 // import org.scalajs.testsuite.utils.Platform
 // import org.scalajs.testsuite.utils.AssertThrows.assertThrows
@@ -287,9 +288,7 @@ class IntTest {
     test(AlmostMaxVal, -123, AlmostMaxVal / -123)
   }
 
-  // TODO
-  /*
-  @Test def divisionByZero(): Unit = {
+  def divisionByZero(): Unit = {
     @noinline def divNoInline(x: Int, y: Int): Int = x / y
 
     @inline def divInline(x: Int, y: Int): Int = x / y
@@ -308,10 +307,7 @@ class IntTest {
     // Eligible for constant-folding by scalac itself
     assertThrows(classOf[ArithmeticException], 5 / 0)
   }
-  */
 
-  // TODO
-  /*
   def moduloByZero(): Unit = {
     @noinline def modNoInline(x: Int, y: Int): Int = x % y
 
@@ -331,7 +327,6 @@ class IntTest {
     // Eligible for constant-folding by scalac itself
     assertThrows(classOf[ArithmeticException], 5 % 0)
   }
-    */
 
   def remainderNegative0_Issue1984(): Unit = {
     @noinline def value: Int = -8
