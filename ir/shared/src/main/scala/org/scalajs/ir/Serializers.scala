@@ -2253,6 +2253,7 @@ object Serializers {
           jsConstructor,
           jsMethodProps,
           jsNativeMembers,
+          componentNativeMembers,
           topLevelExportDefs
         )(OptimizerHints.empty)(pos) // throws away the `@inline`
       }
