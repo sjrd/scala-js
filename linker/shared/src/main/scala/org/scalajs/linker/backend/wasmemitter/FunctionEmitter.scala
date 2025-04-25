@@ -1707,7 +1707,6 @@ private class FunctionEmitter private (
       case Throw =>
         if (ctx.coreSpec.wasmFeatures.exceptionHandling) {
           if (!targetPureWasm) fb += wa.ExternConvertAny
-          else fb += wa.RefCast(watpe.RefType(genTypeID.ThrowableStruct))
           fb += wa.Throw(genTagID.exception)
         } else {
           fb += wa.Drop
@@ -2759,7 +2758,7 @@ private class FunctionEmitter private (
     markPosition(tree)
 
     val exceptionType =
-      if (targetPureWasm) watpe.RefType.nullable(genTypeID.ThrowableStruct)
+      if (targetPureWasm) watpe.RefType.anyref
       else watpe.RefType.externref
 
     fb.block(resultType) { doneLabel =>

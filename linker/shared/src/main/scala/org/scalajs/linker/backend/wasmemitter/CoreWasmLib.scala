@@ -138,7 +138,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     if (!targetPureWasm) genImports()
     else {
       if (coreSpec.wasmFeatures.exceptionHandling) {
-        val exceptionSig = FunctionType(List(RefType(genTypeID.forClass(ThrowableClass))), Nil)
+        val exceptionSig = FunctionType(List(RefType.anyref), Nil)
         val typeID = ctx.moduleBuilder.functionTypeToTypeID(exceptionSig)
         ctx.moduleBuilder.addTag(
           Tag(
