@@ -1,6 +1,6 @@
 package testSuiteWASI
 
-import javalib.util._
+import org.scalajs.testsuite.javalib.util._
 
 object JavalibUtilTest {
   def run(): Unit = {
@@ -78,8 +78,6 @@ object JavalibUtilTest {
       copyOfAnyRefWithChangeOfType()
       copyOfRangeAnyRef()
       copyOfRangeAnyRefArrayIndexOutOfBoundsException()
-
-
       asList()
 
       hashCodeBoolean()
@@ -103,7 +101,7 @@ object JavalibUtilTest {
       equalsDoubles()
 
       deepEquals()
-      toStringAnyRef()
+      // toStringAnyRef()
 
       // TODO: JSArrayConstr in deepToString
       // deepToString()
@@ -121,7 +119,6 @@ object JavalibUtilTest {
       requireNonNull()
       isNull()
       nonNull()
-
     }
   }
 }

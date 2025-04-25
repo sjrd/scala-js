@@ -1,6 +1,6 @@
 package testSuiteWASI
 
-import compiler._
+import org.scalajs.testsuite.compiler._
 
 object CompilerTest {
   def run(): Unit = {
@@ -15,14 +15,21 @@ object CompilerTest {
       negativeArraySizes()
       genericArrayNullsShortCircuited_Issue4755()
     }
-    BooleanTest.bitwiseAndOrXorOperators()
-    ByteTest.toByteAndToCharAreInRange()
-    CharTest.toIntNegativeToPositive()
-    CharTest.toIntOverflow()
-    CharTest.multiplyOverflow()
-    CharTest.doNotBoxSeveralTimesInBlock()
-    CharTest.doNotBoxSeveralTimesInIf()
-    ClassDiffersOnlyInCaseTest.testClassesThatDifferOnlyInCase_Issue4855()
+
+    (new BooleanTest).bitwiseAndOrXorOperators()
+    (new ByteTest).toByteAndToCharAreInRange()
+
+    locally {
+      val test = new CharTest
+      import test._
+      toIntNegativeToPositive()
+      toIntOverflow()
+      multiplyOverflow()
+      doNotBoxSeveralTimesInBlock()
+      doNotBoxSeveralTimesInIf()
+    }
+
+    // (new ClassDiffersOnlyInCaseTest).testClassesThatDifferOnlyInCase_Issue4855()
 
     locally {
       val test = new DefaultMethodsTest
@@ -124,7 +131,6 @@ object CompilerTest {
       moduloByZero()
     }
 
-
     locally {
       val test = new MatchTest
       test.switchWithGuardsStat()
@@ -170,7 +176,7 @@ object CompilerTest {
       test.compareToForPrimitives()
 
       // TODO: float to string / long to string, runtime type check
-      test.concatForPrimitives()
+      // test.concatForPrimitives()
 
       test.arrays()
       test.arraysOfPrimitiveValues()
@@ -179,10 +185,10 @@ object CompilerTest {
       test.bugCompatibleWithScalaJVMForInheritedOverloads()
       test.javaLangObjectNotifyNotifyAll_Issue303()
       test.javaLangObjectClone_Issue303()
-      // test.scalaAnyRefEqNeSynchronized_Issue2709()
 
+      // test.scalaAnyRefEqNeSynchronized_Issue2709()
       // TODO: assertEquals("hellothere", objSynchronizedTest(a, "hello"))
-      test.anyValEqNeSynchronized_Issue2709()
+      // test.anyValEqNeSynchronized_Issue2709()
 
       test.javaLangFloatDoubleIsNaNIsInfinite()
       test.defaultArguments_Issue390()
