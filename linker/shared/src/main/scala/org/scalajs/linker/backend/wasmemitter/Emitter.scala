@@ -123,6 +123,21 @@ final class Emitter(config: Emitter.Config) {
     val fb =
       new FunctionBuilder(ctx.moduleBuilder, genFunctionID.start, OriginalName("start"), pos)
 
+    val topLevelHandlerLabel: Option[wanme.LabelID] = if (coreSpec.wasmFeatures.exceptionHandling) {
+      None
+    } else {
+      val label = Some(fb.genLabel())
+      fb += wa.Block(wa.BlockType.ValueType(), label)
+      label
+    }
+
+    def genForwardThrow(): Unit = {
+      for (handlerLabel <- topLevelHandlerLabel) {
+        fb += wa.GlobalGet(genGlobalID.isThrowing)
+        fb += wa.BrIf(handlerLabel)
+      }
+    }
+
     // Initialize the JS private field symbols
 
     for (clazz <- sortedClasses if clazz.kind.isJSClass) {
@@ -146,6 +161,7 @@ final class Emitter(config: Emitter.Config) {
         StaticInitializerName
       )
       fb += wa.Call(funcID)
+      genForwardThrow()
     }
 
     // Initialize the top-level exports that require it
@@ -155,8 +171,10 @@ final class Emitter(config: Emitter.Config) {
       tle.tree match {
         case TopLevelJSClassExportDef(_, exportName) =>
           fb += wa.Call(genFunctionID.loadJSClass(tle.owningClass))
+          genForwardThrow()
         case TopLevelModuleExportDef(_, exportName) =>
           fb += wa.Call(genFunctionID.loadModule(tle.owningClass))
+          genForwardThrow()
         case TopLevelMethodExportDef(_, methodDef) =>
           genTopLevelExportedFun(fb, tle.exportName, methodDef)
         case TopLevelFieldExportDef(_, _, fieldIdent) =>
@@ -180,6 +198,7 @@ final class Emitter(config: Emitter.Config) {
       def genCallStatic(className: ClassName, methodName: MethodName): Unit = {
         val funcID = genFunctionID.forMethod(MemberNamespace.PublicStatic, className, methodName)
         fb += wa.Call(funcID)
+        genForwardThrow()
       }
 
       ModuleInitializerImpl.fromInitializer(init) match {
@@ -196,6 +215,17 @@ final class Emitter(config: Emitter.Config) {
         case ModuleInitializerImpl.VoidMainMethod(className, encodedMainMethodName) =>
           genCallStatic(className, encodedMainMethodName)
       }
+    }
+
+    // Top-level exception handler
+
+    if (topLevelHandlerLabel.isDefined) {
+      fb += wa.Return
+      fb += wa.End
+
+      // TODO Print *something* useful, somehow.
+      // For now at least we fail the execution.
+      fb += wa.Unreachable
     }
 
     // Finish the start function

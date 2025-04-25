@@ -56,6 +56,17 @@ object SWasmGen {
     }
   }
 
+  def genZeroOf(tpe: Types.Type): Instr = tpe match {
+    case Types.Int32                   => I32Const(0)
+    case Types.Int64                   => I64Const(0L)
+    case Types.Float32                 => F32Const(0.0f)
+    case Types.Float64                 => F64Const(0.0)
+    case Types.RefType(true, heapType) => RefNull(heapType)
+
+    case Types.RefType(false, _) =>
+      throw new AssertionError(s"Illegal Wasm type for genZeroOf: $tpe")
+  }
+
   def genLoadTypeData(fb: FunctionBuilder, typeRef: TypeRef): Unit = typeRef match {
     case typeRef: NonArrayTypeRef  => genLoadNonArrayTypeData(fb, typeRef)
     case typeRef: ArrayTypeRef     => genLoadArrayTypeData(fb, typeRef)
@@ -85,6 +96,41 @@ object SWasmGen {
 
     // Create the array object
     fb += StructNew(genTypeID.forArrayClass(arrayTypeRef))
+  }
+
+  /** Generates code that forwards an exception from a function call that always throws.
+   *
+   *  After this codegen, the stack is in a stack-polymorphic context.
+   *
+   *  This method assumes that there is no enclosing exception handler in the
+   *  current function.
+   */
+  def genForwardThrowAlwaysAsReturn(fb: FunctionBuilder, fakeResult: List[Instr])(
+      implicit ctx: WasmContext): Unit = {
+    if (ctx.coreSpec.wasmFeatures.exceptionHandling) {
+      fb += Unreachable
+    } else {
+      fb ++= fakeResult
+      fb += Return
+    }
+  }
+
+  /** Generates code that possibly forwards an exception from the previous function call.
+   *
+   *  The stack is not altered by this codegen.
+   *
+   *  This method assumes that there is no enclosing exception handler in the
+   *  current function.
+   */
+  def genForwardThrowAsReturn(fb: FunctionBuilder, fakeResult: List[Instr])(
+      implicit ctx: WasmContext): Unit = {
+    if (!ctx.coreSpec.wasmFeatures.exceptionHandling) {
+      fb += GlobalGet(genGlobalID.isThrowing)
+      fb.ifThen() {
+        fb ++= fakeResult
+        fb += Return
+      }
+    }
   }
 
 }
