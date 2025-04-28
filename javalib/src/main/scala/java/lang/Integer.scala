@@ -97,31 +97,53 @@ object Integer {
     val firstChar = s.charAt(0)
     val negative = signed && firstChar == '-'
 
-    val maxAbsValue: scala.Double = {
-      if (!signed) 0xffffffffL.toDouble
-      else if (negative) 0x80000000L.toDouble
-      else 0x7fffffffL.toDouble
-    }
-
     var i = if (negative || firstChar == '+') 1 else 0
 
     // We need at least one digit
     if (i >= s.length)
       fail()
 
-    var result: scala.Double = 0.0
-    while (i != len) {
-      val digit = Character.digitWithValidRadix(s.charAt(i), radix)
-      result = result * radix + digit
-      if (digit == -1 || result > maxAbsValue)
-        fail()
-      i += 1
-    }
+    if (LinkingInfo.targetPureWasm) {
+      val maxAbsValue: scala.Long = {
+        if (!signed) 0xffffffffL
+        else if (negative) 0x80000000L
+        else 0x7fffffffL
+      }
 
-    if (negative)
-      asInt(-result)
-    else
-      asInt(result)
+      var result: scala.Long = 0L
+      while (i != len) {
+        val digit = Character.digitWithValidRadix(s.charAt(i), radix)
+        result = result * radix + digit
+        if (digit == -1 || result > maxAbsValue)
+          fail()
+        i += 1
+      }
+
+      if (negative)
+        -result.toInt
+      else
+        result.toInt
+    } else {
+      val maxAbsValue: scala.Double = {
+        if (!signed) 0xffffffffL.toDouble
+        else if (negative) 0x80000000L.toDouble
+        else 0x7fffffffL.toDouble
+      }
+
+      var result: scala.Double = 0.0
+      while (i != len) {
+        val digit = Character.digitWithValidRadix(s.charAt(i), radix)
+        result = result * radix + digit
+        if (digit == -1 || result > maxAbsValue)
+          fail()
+        i += 1
+      }
+
+      if (negative)
+        asInt(-result)
+      else
+        asInt(result)
+      }
   }
 
   @inline def toString(i: scala.Int): String = "" + i

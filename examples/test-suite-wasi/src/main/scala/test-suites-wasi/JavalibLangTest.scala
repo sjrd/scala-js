@@ -224,14 +224,13 @@ object JavalibLangTest {
       compareToInteger()
       compareTo()
 
-      // TODO: JSBinaryOp 8: asInt (number2dynamic)
-      // parseString()
-      // parseStringInvalidThrows()
-      // parseUnsignedInt()
-      // parseUnsignedIntInvalidThrows()
-      // parseStringBase16()
-      // decodeStringBase8()
-      // decodeStringInvalidThrows()
+      parseString()
+      parseStringInvalidThrows()
+      parseUnsignedInt()
+      parseUnsignedIntInvalidThrows()
+      parseStringBase16()
+      decodeStringBase8()
+      decodeStringInvalidThrows()
 
       highestOneBit()
       lowestOneBit()
@@ -243,10 +242,9 @@ object JavalibLangTest {
       // TODO: JSMethodApply toString (enableJSNumberOps)
       // toStringRadix()
 
-      // TODO: JSMethodApply (asInt)
-      // parseUnsignedIntRadix()
-      // parseUnsignedIntRadixInvalidThrows()
-      // parseUnsignedIntBase16()
+      parseUnsignedIntRadix()
+      parseUnsignedIntRadixInvalidThrows()
+      parseUnsignedIntBase16()
 
       // JSBinaryOp 13 Utils.scala toUint
       // compareUnsigned()
