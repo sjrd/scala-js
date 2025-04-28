@@ -640,7 +640,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       fb += wa.LocalGet(objParam)
       fb += wa.GlobalGet(genGlobalID.forVTable(className))
       fb += wa.Call(genFunctionID.classCastException)
-      fb += wa.Unreachable
+      SWasmGen.genForwardThrowAlwaysAsReturn(fb, List(wa.RefNull(watpe.HeapType.None)))
     }
 
     fb += wa.LocalGet(objParam)
@@ -774,7 +774,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       // If we get here, it's a CCE -- `obj` is still on the stack
       fb += wa.GlobalGet(genGlobalID.forVTable(className))
       fb += wa.Call(genFunctionID.classCastException)
-      fb += wa.Unreachable
+      SWasmGen.genForwardThrowAlwaysAsReturn(fb, List(wa.RefNull(watpe.HeapType.None)))
     }
 
     fb.buildAndAddToModule()
@@ -822,7 +822,9 @@ class ClassEmitter(coreSpec: CoreSpec) {
             // then, throw
             fb += wa.GlobalGet(genGlobalID.forVTable(className))
             fb += wa.Call(genFunctionID.throwModuleInitError)
-            fb += wa.Unreachable // for clarity; technically redundant since the stacks align
+
+            // the fake result is particularly awkward here
+            SWasmGen.genForwardThrowAlwaysAsReturn(fb, List(wa.Call(genFunctionID.newDefault(className))))
           }
         }
 
@@ -835,6 +837,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       fb += wa.Call(genFunctionID.newDefault(className))
       fb += wa.LocalTee(instanceLocal)
       fb += wa.Call(ctorID)
+      SWasmGen.genForwardThrowAsReturn(fb, List(wa.LocalGet(instanceLocal)))
 
       // store it in the global
       fb += wa.LocalGet(instanceLocal)

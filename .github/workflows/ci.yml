@@ -76,6 +76,7 @@ jobs:
       fail-fast: false
       matrix:
         suffix: [2_12] # TODO: test with 2_13 too
+        eh-support: [true, false]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -91,9 +92,9 @@ jobs:
         run: npm install
       - name: testSuiteWASI${{ matrix.suffix }}/fastLinkJS
         run: |
-          sbt 'set Global/enableWasmEverywhere := true' testSuiteWASI${{ matrix.suffix }}/fastLinkJS
+          sbt "set Seq(Global/enableWasmEverywhere := true, testSuiteWASI.v${{ matrix.suffix }}/scalaJSLinkerConfig ~= (_.withWasmFeatures(_.withExceptionHandling(${{ matrix.eh-support }}))))" testSuiteWASI${{ matrix.suffix }}/fastLinkJS
           VERSION=$(echo "${{ matrix.suffix }}" | sed 's/2_/2./')
-          node --experimental-wasm-exnref ./index.mjs ./examples/test-suite-wasi/.$VERSION/target/scala-$VERSION/test-suite-wasi-fastopt/main.wasm
+          node ${{ matrix.eh-support && '--experimental-wasm-exnref' || '--no-experimental-wasm-exnref' }} ./index.mjs ./examples/test-suite-wasi/.$VERSION/target/scala-$VERSION/test-suite-wasi-fastopt/main.wasm
           echo "test success"
 
   test-suite-component:

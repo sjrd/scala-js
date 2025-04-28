@@ -132,16 +132,18 @@ object FunctionEmitter {
         List(preSuperEnvType)
       )
 
-      emitter.returnWithNPEScope() {
-        emitter.genBlockStats(ctorBody.beforeSuper) {
-          // Build and return the preSuperEnv struct
-          for (varDef <- preSuperDecls) {
-            val localID = (emitter.lookupLocal(varDef.name.name): @unchecked) match {
-              case VarStorage.Local(localID) => localID
+      emitter.withNoExceptionHandler {
+        emitter.returnWithNPEScope() {
+          emitter.genBlockStats(ctorBody.beforeSuper) {
+            // Build and return the preSuperEnv struct
+            for (varDef <- preSuperDecls) {
+              val localID = (emitter.lookupLocal(varDef.name.name): @unchecked) match {
+                case VarStorage.Local(localID) => localID
+              }
+              emitter.fb += wa.LocalGet(localID)
             }
-            emitter.fb += wa.LocalGet(localID)
+            emitter.fb += wa.StructNew(preSuperEnvStructTypeID)
           }
-          emitter.fb += wa.StructNew(preSuperEnvStructTypeID)
         }
       }
 
@@ -328,12 +330,40 @@ private class FunctionEmitter private (
   import coreSpec.semantics
   import coreSpec.wasmFeatures.targetPureWasm
 
+  private var currentExceptionHandler: Option[wanme.LabelID] = null
   private var currentNPELabel: Option[wanme.LabelID] = null
   private var closureIdx: Int = 0
   private var currentEnv: Env = paramsEnv
 
   private def newTargetStorage: VarStorage.Local =
     _newTargetStorage.getOrElse(throw new Error("Cannot access new.target in this context."))
+
+  /** Generates code that forwards an exception from a function call that always throws.
+   *
+   *  After this codegen, the stack is in a stack-polymorphic context.
+   */
+  private def genForwardThrowAlways(): Unit = {
+    currentExceptionHandler match {
+      case None =>
+        fb += wa.Unreachable
+      case Some(handler) =>
+        fb += wa.Br(handler)
+    }
+  }
+
+  /** Generates code that possibly forwards an exception from the previous function call.
+   *
+   *  The stack is not altered by this codegen.
+   */
+  private def genForwardThrow(): Unit = {
+    currentExceptionHandler match {
+      case None =>
+        ()
+      case Some(handler) =>
+        fb += wa.GlobalGet(genGlobalID.isThrowing)
+        fb += wa.BrIf(handler)
+    }
+  }
 
   /** Opens a new scope in which NPEs can be thrown by jumping to the NPE label.
    *
@@ -387,7 +417,7 @@ private class FunctionEmitter private (
         fb += wa.Br(noNPELabel)
         fb += wa.End // npeLabel
         fb += wa.Call(genFunctionID.throwNullPointerException)
-        fb += wa.Unreachable
+        genForwardThrowAlways()
         fb += wa.End // noNPELabel
       }
 
@@ -430,7 +460,7 @@ private class FunctionEmitter private (
         fb += wa.Return
         fb += wa.End // npeLabel
         fb += wa.Call(genFunctionID.throwNullPointerException)
-        fb += wa.Unreachable
+        genForwardThrowAlways()
       }
 
       currentNPELabel = savedNPELabel
@@ -552,10 +582,40 @@ private class FunctionEmitter private (
   private def markPosition(tree: Tree): Unit =
     markPosition(tree.pos)
 
+  def withNoExceptionHandler(genBody: => Unit): Unit = {
+    assert(currentExceptionHandler == null)
+    currentExceptionHandler = None
+    genBody
+    currentExceptionHandler = null
+  }
+
   def genBody(tree: Tree, expectedType: Type): Unit = {
-    returnWithNPEScope() {
-      genTree(tree, expectedType)
+    assert(currentExceptionHandler == null)
+
+    if (coreSpec.wasmFeatures.exceptionHandling) {
+      currentExceptionHandler = None
+      returnWithNPEScope() {
+        genTree(tree, expectedType)
+      }
+    } else {
+      fb.block() { propagateExceptionLabel =>
+        currentExceptionHandler = Some(propagateExceptionLabel)
+
+        returnWithNPEScope() {
+          genTree(tree, expectedType)
+          fb += wa.Return
+        }
+      }
+
+      /* Propagate the exception to the caller.
+       * `isThrowing` and `thrownException` are already set, but we need to
+       * synthesize a fake result.
+       */
+      if (expectedType != VoidType && expectedType != NothingType)
+        fb += SWasmGen.genZeroOf(expectedType)
     }
+
+    currentExceptionHandler = null
   }
 
   def genTreeAuto(tree: Tree): Unit =
@@ -786,6 +846,7 @@ private class FunctionEmitter private (
               genRhs()
               markPosition(tree)
               fb += wa.Call(genFunctionID.arraySetFor(arrayTypeRef))
+              genForwardThrow()
             }
           case NothingType =>
             // unreachable
@@ -942,9 +1003,11 @@ private class FunctionEmitter private (
     fb += wa.I32Const(proxyId)
     // `searchReflectiveProxy`: [typeData, i32] -> [(ref func)]
     fb += wa.Call(genFunctionID.searchReflectiveProxy)
+    genForwardThrow()
 
     fb += wa.RefCast(watpe.RefType(watpe.HeapType(funcTypeID)))
     fb += wa.CallRef(funcTypeID)
+    genForwardThrow()
 
     tree.tpe
   }
@@ -1002,6 +1065,7 @@ private class FunctionEmitter private (
     def genHijackedClassCall(hijackedClass: ClassName): Unit = {
       val funcID = genFunctionID.forMethod(MemberNamespace.Public, hijackedClass, methodName)
       fb += wa.Call(funcID)
+      genForwardThrow()
     }
 
     if (!receiverClassInfo.hasInstances) {
@@ -1263,6 +1327,7 @@ private class FunctionEmitter private (
         genFieldID.forMethodTableEntry(methodName)
       )
       fb += wa.CallRef(ctx.tableFunctionType(methodName))
+      genForwardThrow()
     }
 
     // Generates a vtable-based dispatch.
@@ -1279,6 +1344,7 @@ private class FunctionEmitter private (
         genFieldID.forMethodTableEntry(methodName)
       )
       fb += wa.CallRef(ctx.tableFunctionType(methodName))
+      genForwardThrow()
     }
 
     if (receiverClassInfo.isInterface)
@@ -1338,6 +1404,7 @@ private class FunctionEmitter private (
         markPosition(tree)
         val funcID = genFunctionID.forMethod(namespace, targetClassName, methodName)
         fb += wa.Call(funcID)
+        genForwardThrow()
         if (tree.tpe == NothingType)
           fb += wa.Unreachable
         tree.tpe
@@ -1352,6 +1419,7 @@ private class FunctionEmitter private (
     val funcID = genFunctionID.forMethod(namespace, className, methodName)
     markPosition(tree)
     fb += wa.Call(funcID)
+    genForwardThrow()
     if (tree.tpe == NothingType)
       fb += wa.Unreachable
     tree.tpe
@@ -1391,6 +1459,7 @@ private class FunctionEmitter private (
         fb += wa.LocalGet(funLocal)
         fb += wa.StructGet(typedClosureTypeID, genFieldID.typedClosure.fun)
         fb += wa.CallRef(funTypeID)
+        genForwardThrow()
 
         resultType
 
@@ -1504,6 +1573,7 @@ private class FunctionEmitter private (
 
     markPosition(tree)
     fb += wa.Call(genFunctionID.loadModule(className))
+    genForwardThrow()
     tree.tpe
   }
 
@@ -1684,6 +1754,7 @@ private class FunctionEmitter private (
               SpecialNames.AnyArgConstructorName
             )
           )
+          genForwardThrow()
           fb += wa.LocalGet(instanceLocal)
         }
 
@@ -1705,16 +1776,27 @@ private class FunctionEmitter private (
         }
 
       case Throw =>
-        if (ctx.coreSpec.wasmFeatures.exceptionHandling) {
-          if (!targetPureWasm) fb += wa.ExternConvertAny
-          fb += wa.Throw(genTagID.exception)
-        } else {
-          fb += wa.Drop
-          fb += wa.Unreachable
-        }
+        genThrow()
     }
 
     tree.tpe
+  }
+
+  /** Generates code that throws the exception on top of the stack (an anyref).
+   *
+   *  After this codegen, the code is in a stack-polymorphic context.
+   */
+  private def genThrow(): Unit = {
+    if (ctx.coreSpec.wasmFeatures.exceptionHandling) {
+      if (!targetPureWasm)
+        fb += wa.ExternConvertAny
+      fb += wa.Throw(genTagID.exception)
+    } else {
+      fb += wa.GlobalSet(genGlobalID.thrownException)
+      fb += wa.I32Const(1)
+      fb += wa.GlobalSet(genGlobalID.isThrowing)
+      fb += wa.Br(currentExceptionHandler.get)
+    }
   }
 
   private def genBinaryOp(tree: BinaryOp): Type = {
@@ -1801,11 +1883,15 @@ private class FunctionEmitter private (
         genTree(lhs, StringType)
         genTree(rhs, IntType)
         markPosition(tree)
-        if (semantics.stringIndexOutOfBounds == CheckedBehavior.Unchecked)
-          if (targetPureWasm)  fb += wa.ArrayGetU(genTypeID.i16Array)
-          else fb += wa.Call(genFunctionID.stringBuiltins.charCodeAt)
-        else
+        if (semantics.stringIndexOutOfBounds == CheckedBehavior.Unchecked) {
+          if (targetPureWasm)
+            fb += wa.ArrayGetU(genTypeID.i16Array)
+          else
+            fb += wa.Call(genFunctionID.stringBuiltins.charCodeAt)
+        } else {
           fb += wa.Call(genFunctionID.checkedStringCharAt)
+          genForwardThrow()
+        }
         CharType
 
       // Class operations for which genTreeAuto would not do the right thing
@@ -1827,12 +1913,20 @@ private class FunctionEmitter private (
           genTree(rhs, AnyType)
           markPosition(tree)
           fb += wa.Call(genFunctionID.cast)
+          genForwardThrow()
           AnyType
         } else {
           genTree(lhs, VoidType)
           genTreeAuto(rhs)
           rhs.tpe
         }
+      case Class_newArray =>
+        genTreeAuto(lhs)
+        genTreeAuto(rhs)
+        markPosition(tree)
+        fb += wa.Call(genFunctionID.newArray)
+        genForwardThrow()
+        tree.tpe
 
       case _ =>
         genTreeAuto(lhs)
@@ -1993,8 +2087,6 @@ private class FunctionEmitter private (
       case Double_<= => wa.F64Le
       case Double_>  => wa.F64Gt
       case Double_>= => wa.F64Ge
-
-      case Class_newArray => wa.Call(genFunctionID.newArray)
     }
   }
 
@@ -2305,16 +2397,11 @@ private class FunctionEmitter private (
   }
 
   private def genThrowArithmeticException()(implicit pos: Position): Unit = {
-    if (coreSpec.wasmFeatures.exceptionHandling) {
-      val ctorName = MethodName.constructor(List(ClassRef(BoxedStringClass)))
-      genNewScalaClass(ArithmeticExceptionClass, ctorName) {
-        fb ++= ctx.stringPool.getConstantStringInstr("/ by zero")
-      }
-      if (!targetPureWasm) fb += wa.ExternConvertAny
-      fb += wa.Throw(genTagID.exception)
-    } else {
-      fb += wa.Unreachable
+    val ctorName = MethodName.constructor(List(ClassRef(BoxedStringClass)))
+    genNewScalaClass(ArithmeticExceptionClass, ctorName) {
+      fb ++= ctx.stringPool.getConstantStringInstr("/ by zero")
     }
+    genThrow()
   }
 
   private def genIsInstanceOf(tree: IsInstanceOf): Type = {
@@ -2460,14 +2547,17 @@ private class FunctionEmitter private (
           case ArrayTypeRef(ClassRef(ObjectClass) | _: PrimRef, 1) =>
             // For primitive arrays and exactly Array[Object], we have a dedicated function
             fb += wa.Call(genFunctionID.asInstance(targetTpe))
+            genForwardThrow()
           case _ =>
             // For other array types, we must use the generic function
             genLoadArrayTypeData(fb, arrayTypeRef)
             fb += wa.Call(genFunctionID.asSpecificRefArray)
+            genForwardThrow()
         }
 
       case _ =>
         fb += wa.Call(genFunctionID.asInstance(targetTpe))
+        genForwardThrow()
     }
 
     targetTpe
@@ -2738,19 +2828,13 @@ private class FunctionEmitter private (
   }
 
   private def genTryCatch(tree: TryCatch, expectedType: Type): Type = {
-    if (coreSpec.wasmFeatures.exceptionHandling) genTryCatch0(tree, expectedType)
-    else {
-      markPosition(tree)
-      genTree(tree.block, expectedType)
-
-      if (expectedType == NothingType)
-        fb += wa.Unreachable
-
-      expectedType
-    }
+    if (coreSpec.wasmFeatures.exceptionHandling)
+      genTryCatchWithEH(tree, expectedType)
+    else
+      genTryCatchWithoutEH(tree, expectedType)
   }
 
-  private def genTryCatch0(tree: TryCatch, expectedType: Type): Type = {
+  private def genTryCatchWithEH(tree: TryCatch, expectedType: Type): Type = {
     val TryCatch(block, LocalIdent(errVarName), errVarOrigName, handler) = tree
 
     val resultType = transformResultType(expectedType)
@@ -2782,6 +2866,49 @@ private class FunctionEmitter private (
       withNewLocal(errVarName, errVarOrigName, watpe.RefType.anyref) { exceptionLocal =>
         if (!targetPureWasm) fb += wa.AnyConvertExtern
         fb += wa.LocalSet(exceptionLocal)
+        genTree(handler, expectedType)
+      }
+    } // end block $done
+
+    if (expectedType == NothingType)
+      fb += wa.Unreachable
+
+    expectedType
+  }
+
+  private def genTryCatchWithoutEH(tree: TryCatch, expectedType: Type): Type = {
+    val TryCatch(block, LocalIdent(errVarName), errVarOrigName, handler) = tree
+
+    val resultType = transformResultType(expectedType)
+
+    markPosition(tree)
+
+    fb.block(resultType) { doneLabel =>
+      fb.block() { catchLabel =>
+        val savedExceptionHandler = currentExceptionHandler
+        currentExceptionHandler = Some(catchLabel)
+
+        withNPEScope(resultType) {
+          genTree(block, expectedType)
+        }
+        markPosition(tree)
+        fb += wa.Br(doneLabel)
+
+        currentExceptionHandler = savedExceptionHandler
+      } // end block $catch
+
+      withNewLocal(errVarName, errVarOrigName, watpe.RefType.anyref) { exceptionLocal =>
+        // errVar := thrownException
+        fb += wa.GlobalGet(genGlobalID.thrownException)
+        fb += wa.LocalSet(exceptionLocal)
+
+        // thrownException := null (for GC); isThrowing := false
+        fb += wa.RefNull(watpe.HeapType.None)
+        fb += wa.GlobalSet(genGlobalID.thrownException)
+        fb += wa.I32Const(0)
+        fb += wa.GlobalSet(genGlobalID.isThrowing)
+
+        // handler code
         genTree(handler, expectedType)
       }
     } // end block $done
@@ -2864,6 +2991,7 @@ private class FunctionEmitter private (
     genCtorArgs
     markPosition(pos)
     fb += wa.Call(genFunctionID.forMethod(MemberNamespace.Constructor, cls, ctor))
+    genForwardThrow()
     fb += wa.LocalGet(instanceLocal)
   }
 
@@ -2971,6 +3099,7 @@ private class FunctionEmitter private (
       case None =>
         // This is a non-native JS module
         fb += wa.Call(genFunctionID.loadModule(className))
+        genForwardThrow()
     }
 
     AnyType
@@ -3178,7 +3307,7 @@ private class FunctionEmitter private (
             // then throw NegativeArraySizeException
             fb += wa.LocalGet(lengthLocal)
             fb += wa.Call(genFunctionID.throwNegativeArraySizeException)
-            fb += wa.Unreachable
+            genForwardThrowAlways()
           }
           fb += wa.LocalGet(lengthLocal)
       }
@@ -3228,6 +3357,7 @@ private class FunctionEmitter private (
           genTree(index, IntType)
           markPosition(tree)
           fb += wa.Call(genFunctionID.arrayGetFor(arrayTypeRef))
+          genForwardThrow()
         }
 
         /* If it is a reference array type whose element type does not translate
@@ -3610,6 +3740,7 @@ private class FunctionEmitter private (
         genTreeToAny(obj)
         markPosition(tree)
         fb += wa.Call(genFunctionID.anyGetClassName)
+        genForwardThrow()
         StringType
 
       case value @ WasmTransients.WasmUnaryOp(_, lhs) =>
@@ -3639,10 +3770,12 @@ private class FunctionEmitter private (
           genAsNonNullOrNPEFor(string)
         genTree(index, IntType)
         markPosition(tree)
-        if (semantics.stringIndexOutOfBounds == CheckedBehavior.Unchecked)
+        if (semantics.stringIndexOutOfBounds == CheckedBehavior.Unchecked) {
           fb += wa.Call(genFunctionID.stringBuiltins.codePointAt)
-        else
+        } else {
           fb += wa.Call(genFunctionID.checkedStringCodePointAt)
+          genForwardThrow()
+        }
         value.tpe
 
       case value @ WasmTransients.WasmSubstring(string, start, optEnd) =>
@@ -3663,6 +3796,7 @@ private class FunctionEmitter private (
             fb += wa.Call(genFunctionID.checkedSubstringStart)
           else
             fb += wa.Call(genFunctionID.checkedSubstringStartEnd)
+          genForwardThrow()
         }
         value.tpe
 
@@ -3704,10 +3838,12 @@ private class FunctionEmitter private (
           if genTypeID.forArrayClass(srcArrayTypeRef) == genTypeID.forArrayClass(destArrayTypeRef) =>
         // Generate a specialized arrayCopyT call
         fb += wa.Call(genFunctionID.specializedArrayCopy(srcArrayTypeRef))
+        genForwardThrow()
 
       case _ =>
         // Generate a generic arrayCopy call
         fb += wa.Call(genFunctionID.genericArrayCopy)
+        genForwardThrow()
     }
 
     VoidType
@@ -4145,32 +4281,6 @@ private class FunctionEmitter private (
     }
 
     def genTryFinally(tree: TryFinally, expectedType: Type): Type = {
-      if (coreSpec.wasmFeatures.exceptionHandling) {
-        genTryFinally0(tree, expectedType)
-      } else {
-        markPosition(tree)
-        val resultType = transformResultType(expectedType)
-        val resultLocals = resultType.map(addSyntheticLocal(_))
-        genTree(tree.block, expectedType)
-
-        // store the result in locals during the finally block
-        for (resultLocal <- resultLocals.reverse)
-          fb += wa.LocalSet(resultLocal)
-
-        genTree(tree.finalizer, VoidType)
-
-        // reload the result onto the stack
-        for (resultLocal <- resultLocals)
-          fb += wa.LocalGet(resultLocal)
-
-        if (expectedType == NothingType)
-          fb += wa.Unreachable
-
-        expectedType
-      }
-    }
-
-    def genTryFinally0(tree: TryFinally, expectedType: Type): Type = {
       val TryFinally(tryBlock, finalizer) = tree
 
       val entry = new TryFinallyEntry(currentUnwindingStackDepth)
@@ -4178,20 +4288,29 @@ private class FunctionEmitter private (
       val resultType = transformResultType(expectedType)
       val resultLocals = resultType.map(addSyntheticLocal(_))
 
-      val exceptionType =
-        if (targetPureWasm) watpe.RefType.nullable(genTypeID.ThrowableStruct)
-        else watpe.RefType.externref
+      /* When compiling with EH support, we leave the exnref on the stack
+       * during the finally block (that uses fewer opcodes). When we implement
+       * exceptions ourselves, we store the state of the two tracking globals
+       * in local temporaries instead.
+       */
+      val thrownExceptionAndIsThrowingLocals =
+        if (coreSpec.wasmFeatures.exceptionHandling) None
+        else Some((addSyntheticLocal(watpe.RefType.anyref), addSyntheticLocal(watpe.Int32)))
+
+      val catchBlockType =
+        if (coreSpec.wasmFeatures.exceptionHandling) wa.BlockType.ValueType(watpe.RefType.exnref)
+        else wa.BlockType.ValueType()
 
       markPosition(tree)
 
       fb.block() { doneLabel =>
-        fb.block(watpe.RefType.exnref) { catchLabel =>
+        fb.block(catchBlockType) { catchLabel =>
           /* Remember the position in the instruction stream, in case we need
            * to come back and insert the wa.BLOCK for the cross handling.
            */
           val instrsBlockBeginIndex = fb.markCurrentInstructionIndex()
 
-          fb.tryTable()(List(wa.CatchClause.CatchAllRef(catchLabel))) {
+          def genTryTableBody(): Unit = {
             // try block
             enterTryFinally(entry) {
               withNPEScope(resultType) {
@@ -4204,6 +4323,19 @@ private class FunctionEmitter private (
             // store the result in locals during the finally block
             for (resultLocal <- resultLocals.reverse)
               fb += wa.LocalSet(resultLocal)
+          }
+
+          if (coreSpec.wasmFeatures.exceptionHandling) {
+            fb.tryTable()(List(wa.CatchClause.CatchAllRef(catchLabel))) {
+              genTryTableBody()
+            }
+          } else {
+            val savedExceptionHandler = currentExceptionHandler
+            currentExceptionHandler = Some(catchLabel)
+
+            genTryTableBody()
+
+            currentExceptionHandler = savedExceptionHandler
           }
 
           /* If this try..finally was crossed by a `Return`, we need to amend
@@ -4238,25 +4370,58 @@ private class FunctionEmitter private (
           }
 
           // on success, push a `null_ref exn` on the stack
-          fb += wa.RefNull(watpe.HeapType.Exn)
+          if (coreSpec.wasmFeatures.exceptionHandling)
+            fb += wa.RefNull(watpe.HeapType.Exn)
         } // end block $catch
+
+        for ((thrownExceptionLocal, isThrowingLocal) <- thrownExceptionAndIsThrowingLocals) {
+          // Save the throwing state for a possible rethrow after the finally block
+          fb += wa.GlobalGet(genGlobalID.thrownException)
+          fb += wa.LocalSet(thrownExceptionLocal)
+          fb += wa.GlobalGet(genGlobalID.isThrowing)
+          fb += wa.LocalSet(isThrowingLocal)
+
+          // Reset the throwing state during the finally block
+          fb += wa.RefNull(watpe.HeapType.None)
+          fb += wa.GlobalSet(genGlobalID.thrownException)
+          fb += wa.I32Const(0)
+          fb += wa.GlobalSet(genGlobalID.isThrowing)
+        }
 
         // finally block (during which we leave the `(ref null exn)` on the stack)
         genTree(finalizer, VoidType)
 
         markPosition(tree)
 
+        for ((thrownExceptionLocal, isThrowingLocal) <- thrownExceptionAndIsThrowingLocals) {
+          // If we were throwing, rethrow now
+          fb += wa.LocalGet(isThrowingLocal)
+          fb.ifThen() {
+            fb += wa.LocalGet(thrownExceptionLocal)
+            fb += wa.GlobalSet(genGlobalID.thrownException)
+            fb += wa.I32Const(1)
+            fb += wa.GlobalSet(genGlobalID.isThrowing)
+            fb += wa.Br(currentExceptionHandler.get)
+          }
+
+          // Otherwise, leave the exception globals unset and continue
+        }
+
         if (!entry.wasCrossed) {
-          // If the `exnref` is non-null, rethrow it
-          fb += wa.BrOnNull(doneLabel)
-          fb += wa.ThrowRef
-        } else {
-          /* If the `exnref` is non-null, rethrow it.
-           * Otherwise, stay within the `$done` block.
-           */
-          fb.block(Sig(List(watpe.RefType.exnref), Nil)) { exnrefIsNullLabel =>
-            fb += wa.BrOnNull(exnrefIsNullLabel)
+          if (thrownExceptionAndIsThrowingLocals.isEmpty) {
+            // If the `exnref` is non-null, rethrow it
+            fb += wa.BrOnNull(doneLabel)
             fb += wa.ThrowRef
+          }
+        } else {
+          if (thrownExceptionAndIsThrowingLocals.isEmpty) {
+            /* If the `exnref` is non-null, rethrow it.
+             * Otherwise, stay within the `$done` block.
+             */
+            fb.block(Sig(List(watpe.RefType.exnref), Nil)) { exnrefIsNullLabel =>
+              fb += wa.BrOnNull(exnrefIsNullLabel)
+              fb += wa.ThrowRef
+            }
           }
 
           /* Otherwise, use a br_table to dispatch to the right destination

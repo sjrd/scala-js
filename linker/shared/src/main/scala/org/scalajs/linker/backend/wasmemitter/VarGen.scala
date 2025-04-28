@@ -53,6 +53,8 @@ object VarGen {
     case object bZeroFloat extends GlobalID
     case object bZeroDouble extends GlobalID
     case object emptyStringArray extends GlobalID
+    case object thrownException extends GlobalID
+    case object isThrowing extends GlobalID
     // component model
     case object stackPointer extends GlobalID
     case object savedStackPointer extends GlobalID
