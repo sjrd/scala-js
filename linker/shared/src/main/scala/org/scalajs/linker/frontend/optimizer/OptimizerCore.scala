@@ -6623,6 +6623,9 @@ private[optimizer] object OptimizerCore {
         ClassName("java.lang.Character$") -> List(
             m("toString", List(I), StringClassRef) -> CharacterCodePointToString
         ),
+        ClassName("java.lang.String") -> List(
+            m("codePointAt", List(I), I) -> StringCodePointAt
+        ),
     )
 
     private val wasmIntrinsics: List[(ClassName, List[(MethodName, Int)])] = List(
@@ -6651,9 +6654,6 @@ private[optimizer] object OptimizerCore {
         ClassName("java.lang.Double$") -> List(
             m("doubleToLongBits", List(D), J) -> DoubleToLongBits,
             m("longBitsToDouble", List(J), D) -> LongBitsToDouble
-        ),
-        ClassName("java.lang.String") -> List(
-            m("codePointAt", List(I), I) -> StringCodePointAt
         ),
         ClassName("java.lang.Math$") -> List(
             m("abs", List(F), F) -> MathAbsFloat,

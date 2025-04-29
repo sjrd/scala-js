@@ -536,9 +536,8 @@ object JavalibLangTest {
 
       trim()
 
-      // TODO: it takes too long to concat strings
-      // createFromLargeCharArray_Issue2553()
-      // createFromLargeCodePointArray_Issue2553()
+      createFromLargeCharArray_Issue2553()
+      createFromLargeCodePointArray_Issue2553()
 
       stringCaseInsensitiveOrdering()
     }

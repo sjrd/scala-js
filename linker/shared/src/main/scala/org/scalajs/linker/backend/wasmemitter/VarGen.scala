@@ -251,10 +251,22 @@ object VarGen {
       case object equals extends JSHelperFunctionID
     }
 
-    object string { // targetPureWasm
+    object wasmString { // targetPureWasm
       // case object stringFromCharCode extends FunctionID
       case object stringConcat extends FunctionID
       case object stringEquals extends FunctionID
+      /** Mutate the given `ref $wasmString` to have all concatenated characters in the `chars` field.
+       *
+       *  This function traverses the chain of concatenated strings (linked via `left'),
+       *  copies the characters from each part into a reassigned i16 array.
+       *  This mutates the `chars' field of the given string to the newly created i16Array,
+       *  and also mutates `left' to null.
+       */
+      case object collapseString extends FunctionID
+      /** Returns a full character array of the concatenated strings (by calling `collapseString`) */
+      case object getWholeChars extends FunctionID
+      /** Returns a charCode at the given index (calling `collapseString`) */
+      case object charCodeAt extends FunctionID
     }
     case object scalaValueType extends FunctionID
   }
@@ -402,6 +414,33 @@ object VarGen {
       /** The `fun` field of a typed closure struct. */
       case object fun extends FieldID
     }
+
+    object wasmString { // targetPureWasm
+      /** Internal i16Array storage for the characters of the string.
+       *
+       *  For concatenation optimizations, this array may initially contain
+       *  the characters of the *right* segment of a concatenated string.
+       *  And the left segments of the concatenated string are stored in the `left' field.
+       *  The full sequence of characters from all segments is only stored here when
+       *  we call the `wasmString.collapseString' operation, which collects all the characters.
+       *  For string literals or after collapsing, this will hold the full string.
+       */
+      case object chars extends FieldID
+      /** The total number of characters.
+       *
+       *  This number is the sum of the direct characters of this string in `chars'
+       *  and those in the preceding strings linked by `left'.
+       */
+      case object length extends FieldID
+      /** Link to the left string `A` in a concatenation of `A + B`.
+       *
+       *  This allows to defer the full character array allocation,
+       *  for concatenating strings.
+       *  Initially, only the characters of the right operand (`B`) are stored in S's `chars',
+       *  and the left operand is stored in this property as a reference.
+       */
+      case object left extends FieldID
+    }
   }
 
   object genTypeID {
@@ -456,6 +495,7 @@ object VarGen {
     case object typeDataArray extends TypeID
     case object reflectiveProxies extends TypeID
     case object undefined extends TypeID // targetPureWasm
+    case object wasmString extends TypeID // targetPureWasm
 
     // primitive array types, underlying the Array[T] classes
     case object i8Array extends TypeID

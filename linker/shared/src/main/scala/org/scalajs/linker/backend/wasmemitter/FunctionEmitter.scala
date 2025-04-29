@@ -1183,11 +1183,11 @@ private class FunctionEmitter private (
           // By spec, toString() is special
           assert(argsLocals.isEmpty)
           if (targetPureWasm) {
-            fb.block(Sig(List(watpe.RefType.any), List(watpe.RefType(genTypeID.i16Array)))) { exit =>
-              fb.block(Sig(List(watpe.RefType.any), List(watpe.RefType(genTypeID.i16Array)))) { labelString =>
+            fb.block(Sig(List(watpe.RefType.any), List(watpe.RefType(genTypeID.wasmString)))) { exit =>
+              fb.block(Sig(List(watpe.RefType.any), List(watpe.RefType(genTypeID.wasmString)))) { labelString =>
                 fb.block(Sig(List(watpe.RefType.any), List(watpe.RefType.i31))) { labelI31 =>
                   fb += wa.BrOnCast(labelI31, watpe.RefType.any, watpe.RefType.i31)
-                  fb += wa.BrOnCast(labelString, watpe.RefType.any, watpe.RefType(genTypeID.i16Array))
+                  fb += wa.BrOnCast(labelString, watpe.RefType.any, watpe.RefType(genTypeID.wasmString))
                   fb += wa.Unreachable
                 } // end block of labelI31
                 fb += wa.I31GetS
@@ -1207,7 +1207,7 @@ private class FunctionEmitter private (
         } else if (receiverClassName == CharSequenceClass) {
           // the value must be a `string`
           if (!targetPureWasm) fb += wa.ExternConvertAny
-          else fb += wa.RefCast(watpe.RefType(genTypeID.i16Array))
+          else fb += wa.RefCast(watpe.RefType(genTypeID.wasmString))
           pushArgs(argsLocals)
           genHijackedClassCall(BoxedStringClass)
         } else if (methodName == compareToMethodName) {
@@ -1260,10 +1260,10 @@ private class FunctionEmitter private (
               genHijackedClassCall(BoxedBooleanClass)
             } {
               fb += wa.LocalGet(receiverLocal)
-              fb += wa.RefTest(watpe.RefType(genTypeID.i16Array))
+              fb += wa.RefTest(watpe.RefType(genTypeID.wasmString))
               fb.ifThenElse(watpe.Int32) {
                 fb += wa.LocalGet(receiverLocal)
-                fb += wa.RefCast(watpe.RefType(genTypeID.i16Array))
+                fb += wa.RefCast(watpe.RefType(genTypeID.wasmString))
                 pushArgs(argsLocals)
                 genHijackedClassCall(BoxedStringClass)
               } {
@@ -1488,7 +1488,7 @@ private class FunctionEmitter private (
        * `extern.convert_from_any` in `genAdapt`.
        */
       markPosition(tree)
-      if (targetPureWasm) fb += wa.RefNull(watpe.HeapType(genTypeID.i16Array))
+      if (targetPureWasm) fb += wa.RefNull(watpe.HeapType(genTypeID.wasmString))
       else fb += wa.RefNull(watpe.HeapType.NoExtern)
       expectedType
     } else {
@@ -1646,7 +1646,7 @@ private class FunctionEmitter private (
 
       // String.length
       case String_length =>
-        if (targetPureWasm) fb += wa.ArrayLen
+        if (targetPureWasm) fb += wa.StructGet(genTypeID.wasmString, genFieldID.wasmString.length)
         else fb += wa.Call(genFunctionID.stringBuiltins.length)
 
       // Null check
@@ -1884,10 +1884,11 @@ private class FunctionEmitter private (
         genTree(rhs, IntType)
         markPosition(tree)
         if (semantics.stringIndexOutOfBounds == CheckedBehavior.Unchecked) {
-          if (targetPureWasm)
-            fb += wa.ArrayGetU(genTypeID.i16Array)
-          else
+          if (targetPureWasm) {
+            fb += wa.Call(genFunctionID.wasmString.charCodeAt)
+          } else {
             fb += wa.Call(genFunctionID.stringBuiltins.charCodeAt)
+          }
         } else {
           fb += wa.Call(genFunctionID.checkedStringCharAt)
           genForwardThrow()
@@ -2103,7 +2104,7 @@ private class FunctionEmitter private (
         genToStringForConcat(lhs)
         genToStringForConcat(rhs)
         markPosition(tree)
-        if (targetPureWasm) fb += wa.Call(genFunctionID.string.stringConcat)
+        if (targetPureWasm) fb += wa.Call(genFunctionID.wasmString.stringConcat)
         else fb += wa.Call(genFunctionID.stringBuiltins.concat)
     }
 
@@ -2111,7 +2112,7 @@ private class FunctionEmitter private (
   }
 
   private def genToStringForConcat(tree: Tree): Unit = {
-    val stringType = if (targetPureWasm) watpe.RefType(genTypeID.i16Array) else watpe.RefType.extern
+    val stringType = if (targetPureWasm) watpe.RefType(genTypeID.wasmString) else watpe.RefType.extern
     def genWithDispatch(isAncestorOfHijackedClass: Boolean): Unit = {
       // TODO Better codegen when non-nullable
 
@@ -2225,10 +2226,14 @@ private class FunctionEmitter private (
               fb += wa.Call(genFunctionID.booleanToString)
             }
           case CharType =>
-            if (targetPureWasm)
+            if (targetPureWasm) {
               fb += wa.ArrayNewFixed(genTypeID.i16Array, 1)
-            else
+              fb += wa.I32Const(1)
+              fb += wa.RefNull(watpe.HeapType(genTypeID.wasmString))
+              fb += wa.StructNew(genTypeID.wasmString)
+            } else {
               fb += wa.Call(genFunctionID.stringBuiltins.fromCharCode)
+            }
           case ByteType | ShortType | IntType =>
             if (targetPureWasm) {
               fb += wa.Call(genFunctionID.itoa)
@@ -2416,7 +2421,7 @@ private class FunctionEmitter private (
         fb += wa.Call(genFunctionID.isUndef)
       case StringType =>
         if (targetPureWasm) {
-          fb += wa.RefTest(watpe.RefType(genTypeID.i16Array))
+          fb += wa.RefTest(watpe.RefType(genTypeID.wasmString))
         } else {
           fb += wa.ExternConvertAny
           fb += wa.Call(genFunctionID.stringBuiltins.test)
@@ -2674,8 +2679,8 @@ private class FunctionEmitter private (
 
       case StringType =>
         if (targetPureWasm) {
-          val sig = watpe.FunctionType(List(watpe.RefType.nullable(genTypeID.i16Array)),
-              List(watpe.RefType(genTypeID.i16Array)))
+          val sig = watpe.FunctionType(List(watpe.RefType.nullable(genTypeID.wasmString)),
+              List(watpe.RefType(genTypeID.wasmString)))
           fb.block(sig) { nonNullLabel =>
             fb += wa.BrOnNonNull(nonNullLabel)
             fb += wa.GlobalGet(genGlobalID.emptyStringArray)
@@ -3886,7 +3891,7 @@ private class FunctionEmitter private (
   }
 
   private def genStringEquals(): Unit = {
-    if (targetPureWasm) fb += wa.Call(genFunctionID.string.stringEquals)
+    if (targetPureWasm) fb += wa.Call(genFunctionID.wasmString.stringEquals)
     else fb += wa.Call(genFunctionID.stringBuiltins.equals)
   }
 
