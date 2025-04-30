@@ -1536,6 +1536,7 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
         lookupOrSynthesizeClass(className, SyntheticClassKind.Lambda(descriptor)) { lambdaClassInfo =>
           lambdaClassInfo.instantiated()
           lambdaClassInfo.callMethodStatically(MemberNamespace.Constructor, ctorName)
+          moduleUnit.addStaticDependency(lambdaClassInfo.className)
         }
       }
     }
