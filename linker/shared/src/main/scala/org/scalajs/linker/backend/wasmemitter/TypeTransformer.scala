@@ -114,7 +114,7 @@ object TypeTransformer {
       case Some(info) =>
         if (className == BoxedStringClass) {
           if (ctx.coreSpec.wasmFeatures.targetPureWasm)
-            watpe.HeapType(genTypeID.i16Array)
+            watpe.HeapType(genTypeID.wasmString)
           else
             watpe.HeapType.Extern // for all the JS string builtin functions
         }
@@ -148,8 +148,10 @@ object TypeTransformer {
       case FloatType   => watpe.Float32
       case DoubleType  => watpe.Float64
       case StringType  =>
-        if (ctx.coreSpec.wasmFeatures.targetPureWasm) watpe.RefType(genTypeID.i16Array)
-        else watpe.RefType.extern
+        if (ctx.coreSpec.wasmFeatures.targetPureWasm)
+          watpe.RefType(genTypeID.wasmString)
+        else
+          watpe.RefType.extern
       case NullType    => watpe.RefType.nullref
 
       case VoidType | NothingType =>

@@ -224,7 +224,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val nameValue =
       if (targetPureWasm)
         ctx.stringPool.getConstantStringDataInstr(nameStr) :+
-            wa.RefNull(watpe.HeapType(genTypeID.i16Array))
+            wa.RefNull(watpe.HeapType(genTypeID.wasmString))
       else ctx.stringPool.getConstantStringDataInstr(nameStr)
 
     val kind = className match {

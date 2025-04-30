@@ -59,7 +59,7 @@ object ScalaJSToCABI {
         val offset = fb.addLocal(NoOriginalName, watpe.Int32)
         val units = fb.addLocal(NoOriginalName, watpe.Int32)
 
-        fb += wa.RefCast(watpe.RefType.nullable(genTypeID.i16Array))
+        fb += wa.RefCast(watpe.RefType.nullable(genTypeID.wasmString))
         fb += wa.Call(genFunctionID.cabiStoreString)
         // now we have [i32(string offset), i32(string units)] on stack
         fb += wa.LocalSet(units)
@@ -231,7 +231,7 @@ object ScalaJSToCABI {
         val offset = fb.addLocal(NoOriginalName, watpe.Int32)
         val units = fb.addLocal(NoOriginalName, watpe.Int32)
 
-        fb += wa.RefCast(watpe.RefType.nullable(genTypeID.i16Array))
+        fb += wa.RefCast(watpe.RefType.nullable(genTypeID.wasmString))
         fb += wa.Call(genFunctionID.cabiStoreString) // baseAddr, units
 
         fb += wa.LocalSet(units)
