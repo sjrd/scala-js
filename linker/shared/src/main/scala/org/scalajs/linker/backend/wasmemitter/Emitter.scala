@@ -59,7 +59,9 @@ final class Emitter(config: Emitter.Config) {
 
   def emit(module: ModuleSet.Module, globalInfo: LinkedGlobalInfo, logger: Logger): Result = {
     val (wasmModule, jsFileContentInfo) = emitWasmModule(module, globalInfo)
-    val loaderContent = LoaderContent.bytesContent
+    val loaderContent =
+      if (coreSpec.wasmFeatures.targetPureWasm) LoaderContent.pureWasmBytesContent
+      else LoaderContent.bytesContent
     val jsFileContent = buildJSFileContent(module, jsFileContentInfo)
 
     new Result(wasmModule, loaderContent, jsFileContent)

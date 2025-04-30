@@ -21,6 +21,26 @@ object LoaderContent {
   val bytesContent: Array[Byte] =
     stringContent.getBytes(StandardCharsets.UTF_8)
 
+  val pureWasmBytesContent: Array[Byte] =
+    pureWasmStringContent.getBytes(StandardCharsets.UTF_8)
+
+  private def doLoadFunctionContent: String = {
+    raw"""
+async function doLoad(wasmFileURL, importsObj, options) {
+  const resolvedURL = new URL(wasmFileURL, import.meta.url);
+  if (resolvedURL.protocol === 'file:') {
+    const { fileURLToPath } = await import("node:url");
+    const { readFile } = await import("node:fs/promises");
+    const wasmPath = fileURLToPath(resolvedURL);
+    const body = await readFile(wasmPath);
+    return WebAssembly.instantiate(body, importsObj, options);
+  } else {
+    return WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj, options);
+  }
+}
+    """
+  }
+
   private def stringContent: String = {
     raw"""
 // This implementation follows no particular specification, but is the same as the JS backend.
@@ -190,7 +210,9 @@ const stringConstantsPolyfills = new Proxy({}, {
   },
 });
 
-export async function load(wasmFileURL, exportSetters, customJSHelpers, wtf16Strings) {
+$doLoadFunctionContent
+
+export function load(wasmFileURL, exportSetters, customJSHelpers, wtf16Strings) {
   const myScalaJSHelpers = {
     ...scalaJSHelpers,
     idHashCodeMap: new WeakMap()
@@ -207,16 +229,17 @@ export async function load(wasmFileURL, exportSetters, customJSHelpers, wtf16Str
     builtins: ["js-string"],
     importedStringConstants: "$UTF8StringConstantsModule",
   };
-  const resolvedURL = new URL(wasmFileURL, import.meta.url);
-  if (resolvedURL.protocol === 'file:') {
-    const { fileURLToPath } = await import("node:url");
-    const { readFile } = await import("node:fs/promises");
-    const wasmPath = fileURLToPath(resolvedURL);
-    const body = await readFile(wasmPath);
-    return WebAssembly.instantiate(body, importsObj, options);
-  } else {
-    return await WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj, options);
+  return doLoad(wasmFileURL, importsObj, options);
+}
+    """
   }
+
+  private def pureWasmStringContent: String = {
+    raw"""
+$doLoadFunctionContent
+
+export function load(wasmFileURL) {
+  return doLoad(wasmFileURL, {}, {});
 }
     """
   }

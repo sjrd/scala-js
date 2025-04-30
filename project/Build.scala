@@ -247,17 +247,31 @@ object MyScalaJSPlugin extends AutoPlugin {
       jsEnv := {
         val baseConfig = NodeJSEnv.Config().withSourceMap(wantSourceMaps.value)
         val config = if (enableWasmEverywhere.value) {
-          baseConfig.withArgs(List(
-            "--experimental-wasm-exnref",
-            "--experimental-wasm-imported-strings", // for JS string builtins
-            "--experimental-wasm-jspi", // for JSPI, used by async/await
+          val baseWasmArgs = List(
             /* Force using the Turboshaft infrastructure for the optimizing compiler.
              * It appears to be more stable for the Wasm that we throw at it.
              * If you remove it, try running `scalaTestSuite2_13/test` with Wasm.
              * See also the use of this flag in MainGenericRunner.scala.
              */
             "--turboshaft-wasm",
-          ))
+          )
+          val linkerConfig = scalaJSLinkerConfig.value
+          val additionWasmArgs = if (!linkerConfig.wasmFeatures.targetPureWasm) {
+            List(
+              "--experimental-wasm-exnref",
+              "--experimental-wasm-imported-strings", // for JS string builtins
+              "--experimental-wasm-jspi", // for JSPI, used by async/await
+            )
+          } else if (linkerConfig.wasmFeatures.exceptionHandling) {
+            List(
+              "--experimental-wasm-exnref",
+            )
+          } else {
+            List(
+              "--no-experimental-wasm-exnref",
+            )
+          }
+          baseConfig.withArgs(additionWasmArgs ::: baseWasmArgs)
         } else {
           baseConfig
         }
