@@ -231,6 +231,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     if (targetPureWasm) {
       genUndefinedAndIsUndef()
       genNaiveFmod()
+      genLtoa()
       genItoa()
       genHijackedValueToString()
       // genPrintlnInt()
@@ -4771,21 +4772,21 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     }
   }
 
-  private def genItoa()(implicit ctx: WasmContext): Unit = {
-    val fb = newFunctionBuilder(genFunctionID.itoa)
-    val value = fb.addParam("value", Int32)
+  private def genLtoa()(implicit ctx: WasmContext): Unit = {
+    val fb = newFunctionBuilder(genFunctionID.ltoa)
+    val value = fb.addParam("value", Int64)
     fb.setResultType(stringType)
 
     val isNegative = fb.addLocal("isNegative", Int32)
     val arrayLen = fb.addLocal("arrayLen", Int32)
-    val tmp = fb.addLocal("tmp", Int32)
+    val tmp = fb.addLocal("tmp", Int64)
     val iLocal = fb.addLocal("i", Int32)
     val result = fb.addLocal("result", RefType(genTypeID.i16Array))
 
     fb += LocalGet(value)
-    fb += I32Eqz
+    fb += I64Eqz
     fb.ifThen() {
-      fb += I32Const(48) // '0'
+      fb += I32Const('0'.toInt)
       if (targetPureWasm) {
         SWasmGen.genWasmStringFromCharCode(fb)
       } else {
@@ -4795,12 +4796,12 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     }
 
     fb += LocalGet(value)
-    fb += I32Const(0)
-    fb += I32LtS
-    fb.ifThenElse(Int32) { // length
+    fb += I64Const(0L)
+    fb += I64LtS
+    fb.ifThenElse(Int32) { // length of the sign prefix (0 or 1)
+      fb += I64Const(0L)
       fb += LocalGet(value)
-      fb += I32Const(-1)
-      fb += I32Mul
+      fb += I64Sub
       fb += LocalSet(value)
 
       fb += I32Const(1)
@@ -4815,19 +4816,21 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     }
     fb += LocalSet(arrayLen)
 
+    // from now on, interpret value and tmp as *unsigned* 64-bit integers (to handle MinValue)
+
     // calculate the resulting array length
     fb += LocalGet(value)
     fb += LocalSet(tmp)
     fb.loop() { loop =>
       fb += LocalGet(tmp)
-      fb += I32Eqz
+      fb += I64Eqz
       fb.ifThenElse() {
         // break
       } {
-        // tmp = tmp / 10
+        // tmp = tmp / 10L
         fb += LocalGet(tmp)
-        fb += I32Const(10)
-        fb += I32DivS
+        fb += I64Const(10L)
+        fb += I64DivU
         fb += LocalSet(tmp)
 
         fb += LocalGet(arrayLen)
@@ -4853,28 +4856,30 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
     fb.loop() { loop =>
       fb += LocalGet(tmp)
-      fb += I32Eqz
+      fb += I64Eqz
       fb.ifThenElse() {
       } {
-        // array store
+        // array store: result[i] = (tmp % 10L).toInt + '0'.toInt
         fb += LocalGet(result)
         fb += LocalGet(iLocal)
 
         fb += LocalGet(tmp)
-        fb += I32Const(10)
-        fb += I32RemS
-        fb += I32Const(48)
+        fb += I64Const(10)
+        fb += I64RemU
+        fb += I32WrapI64
+        fb += I32Const('0'.toInt)
         fb += I32Add
         fb += ArraySet(genTypeID.i16Array)
+
         // iLocal = iLocal - 1
         fb += LocalGet(iLocal)
         fb += I32Const(1)
         fb += I32Sub
         fb += LocalSet(iLocal)
-        // tmp = tmp / 10
+        // tmp = tmp / 10L
         fb += LocalGet(tmp)
-        fb += I32Const(10)
-        fb += I32DivS
+        fb += I64Const(10L)
+        fb += I64DivU
         fb += LocalSet(tmp)
 
         fb += Br(loop)
@@ -4887,12 +4892,24 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       // Store '-' at the start of the array
       fb += LocalGet(result)
       fb += I32Const(0)
-      fb += I32Const(45) // '-'
+      fb += I32Const('-'.toInt)
       fb += ArraySet(genTypeID.i16Array)
     }
     SWasmGen.genWasmStringFromArray(fb, result)
 
-    fb.buildAndAddToModule
+    fb.buildAndAddToModule()
+  }
+
+  private def genItoa()(implicit ctx: WasmContext): Unit = {
+    val fb = newFunctionBuilder(genFunctionID.itoa)
+    val value = fb.addParam("value", Int32)
+    fb.setResultType(stringType)
+
+    fb += LocalGet(value)
+    fb += I64ExtendI32S
+    fb += ReturnCall(genFunctionID.ltoa)
+
+    fb.buildAndAddToModule()
   }
 
   private def genHijackedValueToString()(implicit ctx: WasmContext): Unit = {

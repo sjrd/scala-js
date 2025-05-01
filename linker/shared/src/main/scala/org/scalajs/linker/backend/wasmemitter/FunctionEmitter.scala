@@ -2227,9 +2227,7 @@ private class FunctionEmitter private (
             }
           case LongType =>
             if (targetPureWasm) {
-              // TODO
-              fb += wa.Drop
-              fb ++= ctx.stringPool.getConstantStringInstr("0")
+              fb += wa.Call(genFunctionID.ltoa)
             } else {
               fb += wa.Call(genFunctionID.longToString)
             }
