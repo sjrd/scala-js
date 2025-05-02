@@ -101,7 +101,7 @@ object JavalibUtilTest {
       equalsDoubles()
 
       deepEquals()
-      // toStringAnyRef()
+      toStringAnyRef()
 
       // TODO: JSArrayConstr in deepToString
       // deepToString()
