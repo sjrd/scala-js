@@ -347,8 +347,7 @@ object JavalibLangTest {
     }
 
     locally {
-      // TODO assertion fail
-      // (new StackTraceElementTest).toStringUnmodifiedIfColumnNumberIsNotSpecified()
+      (new StackTraceElementTest).toStringUnmodifiedIfColumnNumberIsNotSpecified()
     }
 
     locally {
@@ -359,15 +358,11 @@ object JavalibLangTest {
       initString()
       initCharSequence()
 
-      // TODO: toString null / None?
-      // appendAnyRef()
-
+      appendAnyRef()
       appendString()
       appendStringBuffer()
-
-      // TODO: concat with CharSequence?
-      // appendCharSequence()
-      // appendCharSequenceStartEnd()
+      appendCharSequence()
+      appendCharSequenceStartEnd()
 
       appendCharArray()
       appendCharArrayOffsetLen()
@@ -384,11 +379,10 @@ object JavalibLangTest {
       insertString()
       insertCharArray()
 
-      // TODO: asesertion fail
-      // insertAnyRef()
-      // insertCharSequence()
-      // insertCharSequenceStartEnd()
-      // insertPrimitive()
+      insertAnyRef()
+      insertCharSequence()
+      insertCharSequenceStartEnd()
+      // insertPrimitive() // TODO: float to string
 
       indexOfString()
       indexOfStringInt()
@@ -404,7 +398,7 @@ object JavalibLangTest {
       charAt()
 
       // TODO: codePointAt
-      // codePointAt()
+      codePointAt()
 
       codePointBefore()
       codePointCount()
@@ -425,17 +419,16 @@ object JavalibLangTest {
       initString()
       initCharSequence()
 
-      // appendAnyRef()
+      appendAnyRef()
       appendString()
       appendStringBuffer()
-
-      // appendCharSequence()
-      // appendCharSequenceStartEnd()
+      appendCharSequence()
+      appendCharSequenceStartEnd()
 
       appendCharArray()
       appendCharArrayOffsetLen()
 
-      // TODO: toString
+      // TODO: float toString
       // appendPrimitive()
 
       appendCodePoint()
@@ -444,11 +437,11 @@ object JavalibLangTest {
       deleteCharAt()
       replace()
       insertCharArrayOffsetLen()
-      // insertAnyRef()
+      insertAnyRef()
       insertString()
       insertCharArray()
-      // insertCharSequence()
-      // insertCharSequenceStartEnd()
+      insertCharSequence()
+      insertCharSequenceStartEnd()
       // insertPrimitive()
       indexOfString()
       indexOfStringInt()
@@ -461,7 +454,7 @@ object JavalibLangTest {
       trimToSize()
       setLength()
       charAt()
-      // codePointAt()
+      codePointAt()
       codePointBefore()
       codePointCount()
       offsetByCodePoints()
@@ -545,7 +538,7 @@ object JavalibLangTest {
     locally {
       val test = new SystemArraycopyTest
       import test._
-      // TODO: assertion fail, maybe mkString
+      // TODO: float to string
       // simpleTests()
       arraycopyWithRangeOverlapsForTheSameArrayInt()
       arraycopyWithRangeOverlapsForTheSameArrayBoolean()
