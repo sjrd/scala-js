@@ -252,26 +252,38 @@ class LongTest {
   }
 
   @Test def testToString(): Unit = {
-    assertEquals("2147483647", Int.MaxValue.toLong.toString)
-    assertEquals("-50", (-50L).toString)
-    assertEquals("-1000000000", (-1000000000L).toString)
-    assertEquals("2147483648", (Int.MaxValue.toLong+1L).toString)
-    assertEquals("-2147483648", Int.MinValue.toLong.toString)
+    @noinline
+    def testNoInline(expected: String, value: Long): Unit = {
+      assertEquals(expected, JLong.toString(value))
+      assertEquals(expected, value.toString)
+      assertEquals(expected, "" + value)
+    }
 
-    /* Ported from
-     * https://github.com/gwtproject/gwt/blob/master/user/test/com/google/gwt/emultest/java/lang/JLongTest.java
-     */
-    assertEquals("89000000005", new JLong(89000000005L).toString)
-    assertEquals("-9223372036854775808", new JLong(JLong.MIN_VALUE).toString)
-    assertEquals("9223372036854775807", new JLong(JLong.MAX_VALUE).toString)
-    assertEquals("-80765", JLong.toString(-80765L))
-    assertEquals("80765", JLong.toString(80765L))
-    assertEquals("-2147483648", JLong.toString(Integer.MIN_VALUE.toLong))
-    assertEquals("2147483647", JLong.toString(Integer.MAX_VALUE.toLong))
-    assertEquals("-89000000005", JLong.toString(-89000000005L))
-    assertEquals("89000000005", JLong.toString(89000000005L))
-    assertEquals("-9223372036854775808", JLong.toString(JLong.MIN_VALUE))
-    assertEquals("9223372036854775807", JLong.toString(JLong.MAX_VALUE))
+    @inline
+    def test(expected: String, value: Long): Unit = {
+      // These computations get constant-folded by the optimizer
+      assertEquals(expected, JLong.toString(value))
+      assertEquals(expected, value.toString)
+      assertEquals(expected, "" + value)
+
+      testNoInline(expected, value)
+    }
+
+    test("0", 0L)
+    test("-1", -1L)
+    test("1", 1L)
+    test("-50", -50L)
+    test("123456789", 123456789L)
+    test("1000000000", 1000000000L)
+    test("-1000000000", -1000000000L)
+    test("2147483647", Int.MaxValue.toLong)
+    test("2147483648", Int.MaxValue.toLong + 1L)
+    test("-2147483648", Int.MinValue.toLong)
+    test("-2147483649", Int.MinValue.toLong - 1L)
+    test("4821685469972758569", 4821685469972758569L)
+    test("-2719414741484106837", -2719414741484106837L)
+    test("-9223372036854775808", Long.MinValue)
+    test("9223372036854775807", Long.MaxValue)
   }
 
   @Test def toStringRadix(): Unit = {
