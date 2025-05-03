@@ -2214,18 +2214,29 @@ private[optimizer] abstract class OptimizerCore(
       usePreTransform: Boolean)(
       cont: PreTransCont)(
       implicit scope: Scope): TailRec[Tree] = {
-    val ApplyStatic(flags, className,
-        methodIdent @ MethodIdent(methodName), args) = tree
+
+    val ApplyStatic(flags, className, methodIdent, args) = tree
     implicit val pos = tree.pos
 
-    val target = staticCall(className, MemberNamespace.forStaticCall(flags),
-        methodName)
     pretransformExprs(args) { targs =>
-      pretransformSingleDispatch(flags, target, None, targs, isStat, usePreTransform)(cont) {
-        val newArgs = targs.map(finishTransformExpr)
-        cont(PreTransTree(ApplyStatic(flags, className, methodIdent,
-            newArgs)(tree.tpe)))
-      }
+      pretransformApplyStatic(flags, className, methodIdent, targs, tree.tpe,
+          isStat, usePreTransform)(
+          cont)
+    }
+  }
+
+  private def pretransformApplyStatic(flags: ApplyFlags, className: ClassName,
+      methodIdent: MethodIdent, targs: List[PreTransform], resultType: Type,
+      isStat: Boolean, usePreTransform: Boolean)(
+      cont: PreTransCont)(
+      implicit scope: Scope, pos: Position): TailRec[Tree] = {
+
+    val target = staticCall(className, MemberNamespace.forStaticCall(flags),
+        methodIdent.name)
+    pretransformSingleDispatch(flags, target, None, targs, isStat, usePreTransform)(cont) {
+      val newArgs = targs.map(finishTransformExpr)
+      cont(PreTransTree(
+          ApplyStatic(flags, className, methodIdent, newArgs)(resultType)))
     }
   }
 
@@ -3528,6 +3539,7 @@ private[optimizer] abstract class OptimizerCore(
 
   private def expandLongOps(pretrans: PreTransform)(cont: PreTransCont)(
       implicit scope: Scope): TailRec[Tree] = {
+
     implicit val pos = pretrans.pos
 
     // unfortunately nullable for the result types of methods
@@ -3559,6 +3571,28 @@ private[optimizer] abstract class OptimizerCore(
           cont)
     }
 
+    def expandIntDivRuntimeOp(methodName: MethodName, lhs: PreTransform,
+        constantArgs: List[Literal], resultType: Type): TailRec[Tree] = {
+      pretransformApplyStatic(ApplyFlags.empty, IntegerDivisions.IntDivRuntimeClass,
+          MethodIdent(methodName), lhs :: constantArgs.map(PreTransLit(_)),
+          resultType, isStat = false, usePreTransform = true)(
+          cont)
+    }
+
+    def isIntDivOp(op: BinaryOp.Code): Boolean = (op: @switch) match {
+      case BinaryOp.Int_/ | BinaryOp.Int_% | BinaryOp.Int_unsigned_/ | BinaryOp.Int_unsigned_% =>
+        true
+      case _ =>
+        false
+    }
+
+    def isLongDivOp(op: BinaryOp.Code): Boolean = (op: @switch) match {
+      case BinaryOp.Long_/ | BinaryOp.Long_% | BinaryOp.Long_unsigned_/ | BinaryOp.Long_unsigned_% =>
+        true
+      case _ =>
+        false
+    }
+
     pretrans match {
       case PreTransUnaryOp(op, arg) if useRuntimeLong =>
         import UnaryOp._
@@ -3582,6 +3616,48 @@ private[optimizer] abstract class OptimizerCore(
           case _ =>
             cont(pretrans)
         }
+
+      case PreTransBinaryOp(op, lhs, PreTransLit(IntLiteral(r))) if isIntDivOp(op) && r != 0 =>
+        import IntegerDivisions._
+
+        val isSigned = op == BinaryOp.Int_/ || op == BinaryOp.Int_%
+        val isQuotient = op == BinaryOp.Int_/ || op == BinaryOp.Int_unsigned_/
+
+        val Strategy(magic, shift, addMarker, negativeDivisor) = libdivide_gen(r, isSigned)
+
+        expandIntDivRuntimeOp(
+            if (isSigned) libdivide_s32_do_MethodName else libdivide_u32_do_MethodName,
+            lhs,
+            List(
+              IntLiteral(r), // divisor
+              IntLiteral(magic),
+              IntLiteral(shift),
+              BooleanLiteral(addMarker),
+              BooleanLiteral(negativeDivisor),
+              BooleanLiteral(isQuotient)
+            ),
+            resultType = IntType)
+
+      case PreTransBinaryOp(op, lhs, PreTransLit(LongLiteral(r))) if isLongDivOp(op) && r != 0L =>
+        import IntegerDivisions._
+
+        val isSigned = op == BinaryOp.Long_/ || op == BinaryOp.Long_%
+        val isQuotient = op == BinaryOp.Long_/ || op == BinaryOp.Long_unsigned_/
+
+        val Strategy(magic, shift, addMarker, negativeDivisor) = libdivide_gen(r, isSigned)
+
+        expandIntDivRuntimeOp(
+            if (isSigned) libdivide_s64_do_MethodName else libdivide_u64_do_MethodName,
+            lhs,
+            List(
+              LongLiteral(r), // divisor
+              LongLiteral(magic),
+              IntLiteral(shift),
+              BooleanLiteral(addMarker),
+              BooleanLiteral(negativeDivisor),
+              BooleanLiteral(isQuotient)
+            ),
+            resultType = LongType)
 
       case PreTransBinaryOp(op, lhs, rhs) if useRuntimeLong =>
         import BinaryOp._
