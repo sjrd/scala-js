@@ -110,9 +110,6 @@ final class CoreSpec private (
       targetIsWebAssembly
     )
   }
-
-  private[linker] lazy val linkTimeProperties = new LinkTimeProperties(
-      semantics, esFeatures, wasmFeatures, targetIsWebAssembly)
 }
 
 private[linker] object CoreSpec {
