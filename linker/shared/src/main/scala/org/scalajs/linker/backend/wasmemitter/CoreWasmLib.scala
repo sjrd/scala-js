@@ -596,7 +596,12 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
             fb += LocalTee(doubleB)
             fb += F64Eq
             fb.ifThenElse(Int32) {
-              fb += I32Const(1)
+              // Object.is(+0.0, -0.0) -> false
+              fb += LocalGet(doubleA)
+              fb += I64ReinterpretF64
+              fb += LocalGet(doubleB)
+              fb += I64ReinterpretF64
+              fb += I64Eq
             } {
               // both of a and b are NaN -> true
               // because JS Object.is(NaN, NaN) -> true
