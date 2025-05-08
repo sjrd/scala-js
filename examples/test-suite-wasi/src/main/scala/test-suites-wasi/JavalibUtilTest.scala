@@ -108,6 +108,24 @@ object JavalibUtilTest {
     }
 
     locally {
+      val test = new ArrayListTest
+      AbstractTests.runListTests(test)
+      AbstractTests.runCollectionTest(test)
+      AbstractTests.runIterableTest(test)
+
+      import test._
+      ensureCapacity()
+      constructorInitialCapacity()
+      constructorNullThrowsNullPointerException()
+      testClone()
+      removeRangeFromIdenticalIndices()
+      removeRangeFromToInvalidIndices()
+      removeRangeFromToFirstTwoElements()
+      removeRangeFromToTwoElementsFromMiddle()
+      removeRangeFromToLastTwoElementsAtTail()
+    }
+
+    locally {
       val test = new ObjectsTest
       import test._
       testEquals()
