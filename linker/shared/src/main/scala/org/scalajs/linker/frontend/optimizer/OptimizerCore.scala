@@ -1505,19 +1505,9 @@ private[optimizer] abstract class OptimizerCore(
 
       (op: @switch) match {
         case Int_/ | Int_% | Int_unsigned_/ | Int_unsigned_% =>
-          rhs match {
-            case PreTransLit(IntLiteral(r)) if r != 0 =>
-              finishNoSideEffects
-            case _ =>
-              Block(newLhs, BinaryOp(op, IntLiteral(0), finishTransformExpr(rhs)))
-          }
+          Block(newLhs, BinaryOp(op, IntLiteral(0), finishTransformExpr(rhs)))
         case Long_/ | Long_% | Long_unsigned_/ | Long_unsigned_% =>
-          rhs match {
-            case PreTransLit(LongLiteral(r)) if r != 0L =>
-              finishNoSideEffects
-            case _ =>
-              Block(newLhs, BinaryOp(op, LongLiteral(0L), finishTransformExpr(rhs)))
-          }
+          Block(newLhs, BinaryOp(op, LongLiteral(0L), finishTransformExpr(rhs)))
         case String_charAt if semantics.stringIndexOutOfBounds != CheckedBehavior.Unchecked =>
           finishWithSideEffects
         case Class_cast if semantics.asInstanceOfs != CheckedBehavior.Unchecked =>

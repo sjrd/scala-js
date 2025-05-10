@@ -1694,12 +1694,7 @@ private class FunctionEmitter private (
           case Int_unsigned_/ => wa.I32DivU
           case Int_unsigned_% => wa.I32RemU
         }
-        rhs match {
-          case IntLiteral(rhsValue) =>
-            genDivModByConstant(tree, isSignedDiv, rhsValue, wa.I32Const(_), wa.I32Sub, mainOp)
-          case _ =>
-            genDivMod(tree, isSignedDiv, wa.I32Const(_), wa.I32Eqz, wa.I32Eq, wa.I32Sub, mainOp)
-        }
+        genDivMod(tree, isSignedDiv, wa.I32Const(_), wa.I32Eqz, wa.I32Eq, wa.I32Sub, mainOp)
 
       case Long_/ | Long_% | Long_unsigned_/ | Long_unsigned_% =>
         val isSignedDiv = op == Long_/
@@ -1709,12 +1704,7 @@ private class FunctionEmitter private (
           case Long_unsigned_/ => wa.I64DivU
           case Long_unsigned_% => wa.I64RemU
         }
-        rhs match {
-          case LongLiteral(rhsValue) =>
-            genDivModByConstant(tree, isSignedDiv, rhsValue, wa.I64Const(_), wa.I64Sub, mainOp)
-          case _ =>
-            genDivMod(tree, isSignedDiv, wa.I64Const(_), wa.I64Eqz, wa.I64Eq, wa.I64Sub, mainOp)
-        }
+        genDivMod(tree, isSignedDiv, wa.I64Const(_), wa.I64Eqz, wa.I64Eq, wa.I64Sub, mainOp)
 
       case Long_<< =>
         genLongShiftOp(wa.I64Shl)
@@ -2086,45 +2076,6 @@ private class FunctionEmitter private (
       case tpe @ (_:ClosureType | _:RecordType) =>
         throw new AssertionError(
             s"Invalid type $tpe for String_+ at ${tree.pos}: $tree")
-    }
-  }
-
-  private def genDivModByConstant[T](tree: BinaryOp, isSignedDiv: Boolean,
-      rhsValue: T, const: T => wa.Instr, sub: wa.Instr, mainOp: wa.Instr)(
-      implicit num: Numeric[T]): Type = {
-    /* When we statically know the value of the rhs, we can avoid the
-     * dynamic tests for division by zero and overflow. This is quite
-     * common in practice.
-     */
-
-    import BinaryOp._
-
-    val BinaryOp(_, lhs, rhs) = tree
-
-    val tpe = tree.tpe
-
-    if (rhsValue == num.zero) {
-      genTree(lhs, tpe)
-      markPosition(tree)
-      genThrowArithmeticException()(tree.pos)
-      NothingType
-    } else if (isSignedDiv && rhsValue == num.fromInt(-1)) {
-      /* MinValue / -1 overflows; it traps in Wasm but we need to wrap.
-       * We rewrite as `0 - lhs` so that we do not need any test.
-       */
-      markPosition(tree)
-      fb += const(num.zero)
-      genTree(lhs, tpe)
-      markPosition(tree)
-      fb += sub
-      tpe
-    } else {
-      genTree(lhs, tpe)
-      markPosition(rhs)
-      fb += const(rhsValue)
-      markPosition(tree)
-      fb += mainOp
-      tpe
     }
   }
 
