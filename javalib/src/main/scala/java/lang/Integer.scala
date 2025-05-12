@@ -305,8 +305,8 @@ object Integer {
 
   // Wasm intrinsic
   @inline def numberOfTrailingZeros(i: scala.Int): scala.Int = {
-    val l = numberOfLeadingZeros(i & -i)
-    (l >> 5) + (31 - (l & 31))
+    val lz = numberOfLeadingZeros(i & -i)
+    (31 - (lz & 31)) + (lz >> 5)
 
     /*if (l == 32) 32
     else 31 - l // 31 & -l

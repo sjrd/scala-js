@@ -470,7 +470,7 @@ object Long {
     if (lo != 0)
       31 - Integer.numberOfLeadingZeros(lo & -lo) // inlined Integer.ntz without the handling of 0
     else
-      Integer.numberOfTrailingZeros((l >>> 32).toInt) + 32
+      32 + Integer.numberOfTrailingZeros((l >>> 32).toInt)
   }
 
   @inline def toBinaryString(l: scala.Long): String =
