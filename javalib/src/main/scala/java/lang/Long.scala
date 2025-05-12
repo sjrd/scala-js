@@ -467,8 +467,10 @@ object Long {
   @inline
   def numberOfTrailingZeros(l: scala.Long): Int = {
     val lo = l.toInt
-    if (lo != 0) Integer.numberOfTrailingZeros(lo)
-    else         Integer.numberOfTrailingZeros((l >>> 32).toInt) + 32
+    if (lo != 0)
+      31 - Integer.numberOfLeadingZeros(lo & -lo) // inlined Integer.ntz without the handling of 0
+    else
+      Integer.numberOfTrailingZeros((l >>> 32).toInt) + 32
   }
 
   @inline def toBinaryString(l: scala.Long): String =

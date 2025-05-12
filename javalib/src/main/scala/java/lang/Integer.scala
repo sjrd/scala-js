@@ -304,9 +304,22 @@ object Integer {
   }
 
   // Wasm intrinsic
-  @inline def numberOfTrailingZeros(i: scala.Int): scala.Int =
-    if (i == 0) 32
-    else 31 - numberOfLeadingZeros(i & -i)
+  @inline def numberOfTrailingZeros(i: scala.Int): scala.Int = {
+    val l = numberOfLeadingZeros(i & -i)
+    (l >> 5) + (31 - (l & 31))
+
+    /*if (l == 32) 32
+    else 31 - l // 31 & -l
+
+    //if (i == 0) 32
+    //else 31 - numberOfLeadingZeros(i & -i)
+    val r = 31 - numberOfLeadingZeros(i & -i)
+
+    /* If i == 0, r == -1 but we need to return 32. Since all other values of
+     * r are >= 0, we can add 33 if the sign bit is on, which we get with:
+     */
+    r + ((r >> 31) & 33)*/
+  }
 
   def toBinaryString(i: scala.Int): String = toStringBase(i, 2)
   def toHexString(i: scala.Int): String = toStringBase(i, 16)
