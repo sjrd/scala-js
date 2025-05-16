@@ -331,7 +331,22 @@ object Double {
   }
 
   def compare(a: scala.Double, b: scala.Double): scala.Int = {
-    // NaN must equal itself, and be greater than anything else
+    val abits = doubleToLongBits(a)
+    val bbits = doubleToLongBits(b)
+
+    /* IEEE bit patterns grow away from 0. Flip the non-sign bits of negative
+     * values so that they have the correct integer arithmetic ordering.
+     */
+    val fixedABits =
+      if (abits < 0L) (scala.Long.MinValue-1L) - abits // MinValue becomes -1L, and conversely
+      else abits
+    val fixedBBits =
+      if (bbits < 0L) (scala.Long.MinValue-1L) - bbits
+      else bbits
+
+    Long.compare(fixedABits, fixedBBits)
+
+    /*// NaN must equal itself, and be greater than anything else
     if (isNaN(a)) {
       if (isNaN(b)) 0
       else 1
@@ -352,7 +367,7 @@ object Double {
         if (a < b) -1
         else 1
       }
-    }
+    }*/
   }
 
   @inline def isNaN(v: scala.Double): scala.Boolean =
