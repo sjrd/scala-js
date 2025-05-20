@@ -79,7 +79,6 @@ impl Countable for Component {
 
 #[allow(unused_variables)]
 impl Tests for Component {
-  fn roundtrip_basics0(a: (u32, i32)) -> (u32, i32) { a }
   fn roundtrip_basics1(a: (u8, i8, u16, i16, u32, i32, f32, f64, char)) -> (u8, i8, u16, i16, u32, i32, f32, f64, char) { a }
   fn roundtrip_list_u16(a: Vec<u16>) -> Vec<u16> { a }
   fn roundtrip_list_point(a: Vec<Point>) -> Vec<Point> { a }

@@ -782,12 +782,13 @@ object Serializers {
           writeMethodIdent(name)
           writeJSNativeLoadSpec(Some(jsNativeLoadSpec))
 
-        case ComponentNativeMemberDef(flags, name, importModule, importName, signature) =>
+        case ComponentNativeMemberDef(flags, moduleName, name,
+            method, signature) =>
           writeByte(TagComponentNativeMemberDef)
           writeInt(MemberFlags.toBits(flags))
-          writeMethodIdent(name)
-          writeString(importModule)
-          writeString(importName)
+          writeString(moduleName)
+          writeWasmComponentFunctionName(name)
+          writeMethodIdent(method)
           writeWITType(signature)
       }
     }
@@ -817,10 +818,10 @@ object Serializers {
           writeByte(TagTopLevelFieldExportDef)
           writeString(moduleID); writeString(exportName); writeFieldIdentForEnclosingClass(field)
 
-        case WasmComponentExportDef(moduleID, exportName, methodDef, signature) =>
+        case WasmComponentExportDef(moduleName, name, methodDef, signature) =>
           writeByte(TagWasmComponentExportDef)
-          writeString(moduleID)
-          writeString(exportName)
+          writeString(moduleName)
+          writeWasmComponentFunctionName(name)
           writeMemberDef(methodDef)
           writeWITType(signature)
       }
@@ -1161,6 +1162,29 @@ object Serializers {
     def writeStrings(strings: List[String]): Unit = {
       buffer.writeInt(strings.size)
       strings.foreach(writeString)
+    }
+
+    def writeWasmComponentFunctionName(name: WasmComponentFunctionName): Unit = {
+      import WasmComponentFunctionName._
+      name match {
+        case Function(func) =>
+          buffer.writeByte(TagWasmComponentFunction)
+          writeString(func)
+        case ResourceMethod(func, resource) =>
+          buffer.writeByte(TagWasmComponentResourceMethod)
+          writeString(func)
+          writeString(resource)
+        case ResourceStaticMethod(func, resource) =>
+          buffer.writeByte(TagWasmComponentResourceStaticMethod)
+          writeString(func)
+          writeString(resource)
+        case ResourceConstructor(resource) =>
+          buffer.writeByte(TagWasmComponentResourceConstructor)
+          writeString(resource)
+        case ResourceDrop(resource) =>
+          buffer.writeByte(TagWasmComponentResourceDrop)
+          writeString(resource)
+      }
     }
   }
 
@@ -2461,12 +2485,11 @@ object Serializers {
 
     private def readComponentNativeMemberDef()(implicit pos: Position): ComponentNativeMemberDef = {
       val flags = MemberFlags.fromBits(readInt())
-      val name = readMethodIdent()
-      val importModule = readString()
-      val importName = readString()
+      val moduleName = readString()
+      val name = readWasmComponentFunctionName()
+      val methodIdent = readMethodIdent()
       val signature = readWITFuncType()
-
-      ComponentNativeMemberDef(flags, name, importModule, importName, signature)
+      ComponentNativeMemberDef(flags, moduleName, name, methodIdent, signature)
     }
 
     /* #4442 and #4601: Patch Labeled, If, Match and TryCatch nodes in
@@ -2558,14 +2581,16 @@ object Serializers {
           TopLevelFieldExportDef(readModuleID(), readString(), readFieldIdentForEnclosingClass())
 
         case TagWasmComponentExportDef =>
-          val moduleID = readModuleID()
-          val exportName = readString()
+          val moduleName = readString()
+          val name = readWasmComponentFunctionName()
+          // read methoddef
           val methodPos = readPosition()
           val tag = readByte()
           assert(tag == TagMethodDef, s"unexpected tag $tag")
           val methodDef = readMethodDef(owner, ownerKind)(methodPos)
+
           val signature = readWITFuncType()
-          WasmComponentExportDef(moduleID, exportName, methodDef, signature)
+          WasmComponentExportDef(moduleName, name, methodDef, signature)
       }
     }
 
@@ -3008,6 +3033,23 @@ object Serializers {
       }
 
       res
+    }
+
+    private def readWasmComponentFunctionName(): WasmComponentFunctionName = {
+      import WasmComponentFunctionName._
+      val tag = readByte()
+      (tag: @switch) match {
+        case TagWasmComponentFunction =>
+          Function(readString())
+        case TagWasmComponentResourceMethod =>
+          ResourceMethod(readString(), readString())
+        case TagWasmComponentResourceStaticMethod =>
+          ResourceStaticMethod(readString(), readString())
+        case TagWasmComponentResourceConstructor =>
+          ResourceConstructor(readString())
+        case TagWasmComponentResourceDrop =>
+          ResourceDrop(readString())
+      }
     }
   }
 

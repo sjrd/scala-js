@@ -78,10 +78,8 @@ class ClassEmitter(coreSpec: CoreSpec) {
         genMethod(clazz, method)
     }
 
-    if (ctx.coreSpec.wasmFeatures.targetPureWasm) {
-      for (member <- clazz.componentNativeMembers) {
-        canonicalabi.InteropEmitter.genComponentNativeInterop(clazz, member)
-      }
+    for (member <- clazz.componentNativeMembers) {
+      canonicalabi.InteropEmitter.genComponentNativeInterop(clazz, member)
     }
 
     // maybe better to Component Interface to be an another ClassKind?
@@ -94,8 +92,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       case ClassKind.JSClass | ClassKind.JSModuleClass =>
         genJSClass(clazz)
       case ClassKind.HijackedClass | ClassKind.AbstractJSType | ClassKind.NativeJSClass |
-          ClassKind.NativeJSModuleClass | ClassKind.NativeWasmComponentResourceClass |
-          ClassKind.NativeWasmComponentInterfaceClass =>
+          ClassKind.NativeJSModuleClass | ClassKind.NativeWasmComponentResourceClass =>
         () // nothing to do
     }
   }
@@ -248,7 +245,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
             KindClass
           case Interface =>
             KindInterface
-          case NativeWasmComponentResourceClass | NativeWasmComponentInterfaceClass =>
+          case NativeWasmComponentResourceClass =>
             KindClass // TODO
           case JSClass | JSModuleClass | AbstractJSType | NativeJSClass | NativeJSModuleClass =>
             if (clazz.superClass.isDefined)

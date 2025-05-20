@@ -79,8 +79,10 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
         case AbstractJSType | NativeJSClass | NativeJSModuleClass =>
           // discard
 
-        case NativeWasmComponentResourceClass | NativeWasmComponentInterfaceClass =>
-          ??? // TODO
+        case NativeWasmComponentResourceClass =>
+          val cleanedTree = cleanTree(tree, jsTypes, errorManager)
+          writeIRFile(output, cleanedTree)
+          resultBuilder += output
 
         case JSClass | JSModuleClass  =>
           errorManager.reportError(
@@ -470,6 +472,11 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
           ApplyStatic(t.flags, transformNonJSClassName(t.className),
               transformMethodIdent(t.method), t.args)(transformType(t.tpe))
 
+        case t: ComponentFunctionApply =>
+          ComponentFunctionApply(t.receiver,
+              transformNonJSClassName(t.className),
+              transformMethodIdent(t.method), t.args)(transformType(t.tpe))
+
         case NewArray(typeRef, lengths) =>
           NewArray(transformArrayTypeRef(typeRef), lengths)
         case ArrayValue(typeRef, elems) =>
@@ -617,8 +624,13 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
         (enclosingClassName == TypedArrayBufferBridge || enclosingClassName == TypedArrayBufferBridgeMod)
       }
 
+      def isWasmComponent = {
+        cls.nameString.startsWith("scala.scalajs.component")
+      }
+
       def isAnException: Boolean =
-        isJavaScriptExceptionWithinItself || isTypedArrayBufferBridgeWithinItself
+        isJavaScriptExceptionWithinItself || isTypedArrayBufferBridgeWithinItself ||
+            isWasmComponent
 
       if (cls.nameString.startsWith("scala.") && !isAnException)
         reportError(s"Illegal reference to Scala class ${cls.nameString}")

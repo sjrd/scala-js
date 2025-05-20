@@ -385,7 +385,6 @@ private final class JSConsoleBasedPrintStream(isErr: scala.Boolean)
   private def doWriteLine(line: String): Unit = {
     if (LinkingInfo.targetPureWasm) { // isWASI
       // TODO
-
     } else {
       import js.DynamicImplicits.truthValue
 
