@@ -78,8 +78,11 @@ class ClassEmitter(coreSpec: CoreSpec) {
         genMethod(clazz, method)
     }
 
-    for (member <- clazz.componentNativeMembers) {
-      canonicalabi.InteropEmitter.genComponentNativeInterop(clazz, member)
+    if (coreSpec.wasmFeatures.targetPureWasm &&
+        coreSpec.wasmFeatures.componentModel) {
+      for (member <- clazz.componentNativeMembers) {
+        canonicalabi.InteropEmitter.genComponentNativeInterop(clazz, member)
+      }
     }
 
     // maybe better to Component Interface to be an another ClassKind?
@@ -1407,7 +1410,8 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val body = method.body.getOrElse(throw new Exception("abstract method cannot be transformed"))
 
     // Emit the function
-    if (className == SpecialNames.WasmSystemClass &&
+    if (!ctx.coreSpec.wasmFeatures.componentModel &&
+        className == SpecialNames.WasmSystemClass &&
         namespace == MemberNamespace.Public && !methodName.isReflectiveProxy) {
       emitSpecialMethod(
         functionID,
