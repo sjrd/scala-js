@@ -11,7 +11,7 @@ on:
       - scala-wasm
 
 env:
-  SBT_OPTS: "-Xmx4G"
+  SBT_OPTS: '-Xmx6g -Xms1g -Xss4m'
 
 jobs:
   test-suite-js:
