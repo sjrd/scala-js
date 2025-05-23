@@ -68,7 +68,8 @@ object System {
 
   @inline
   def currentTimeMillis(): scala.Long =
-    (new js.Date).getTime().toLong
+    if (LinkingInfo.targetPureWasm) WasmSystem.currentTimeMillis()
+    else js.Date.now().toLong
 
   private object NanoTime {
     val getHighPrecisionTime: js.Function0[scala.Double] = {
@@ -90,7 +91,8 @@ object System {
 
   @inline
   def nanoTime(): scala.Long =
-    (NanoTime.getHighPrecisionTime() * 1000000).toLong
+    if (LinkingInfo.targetPureWasm) WasmSystem.nanoTime()
+    else (NanoTime.getHighPrecisionTime() * 1000000).toLong
 
   // arraycopy ----------------------------------------------------------------
 
@@ -383,8 +385,8 @@ private final class JSConsoleBasedPrintStream(isErr: scala.Boolean)
   override def close(): Unit = ()
 
   private def doWriteLine(line: String): Unit = {
-    if (LinkingInfo.targetPureWasm) { // isWASI
-      // TODO
+    if (LinkingInfo.targetPureWasm) {
+      WasmSystem.print(line)
     } else {
       import js.DynamicImplicits.truthValue
 
