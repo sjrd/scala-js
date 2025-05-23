@@ -127,7 +127,7 @@ private[analyzer] object InfoLoader {
         .map(m => m.name.name -> m.jsNativeLoadSpec).toMap
 
       val componentNativeMembers = classDef.componentNativeMembers
-        .map(m => m.name.name -> generator.generateComponentNativeMember(m)).toMap
+        .map(m => m.method.name -> generator.generateComponentNativeMember(m)).toMap
 
       new Infos.ClassInfo(classDef.className, classDef.kind,
           classDef.superClass.map(_.name), classDef.interfaces.map(_.name),

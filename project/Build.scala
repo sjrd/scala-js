@@ -2079,7 +2079,13 @@ object Build {
       exampleSettings,
       name := "Testing module for component model",
       scalaJSLinkerConfig ~= {
-        _.withPrettyPrint(true).withWasmFeatures(_.withExceptionHandling(false).withTargetPureWasm(true)).withModuleKind(ModuleKind.ESModule)
+        _.withPrettyPrint(true)
+         .withModuleKind(ModuleKind.ESModule)
+         .withWasmFeatures(
+           _.withExceptionHandling(false)
+            .withTargetPureWasm(true)
+            .withComponentModel(true)
+         )
       },
   ).withScalaJSCompiler.dependsOnLibrary
 

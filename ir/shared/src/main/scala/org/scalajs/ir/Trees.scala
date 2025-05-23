@@ -1510,10 +1510,21 @@ object Trees {
       implicit val pos: Position)
       extends MemberDef
 
-  sealed case class ComponentNativeMemberDef(flags: MemberFlags, name: MethodIdent,
-      importModule: String, importName: String, signature: WasmInterfaceTypes.FuncType)(
+  sealed case class ComponentNativeMemberDef(flags: MemberFlags,
+      moduleName: String, name: WasmComponentFunctionName, method: MethodIdent,
+      signature: WasmInterfaceTypes.FuncType)(
       implicit val pos: Position)
       extends MemberDef
+
+  sealed abstract class WasmComponentFunctionName {
+  }
+  object WasmComponentFunctionName {
+    final case class Function(func: String) extends WasmComponentFunctionName
+    final case class ResourceMethod(func: String, resource: String) extends WasmComponentFunctionName
+    final case class ResourceStaticMethod(func: String, resource: String) extends WasmComponentFunctionName
+    final case class ResourceConstructor(resource: String) extends WasmComponentFunctionName
+    final case class ResourceDrop(resource: String) extends WasmComponentFunctionName
+  }
 
   // Top-level export defs
 
@@ -1531,7 +1542,18 @@ object Trees {
         name
 
       case TopLevelFieldExportDef(_, name, _) => name
-      case WasmComponentExportDef(_, name, _, _) => name
+      case WasmComponentExportDef(moduleName, name, _, _) => name match {
+        case WasmComponentFunctionName.Function(func) =>
+          s"$moduleName#$func"
+        case WasmComponentFunctionName.ResourceMethod(func, resource) =>
+          s"$moduleName#[method]$resource.$func"
+        case WasmComponentFunctionName.ResourceStaticMethod(func, resource) =>
+          s"$moduleName#[static]$resource.$func"
+        case WasmComponentFunctionName.ResourceConstructor(resource) =>
+          s"$moduleName#[constructor]$resource"
+        case WasmComponentFunctionName.ResourceDrop(resource) =>
+          s"$moduleName#[resource-drop]$resource"
+      }
     }
 
     val isWasmComponentExport = this.isInstanceOf[WasmComponentExportDef]
@@ -1564,10 +1586,12 @@ object Trees {
       implicit val pos: Position) extends TopLevelExportDef
 
 
-  sealed case class WasmComponentExportDef(moduleID: String,
-      exportName: String, methodDef: MethodDef,
+  sealed case class WasmComponentExportDef(moduleName: String,
+      name: WasmComponentFunctionName, methodDef: MethodDef,
       signature: WasmInterfaceTypes.FuncType)(
-      implicit val pos: Position) extends TopLevelExportDef
+      implicit val pos: Position) extends TopLevelExportDef {
+    override def moduleID = DefaultModuleID
+  }
 
   // Miscellaneous
 
