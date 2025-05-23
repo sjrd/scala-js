@@ -272,6 +272,18 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
           clazz.callMethodStatically(MemberNamespace.PublicStatic, methodName)
         }
 
+      case OptionallyCallStaticMethod(origin, className, methodName) =>
+        implicit val from = FromCore(origin)
+        lookupClass(className) { clazz =>
+          clazz.methodInfos(MemberNamespace.PublicStatic).get(methodName) match {
+            case Some(methodInfo) =>
+              objectClassInfo.addStaticDependency(clazz.className)
+              methodInfo.reachStatic()
+            case None =>
+              () // ignore
+          }
+        }
+
       case Multiple(requirements) =>
         for (requirement <- requirements)
           reachSymbolRequirement(requirement)

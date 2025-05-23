@@ -79,6 +79,16 @@ object SymbolRequirement {
       CallStaticMethod(origin, className, methodName)
     }
 
+    def optionallyCallStaticMethod(className: ClassName,
+        methodName: MethodName): SymbolRequirement = {
+      OptionallyCallStaticMethod(origin, className, methodName)
+    }
+
+    def optionallyCallStaticMethods(className: ClassName,
+        methodNames: List[MethodName]): SymbolRequirement = {
+      multipleInternal(methodNames.map(optionallyCallStaticMethod(className, _)))
+    }
+
     @deprecated("broken (not actually optional), do not use", "1.13.2")
     def optional(requirement: SymbolRequirement): SymbolRequirement = requirement
 
@@ -117,6 +127,9 @@ object SymbolRequirement {
         extends SymbolRequirement
     final case class CallStaticMethod(origin: String, className: ClassName,
         methodName: MethodName)
+        extends SymbolRequirement
+    final case class OptionallyCallStaticMethod(
+        origin: String, className: ClassName, methodName: MethodName)
         extends SymbolRequirement
     final case class Multiple(requirements: List[SymbolRequirement])
         extends SymbolRequirement
