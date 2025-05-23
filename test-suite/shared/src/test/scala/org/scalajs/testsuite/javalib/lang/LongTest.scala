@@ -27,6 +27,8 @@ class LongTest {
   final val MinRadix = Character.MIN_RADIX
   final val MaxRadix = Character.MAX_RADIX
 
+  @noinline def hideFromOptimizer(x: Long): Long = x
+
   @Test def reverseBytes(): Unit = {
     assertEquals(0x14ff01d49c68abf5L, JLong.reverseBytes(0xf5ab689cd401ff14L))
     assertEquals(0x780176af73b18fc7L, JLong.reverseBytes(0xc78fb173af760178L))
@@ -671,8 +673,12 @@ class LongTest {
   }
 
   @Test def divideUnsigned(): Unit = {
-    def test(dividend: Long, divisor: Long, result: Long): Unit =
-      assertEquals(result, JLong.divideUnsigned(dividend, divisor))
+    @inline def test(x: Long, y: Long, result: Long): Unit = {
+      assertEquals(result, JLong.divideUnsigned(x, y))
+      assertEquals(result, JLong.divideUnsigned(hideFromOptimizer(x), y))
+      assertEquals(result, JLong.divideUnsigned(x, hideFromOptimizer(y)))
+      assertEquals(result, JLong.divideUnsigned(hideFromOptimizer(x), hideFromOptimizer(y)))
+    }
 
     test(-9223372034182170740L, 53886L, 171164533265177L)
     test(-9223372036854775807L, 1L, -9223372036854775807L)
@@ -733,8 +739,12 @@ class LongTest {
   }
 
   @Test def remainderUnsigned(): Unit = {
-    def test(dividend: Long, divisor: Long, result: Long): Unit =
-      assertEquals(result, JLong.remainderUnsigned(dividend, divisor))
+    @inline def test(x: Long, y: Long, result: Long): Unit = {
+      assertEquals(result, JLong.remainderUnsigned(x, y))
+      assertEquals(result, JLong.remainderUnsigned(hideFromOptimizer(x), y))
+      assertEquals(result, JLong.remainderUnsigned(x, hideFromOptimizer(y)))
+      assertEquals(result, JLong.remainderUnsigned(hideFromOptimizer(x), hideFromOptimizer(y)))
+    }
 
     test(97062081516L, 772L, 668L)
     test(-9223372036854775472L, 49L, 43L)
