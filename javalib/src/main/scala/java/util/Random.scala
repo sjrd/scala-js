@@ -16,6 +16,7 @@ import scala.annotation.tailrec
 
 import scala.scalajs.js
 import scala.scalajs.LinkingInfo
+import scala.scalajs.LinkingInfo.linkTimeIf
 
 import java.util.random.RandomGenerator
 
@@ -43,9 +44,9 @@ class Random(seed_in: Long)
 
   def setSeed(seed_in: Long): Unit = {
     val seed = ((seed_in ^ 0x5DEECE66DL) & ((1L << 48) - 1)) // as documented
-    if (LinkingInfo.isWebAssembly) {
+    linkTimeIf(LinkingInfo.isWebAssembly) {
       this.seed = seed
-    } else {
+    } {
       seedHi = (seed >>> 24).toInt
       seedLo = seed.toInt & ((1 << 24) - 1)
     }
@@ -54,8 +55,11 @@ class Random(seed_in: Long)
 
   @noinline
   protected def next(bits: Int): Int =
-    if (LinkingInfo.isWebAssembly) nextWasm(bits)
-    else nextJS(bits)
+    linkTimeIf(LinkingInfo.isWebAssembly) {
+      nextWasm(bits)
+    } {
+      nextJS(bits)
+    }
 
   @inline
   private def nextWasm(bits: Int): Int = {

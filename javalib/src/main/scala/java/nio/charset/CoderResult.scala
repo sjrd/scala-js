@@ -18,7 +18,7 @@ import java.lang.Utils._
 import java.nio._
 
 import scala.scalajs.js
-import scala.scalajs.LinkingInfo.targetPureWasm
+import scala.scalajs.LinkingInfo.{targetPureWasm, linkTimeIf}
 
 class CoderResult private (kind: Int, _length: Int) {
   import CoderResult._
@@ -61,11 +61,17 @@ object CoderResult {
 
   // This is a sparse array
   private val uniqueMalformedJS =
-    if (targetPureWasm) null
-    else js.Array[js.UndefOr[CoderResult]]()
+    linkTimeIf(!targetPureWasm) {
+      js.Array[js.UndefOr[CoderResult]]()
+    } {
+      null
+    }
   private val uniqueMalformedWasm =
-    if (targetPureWasm) new java.util.HashMap[Int, CoderResult]()
-    else null
+    linkTimeIf(targetPureWasm) {
+      new java.util.HashMap[Int, CoderResult]()
+    } {
+      null
+    }
 
   private val Unmappable1 = new CoderResult(Unmappable, 1)
   private val Unmappable2 = new CoderResult(Unmappable, 2)
@@ -74,11 +80,17 @@ object CoderResult {
 
   // This is a sparse array
   private val uniqueUnmappableJS =
-    if (targetPureWasm) null
-    else js.Array[js.UndefOr[CoderResult]]()
+    linkTimeIf(!targetPureWasm) {
+      js.Array[js.UndefOr[CoderResult]]()
+    } {
+      null
+    }
   private val uniqueUnmappableWasm =
-    if (targetPureWasm) new java.util.HashMap[Int, CoderResult]()
-    else null
+    linkTimeIf(targetPureWasm) {
+      new java.util.HashMap[Int, CoderResult]()
+    } {
+      null
+    }
 
   @inline def malformedForLength(length: Int): CoderResult = (length: @switch) match {
     case 1 => Malformed1
@@ -89,9 +101,9 @@ object CoderResult {
   }
 
   private def malformedForLengthImpl(length: Int): CoderResult = {
-    if (targetPureWasm) {
+    linkTimeIf(targetPureWasm) {
       uniqueMalformedWasm.computeIfAbsent(length, _ => new CoderResult(Malformed, length))
-    } else {
+    } {
       undefOrFold(uniqueMalformedJS(length)) { () =>
         val result = new CoderResult(Malformed, length)
         uniqueMalformedJS(length) = result
@@ -111,9 +123,9 @@ object CoderResult {
   }
 
   private def unmappableForLengthImpl(length: Int): CoderResult = {
-    if (targetPureWasm) {
+    linkTimeIf(targetPureWasm) {
       uniqueUnmappableWasm.computeIfAbsent(length, _ => new CoderResult(Unmappable, length))
-    } else {
+    } {
       undefOrFold(uniqueUnmappableJS(length)) { () =>
         val result = new CoderResult(Unmappable, length)
         uniqueUnmappableJS(length) = result

@@ -51,7 +51,8 @@ final class Analyzer(config: CommonPhaseConfig, initial: Boolean,
   private val linkTimeProperties = LinkTimeProperties.fromCoreSpec(config.coreSpec)
 
   private val infoLoader: InfoLoader =
-    new InfoLoader(irLoader, checkIRFor, linkTimeProperties)
+    new InfoLoader(irLoader, checkIRFor, linkTimeProperties,
+        config.coreSpec.wasmFeatures.targetPureWasm)
 
   def computeReachability(moduleInitializers: Seq[ModuleInitializer],
       symbolRequirements: SymbolRequirement, logger: Logger)(implicit ec: ExecutionContext): Future[Analysis] = {
@@ -1369,6 +1370,9 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
     def needsDesugaring: Boolean =
       (data.globalFlags & ReachabilityInfo.FlagNeedsDesugaring) != 0
 
+    private val usedJSInPureWasm: Boolean =
+      (data.globalFlags & ReachabilityInfo.FlagUsedJSInPureWasm) != 0
+
     /** Throws MatchError if `!isDefaultBridge`. */
     def defaultBridgeTarget: ClassName = (syntheticKind: @unchecked) match {
       case MethodSyntheticKind.DefaultBridge(target) => target
@@ -1382,6 +1386,9 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
 
       _calledFrom ::= from
       if (!_isReachable.getAndSet(true)) {
+        if (usedJSInPureWasm)
+          _errors ::= JSInteropInPureWasm(from)
+
         _isAbstractReachable.set(true)
         doReach()
       }
@@ -1391,6 +1398,9 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
       assert(namespace == MemberNamespace.Public)
 
       if (!_isAbstractReachable.getAndSet(true)) {
+        if (usedJSInPureWasm)
+          _errors ::= JSInteropInPureWasm(from)
+
         checkExistent()
         _calledFrom ::= from
       }
@@ -1410,6 +1420,9 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
       _instantiatedSubclasses ::= inClass
 
       if (!_isReachable.getAndSet(true)) {
+        if (usedJSInPureWasm)
+          _errors ::= JSInteropInPureWasm(from)
+
         _isAbstractReachable.set(true)
         doReach()
       }

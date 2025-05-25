@@ -128,7 +128,7 @@ object Character {
     if (!isValidCodePoint(codePoint))
       throw new IllegalArgumentException()
 
-    if (LinkingInfo.targetPureWasm) {
+    LinkingInfo.linkTimeIf (LinkingInfo.targetPureWasm) {
       if (isBmpCodePoint(codePoint)) {
         Character.toString(codePoint.toChar)
       } else {
@@ -136,7 +136,8 @@ object Character {
         toSurrogate(codePoint, dst, 0)
         new String(dst)
       }
-    } else if (LinkingInfo.esVersion >= ESVersion.ES2015) {
+    } {
+    if (LinkingInfo.esVersion >= ESVersion.ES2015) {
       js.Dynamic.global.String.fromCodePoint(codePoint).asInstanceOf[String]
     } else {
       if (codePoint < MIN_SUPPLEMENTARY_CODE_POINT) {
@@ -148,7 +149,7 @@ object Character {
           .fromCharCode(highSurrogate(codePoint).toInt, lowSurrogate(codePoint).toInt)
           .asInstanceOf[String]
       }
-    }
+    }}
   }
 
   // Low-level code point and code unit manipulations -------------------------
@@ -706,10 +707,10 @@ object Character {
       case _ =>
         // In WASI implementation, we cannot use String#toUpperCase
         // since it uses Character#toUpperCase.
-        if (LinkingInfo.targetPureWasm) {
+        LinkingInfo.linkTimeIf(LinkingInfo.targetPureWasm) {
           import CaseUtil._
           toCase(codePoint, a, z, lowerBeta, lowerRanges, lowerDeltas, lowerSteps)
-        } else {
+        } {
           val upperChars = toString(codePoint).toUpperCase()
           upperChars.length match {
             case 1 =>
@@ -735,12 +736,12 @@ object Character {
       case 0x0130 =>
         0x0069 // İ => i
       case _ =>
-        if (LinkingInfo.targetPureWasm) {
+        LinkingInfo.linkTimeIf(LinkingInfo.targetPureWasm) {
           // in pure Wasm implementation, we cannot use String#toLowerCase
           // since it uses Character$toLowerCase
           import CaseUtil._
           toCase(codePoint, A, Z, upperMu, upperRanges, upperDeltas, upperSteps)
-        } else {
+        } {
           val lowerChars = toString(codePoint).toLowerCase()
           lowerChars.length match {
             case 1 =>

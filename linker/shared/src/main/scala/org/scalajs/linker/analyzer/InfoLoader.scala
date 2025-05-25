@@ -30,9 +30,10 @@ import org.scalajs.linker.CollectionsCompat.MutableMapCompatOps
 import Platform.emptyThreadSafeMap
 
 private[analyzer] final class InfoLoader(irLoader: IRLoader,
-    checkIRFor: Option[CheckingPhase], linkTimeProperties: LinkTimeProperties) {
+    checkIRFor: Option[CheckingPhase], linkTimeProperties: LinkTimeProperties,
+    targetPureWasm: Boolean) {
 
-  private val generator = new Infos.InfoGenerator(linkTimeProperties)
+  private val generator = new Infos.InfoGenerator(linkTimeProperties, targetPureWasm)
   private var logger: Logger = _
   private val cache = emptyThreadSafeMap[ClassName, InfoLoader.ClassInfoCache]
 
