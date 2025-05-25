@@ -407,12 +407,12 @@ object Assert {
             actualThrown)
     }
 
-    if (LinkingInfo.targetPureWasm) {
+    LinkingInfo.linkTimeIf(LinkingInfo.targetPureWasm) {
       throw new AssertionError(
           buildPrefix +
           "expecte " + formatClass(expectedThrowable) + " to be thrown, but nothing was thrown"
       )
-    } else {
+    } {
     throw new AssertionError(
         buildPrefix +
         String.format("expected %s to be thrown, but nothing was thrown", formatClass(expectedThrowable)))

@@ -17,7 +17,7 @@ import java.util.function._
 
 import scala.scalajs.js
 import scala.scalajs.LinkingInfo
-import scala.scalajs.LinkingInfo.ESVersion
+import scala.scalajs.LinkingInfo.{ESVersion, linkTimeIf}
 
 /* This is a hijacked class. Its instances are primitive numbers.
  * Constructors are not emitted.
@@ -103,7 +103,7 @@ object Integer {
     if (i >= s.length)
       fail()
 
-    if (LinkingInfo.targetPureWasm) {
+    linkTimeIf(LinkingInfo.targetPureWasm) {
       val maxAbsValue: scala.Long = {
         if (!signed) 0xffffffffL
         else if (negative) 0x80000000L
@@ -123,7 +123,7 @@ object Integer {
         -result.toInt
       else
         result.toInt
-    } else {
+    } {
       val maxAbsValue: scala.Double = {
         if (!signed) 0xffffffffL.toDouble
         else if (negative) 0x80000000L.toDouble
@@ -298,26 +298,39 @@ object Integer {
 
   // Intrinsic, fallback on actual code for non-literal in JS
   @inline def numberOfLeadingZeros(i: scala.Int): scala.Int = {
-    if (LinkingInfo.esVersion >= ESVersion.ES2015) js.Math.clz32(i)
-    else clz32Dynamic(i)
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      clz32Dynamic(i)
+    } {
+      if (LinkingInfo.esVersion >= ESVersion.ES2015) js.Math.clz32(i)
+      else clz32Dynamic(i)
+    }
+
   }
 
   private def clz32Dynamic(i: scala.Int) = {
-    if (js.typeOf(js.Dynamic.global.Math.clz32) == "function") {
-      js.Math.clz32(i)
-    } else {
-      // See Hacker's Delight, Section 5-3
-      var x = i
-      if (x == 0) {
-        32
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      clz32Dynamic0(i)
+    } {
+      if (js.typeOf(js.Dynamic.global.Math.clz32) == "function") {
+        js.Math.clz32(i)
       } else {
-        var r = 1
-        if ((x & 0xffff0000) == 0) { x <<= 16; r += 16 }
-        if ((x & 0xff000000) == 0) { x <<= 8; r += 8 }
-        if ((x & 0xf0000000) == 0) { x <<= 4; r += 4 }
-        if ((x & 0xc0000000) == 0) { x <<= 2; r += 2 }
-        r + (x >> 31)
+        clz32Dynamic0(i)
       }
+    }
+  }
+
+  @inline private def clz32Dynamic0(i: scala.Int) = {
+    // See Hacker's Delight, Section 5-3
+    var x = i
+    if (x == 0) {
+      32
+    } else {
+      var r = 1
+      if ((x & 0xffff0000) == 0) { x <<= 16; r += 16 }
+      if ((x & 0xff000000) == 0) { x <<= 8; r += 8 }
+      if ((x & 0xf0000000) == 0) { x <<= 4; r += 4 }
+      if ((x & 0xc0000000) == 0) { x <<= 2; r += 2 }
+      r + (x >> 31)
     }
   }
 

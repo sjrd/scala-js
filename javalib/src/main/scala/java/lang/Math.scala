@@ -17,7 +17,7 @@ import scala.scalajs.js
 import js.Dynamic.{ global => g }
 
 import scala.scalajs.LinkingInfo
-import scala.scalajs.LinkingInfo.ESVersion
+import scala.scalajs.LinkingInfo.{ESVersion, linkTimeIf}
 
 object Math {
   final val E  = 2.718281828459045
@@ -30,8 +30,19 @@ object Math {
   @inline def abs(a: scala.Long): scala.Long = if (a < 0) -a else a
 
   // Wasm intrinsics
-  @inline def abs(a: scala.Float): scala.Float = js.Math.abs(a).toFloat
-  @inline def abs(a: scala.Double): scala.Double = js.Math.abs(a)
+  @inline def abs(a: scala.Float): scala.Float =
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      Float.intBitsToFloat(Float.floatToIntBits(a) & ~Int.MinValue)
+    } {
+      js.Math.abs(a).toFloat
+    }
+
+  @inline def abs(a: scala.Double): scala.Double =
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      Double.longBitsToDouble(Double.doubleToLongBits(a) & ~scala.Long.MinValue)
+    } {
+      js.Math.abs(a)
+    }
 
   @inline def max(a: scala.Int, b: scala.Int): scala.Int = if (a > b) a else b
   @inline def max(a: scala.Long, b: scala.Long): scala.Long = if (a > b) a else b
@@ -154,8 +165,11 @@ object Math {
   @inline def atan2(y: scala.Double, x: scala.Double): scala.Double = js.Math.atan2(y, x)
 
   @inline def random(): scala.Double =
-    if (LinkingInfo.targetPureWasm) WasmSystem.random()
-    else js.Math.random()
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      WasmSystem.random()
+    } {
+      js.Math.random()
+    }
 
   @inline def toDegrees(a: scala.Double): scala.Double = a * 180.0 / PI
   @inline def toRadians(a: scala.Double): scala.Double = a / 180.0 * PI
