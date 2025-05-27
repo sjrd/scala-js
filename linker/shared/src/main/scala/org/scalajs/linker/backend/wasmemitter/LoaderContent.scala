@@ -361,6 +361,9 @@ const essentialExterns = {
   nanoTime: () => performance.now(),
   currentTimeMillis: () => Date.now(),
   random: () => Math.random(),
+
+  send: (strArray) => scalajsCom.send(wasmArrayToString(strArray)),
+  init: (handleMessage) => scalajsCom.init((msg) => handleMessage(stringToWasmArray(msg))),
 };
 
 $doLoadFunctionContent

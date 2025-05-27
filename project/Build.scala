@@ -2042,6 +2042,32 @@ object Build {
       },
   ).withScalaJSCompiler.dependsOnLibrary
 
+  lazy val helloworldWasm: MultiScalaProject = MultiScalaProject(
+      id = "helloworldWasm", base = file("examples") / "helloworld-wasm"
+  ).enablePlugins(
+      MyScalaJSPlugin
+  ).settings(
+      exampleSettings,
+      name := "HelloWorld Wasm",
+      moduleName := "helloworld-wasm",
+      scalaJSUseMainModuleInitializer := true,
+      scalaJSLinkerConfig ~= {
+        _.withPrettyPrint(true)
+         .withExperimentalUseWebAssembly(true)
+         .withModuleKind(ModuleKind.ESModule)
+         .withWasmFeatures(_.withTargetPureWasm(true))
+      },
+      jsEnv := {
+        val config = NodeJSEnv.Config().withArgs(List(
+          "--turboshaft-wasm",
+          "--experimental-wasm-exnref",
+        ))
+        new NodeJSEnv(config)
+      }
+  ).withScalaJSCompiler.withScalaJSJUnitPlugin.dependsOnLibrary.dependsOn(
+      jUnitRuntime % "test", testBridge % "test"
+  )
+
   lazy val testSuiteWASI: MultiScalaProject = MultiScalaProject(
       id = "testSuiteWASI", base = file("examples") / "test-suite-wasi"
   ).enablePlugins(

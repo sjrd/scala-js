@@ -282,6 +282,12 @@ object VarGen {
       case object nanoTime extends JSHelperFunctionID
       case object currentTimeMillis extends JSHelperFunctionID
       case object random extends JSHelperFunctionID
+      object scalajsCom {
+        case object send extends JSHelperFunctionID
+        case object init extends JSHelperFunctionID
+      }
+
+      final case object handleMessage extends FunctionID
     }
   }
 

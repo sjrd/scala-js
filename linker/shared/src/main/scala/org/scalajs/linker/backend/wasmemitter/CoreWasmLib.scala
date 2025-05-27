@@ -744,6 +744,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     addEssentialImport(genFunctionID.wasmEssentials.nanoTime, Nil, List(Float64))
     addEssentialImport(genFunctionID.wasmEssentials.currentTimeMillis, Nil, List(Float64))
     addEssentialImport(genFunctionID.wasmEssentials.random, Nil, List(Float64))
+
+    addEssentialImport(genFunctionID.wasmEssentials.scalajsCom.send, List(RefType(genTypeID.i16Array)), Nil)
+    addEssentialImport(genFunctionID.wasmEssentials.scalajsCom.init, List(RefType.func), Nil)
   }
 
   // --- Global definitions ---
@@ -2397,9 +2400,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
                   fb += GlobalGet(genGlobalID.undef)
                 case StringType =>
                   fb += LocalGet(objParam)
-                  if (targetPureWasm)
+                  if (targetPureWasm) {
                     fb += RefCast(RefType(genTypeID.wasmString))
-                  else {
+                  } else {
                     fb += ExternConvertAny
                     fb += RefAsNonNull
                   }
@@ -2421,9 +2424,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
               fb += LocalGet(objParam)
               primType match {
                 case StringType =>
-                  if (targetPureWasm)
+                  if (targetPureWasm) {
                     fb += RefCast(RefType.nullable(genTypeID.wasmString))
-                  else {
+                  } else {
                     fb += ExternConvertAny
                     fb += RefAsNonNull
                   }
