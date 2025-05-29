@@ -90,6 +90,10 @@ jobs:
           node-version: '23'
       - name: npm install
         run: npm install
+      - name: helloworld-wasm${{ matrix.suffix }}/run
+        run: sbt "helloworldWasm${{ matrix.suffix }}/run"
+      - name: helloworld-wasm${{ matrix.suffix }}/test
+        run: sbt "helloworldWasm${{ matrix.suffix }}/test"
       - name: testSuiteWASI${{ matrix.suffix }}/fastLinkJS
         run: |
           sbt "set Seq(Global/enableWasmEverywhere := true, testSuiteWASI.v${{ matrix.suffix }}/scalaJSLinkerConfig ~= (_.withWasmFeatures(_.withExceptionHandling(${{ matrix.eh-support }}))))" testSuiteWASI${{ matrix.suffix }}/run

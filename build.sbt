@@ -27,6 +27,7 @@ val jUnitPlugin = Build.jUnitPlugin
 val jUnitAsyncJS = Build.jUnitAsyncJS
 val jUnitAsyncJVM = Build.jUnitAsyncJVM
 val helloworld = Build.helloworld
+val helloworldWasm = Build.helloworldWasm
 val reversi = Build.reversi
 val testSuiteWASI = Build.testSuiteWASI
 val testComponentModel = Build.testComponentModel

@@ -53,6 +53,12 @@ object SpecialNames {
   val WasmSystemClass =
     ClassName("java.lang.WasmSystem$")
 
+  val JSRPCClass =
+    ClassName("org.scalajs.testing.bridge.JSRPC$")
+
+  val WasmScalajsComClass =
+    ClassName("org.scalajs.testing.bridge.ScalajsCom$")
+
   // Field names
 
   val valueFieldSimpleName = SimpleFieldName("value")
@@ -73,4 +79,6 @@ object SpecialNames {
 
   /** A unique simple method name to map all method *signatures* into `MethodName`s. */
   val normalizedSimpleMethodName = SimpleMethodName("m")
+
+  val handleMessageMethodName = MethodName("handleMessage0", List(ClassRef(BoxedStringClass)), VoidRef)
 }

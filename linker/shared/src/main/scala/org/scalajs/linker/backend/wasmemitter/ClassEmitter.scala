@@ -1411,7 +1411,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
 
     // Emit the function
     if (!ctx.coreSpec.wasmFeatures.componentModel &&
-        className == SpecialNames.WasmSystemClass &&
+        (className == SpecialNames.WasmSystemClass || className == SpecialNames.WasmScalajsComClass) &&
         namespace == MemberNamespace.Public && !methodName.isReflectiveProxy) {
       emitSpecialMethod(
         functionID,
@@ -1497,28 +1497,64 @@ class ClassEmitter(coreSpec: CoreSpec) {
     }
     fb.setResultTypes(transformResultType(resultType))
 
-    methodName.simpleName.nameString match {
-      case "print" =>
-        fb += wa.LocalGet(paramLocals(0))
-        fb += wa.RefAsNonNull
-        fb += wa.Call(genFunctionID.wasmString.getWholeChars)
-        fb += wa.Call(genFunctionID.wasmEssentials.print)
+    if (enclosingClassName == SpecialNames.WasmSystemClass) {
+      methodName.simpleName.nameString match {
+        case "print" =>
+          fb += wa.LocalGet(paramLocals(0))
+          fb += wa.RefAsNonNull
+          fb += wa.Call(genFunctionID.wasmString.getWholeChars)
+          fb += wa.Call(genFunctionID.wasmEssentials.print)
 
-      case "nanoTime" =>
-        fb += wa.Call(genFunctionID.wasmEssentials.nanoTime)
-        fb += wa.I64TruncSatF64S
+        case "nanoTime" =>
+          fb += wa.Call(genFunctionID.wasmEssentials.nanoTime)
+          fb += wa.I64TruncSatF64S
 
-      case "currentTimeMillis" =>
-        fb += wa.Call(genFunctionID.wasmEssentials.currentTimeMillis)
-        fb += wa.I64TruncSatF64S
+        case "currentTimeMillis" =>
+          fb += wa.Call(genFunctionID.wasmEssentials.currentTimeMillis)
+          fb += wa.I64TruncSatF64S
 
-      case "random" =>
-        fb += wa.Call(genFunctionID.wasmEssentials.random)
+        case "random" =>
+          fb += wa.Call(genFunctionID.wasmEssentials.random)
 
-      case _ =>
-        throw new AssertionError(s"Unknown WasmSystem method ${methodName.nameString}")
+        case _ =>
+          throw new AssertionError(s"Unknown WasmSystem method ${methodName.nameString}")
+      }
+    } else if (enclosingClassName == SpecialNames.WasmScalajsComClass) {
+      methodName.simpleName.nameString match {
+        case "send" =>
+          fb += wa.LocalGet(paramLocals(0))
+          fb += wa.RefAsNonNull
+          fb += wa.Call(genFunctionID.wasmString.getWholeChars)
+          fb += wa.Call(genFunctionID.wasmEssentials.scalajsCom.send)
+
+        case "init" =>
+          genHandleMessage()
+          fb += ctx.refFuncWithDeclaration(genFunctionID.wasmEssentials.handleMessage)
+          fb += wa.Call(genFunctionID.wasmEssentials.scalajsCom.init)
+
+        case _ =>
+          throw new AssertionError(s"Unknown ScalajsCom method ${methodName.nameString}")
+      }
+    } else {
+      throw new AssertionError(s"Unknown class ${enclosingClassName.nameString}")
     }
 
+    fb.buildAndAddToModule()
+  }
+
+  private def genHandleMessage()(implicit ctx: WasmContext): Unit = {
+    val fb = new FunctionBuilder(ctx.moduleBuilder, genFunctionID.wasmEssentials.handleMessage,
+        OriginalName(genFunctionID.wasmEssentials.handleMessage.toString()), Position.NoPosition)
+    val message = fb.addParam("message", watpe.RefType(genTypeID.i16Array))
+
+    fb += wa.Call(genFunctionID.loadModule(SpecialNames.JSRPCClass))
+    fb += wa.LocalGet(message)
+    fb += wa.LocalGet(message)
+    fb += wa.ArrayLen
+    fb += wa.RefNull(watpe.HeapType(genTypeID.wasmString))
+    fb += wa.StructNew(genTypeID.wasmString)
+    fb += wa.Call(genFunctionID.forMethod(MemberNamespace.Public,
+        SpecialNames.JSRPCClass, SpecialNames.handleMessageMethodName))
     fb.buildAndAddToModule()
   }
 
