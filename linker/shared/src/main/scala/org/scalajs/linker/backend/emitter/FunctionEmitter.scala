@@ -2670,17 +2670,15 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
               else
                 genLongApplyStatic(LongImpl.add, newLhs, newRhs)
             case Long_- =>
-              lhs match {
-                case LongLiteral(0L) =>
-                  if (useBigIntForLongs)
+              if (useBigIntForLongs) {
+                lhs match {
+                  case LongLiteral(0L)  =>
                     wrapBigInt64(js.UnaryOp(JSUnaryOp.-, newRhs))
-                  else
-                    genLongApplyStatic(LongImpl.neg, newRhs)
-                case _ =>
-                  if (useBigIntForLongs)
+                  case _ =>
                     wrapBigInt64(js.BinaryOp(JSBinaryOp.-, newLhs, newRhs))
-                  else
-                    genLongApplyStatic(LongImpl.sub, newLhs, newRhs)
+                }
+              } else {
+                genLongApplyStatic(LongImpl.sub, newLhs, newRhs)
               }
             case Long_* =>
               if (useBigIntForLongs)
@@ -2721,17 +2719,15 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
               else
                 genLongApplyStatic(LongImpl.and, newLhs, newRhs)
             case Long_^ =>
-              lhs match {
-                case LongLiteral(-1L) =>
-                  if (useBigIntForLongs)
+              if (useBigIntForLongs) {
+                lhs match {
+                  case LongLiteral(-1L) =>
                     wrapBigInt64(js.UnaryOp(JSUnaryOp.~, newRhs))
-                  else
-                    genLongApplyStatic(LongImpl.not, newRhs)
-                case _ =>
-                  if (useBigIntForLongs)
+                  case _ =>
                     wrapBigInt64(js.BinaryOp(JSBinaryOp.^, newLhs, newRhs))
-                  else
-                    genLongApplyStatic(LongImpl.xor, newLhs, newRhs)
+                }
+              } else {
+                genLongApplyStatic(LongImpl.xor, newLhs, newRhs)
               }
             case Long_<< =>
               if (useBigIntForLongs)
