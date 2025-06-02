@@ -620,7 +620,8 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
       }
 
       def isWasmComponent = {
-        cls.nameString.startsWith("scala.scalajs.component")
+        cls.nameString.startsWith("scala.scalajs.component") ||
+        cls.nameString.startsWith("scala.scalajs.wasi")
       }
 
       def isAnException: Boolean =

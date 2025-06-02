@@ -1,10 +1,11 @@
 package java.lang
 
-import java.lang.wasi.clocks
-import java.lang.wasi.{random => wrandom}
-import java.lang.wasi.cli
-import java.lang.wasi.io
-import java.lang.wasi.io.Streams.StreamError
+import scala.scalajs.wasi.clocks
+import scala.scalajs.wasi.{random => wrandom}
+import scala.scalajs.wasi.cli
+import scala.scalajs.wasi.io
+
+import scala.scalajs.wasi.io.Streams.StreamError
 
 protected[lang] object WasmSystem {
   @noinline
