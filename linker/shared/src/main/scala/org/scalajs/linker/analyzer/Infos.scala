@@ -756,6 +756,7 @@ object Infos {
             wit.CaseType(ComponentResultOkClass, ok),
             wit.CaseType(ComponentResultErrClass, err),
           )
+          builder.maybeAddReferencedClass(ClassRef(ComponentResultClass))
           for (c <- cases) {
             val ctor = wit.makeCtorName(c.tpe)
             builder.addInstantiatedClass(c.className, MethodName.constructor(List(ClassRef(ObjectClass))))

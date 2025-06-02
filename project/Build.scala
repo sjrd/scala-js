@@ -2042,6 +2042,24 @@ object Build {
       },
   ).withScalaJSCompiler.dependsOnLibrary
 
+  lazy val echoserver: MultiScalaProject = MultiScalaProject(
+      id = "echoserver", base = file("examples") / "echo-server"
+  ).enablePlugins(
+      MyScalaJSPlugin
+  ).settings(
+      exampleSettings,
+      name := "Echo Server - Scala.js WASI example",
+      moduleName := "echo",
+      // scalaJSUseMainModuleInitializer := true,
+      scalaJSLinkerConfig ~= {
+        _.withPrettyPrint(true)
+         .withWasmFeatures(
+            _.withTargetPureWasm(true)
+              .withComponentModel(true)
+             .withExceptionHandling(false))
+      },
+  ).withScalaJSCompiler.dependsOnLibrary
+
   lazy val helloworldWasm: MultiScalaProject = MultiScalaProject(
       id = "helloworldWasm", base = file("examples") / "helloworld-wasm"
   ).enablePlugins(

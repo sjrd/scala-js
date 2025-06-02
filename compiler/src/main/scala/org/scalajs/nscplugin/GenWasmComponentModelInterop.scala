@@ -162,7 +162,6 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
       moduleName <- resourceAnnot.stringArg(0)
       resourceName <- resourceAnnot.stringArg(1)
     } yield {
-      println(methodName)
       val name = js.WasmComponentFunctionName.ResourceStaticMethod(
           func = methodName, resource = resourceName)
       withNewLocalNameScope {
