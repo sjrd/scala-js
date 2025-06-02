@@ -414,18 +414,38 @@ private[optimizer] abstract class OptimizerCore(
           }
         }
 
-      case If(cond, thenp, elsep) =>
-        val newCond = transformExpr(cond)
-        newCond match {
-          case BooleanLiteral(condValue) =>
-            if (condValue) transform(thenp, isStat)
-            else           transform(elsep, isStat)
-          case _ =>
-            val newThenp = transform(thenp, isStat)
-            val newElsep = transform(elsep, isStat)
-            val refinedType =
-              constrainedLub(newThenp.tpe, newElsep.tpe, tree.tpe, isStat)
-            foldIf(newCond, newThenp, newElsep)(refinedType)
+      case tree @ If(cond, thenp, elsep) =>
+        trampoline {
+          if (isStat) {
+            pretransformExpr(cond) { tcond =>
+              val resultTree = tcond match {
+                case _ if tcond.tpe.isNothingType =>
+                  finishTransformStat(tcond)
+
+                case PreTransLit(BooleanLiteral(condValue)) =>
+                  val branchTaken = if (condValue) thenp else elsep
+                  transformStat(branchTaken)
+
+                case _ =>
+                  val newThenp = transformStat(thenp)
+                  val newElsep = transformStat(elsep)
+                  (newThenp, newElsep) match {
+                    case (Skip(), Skip()) =>
+                      finishTransformStat(tcond)
+                    case (Skip(), _) =>
+                      val newCond = finishTransformExpr(foldUnaryOp(UnaryOp.Boolean_!, tcond))
+                      If(newCond, newElsep, newThenp)(VoidType)
+                    case _ =>
+                      val newCond = finishTransformExpr(tcond)
+                      If(newCond, newThenp, newElsep)(VoidType)
+                  }
+              }
+
+              TailCalls.done(resultTree)
+            }
+          } else {
+            pretransformIf(tree)(finishTransform(isStat = false))
+          }
         }
 
       case While(cond, body) =>
@@ -1098,57 +1118,72 @@ private[optimizer] abstract class OptimizerCore(
     implicit val pos = tree.pos
     val If(cond, thenp, elsep) = tree
 
-    val newCond = transformExpr(cond)
-    newCond match {
-      case BooleanLiteral(condValue) =>
-        if (condValue)
-          pretransformExpr(thenp)(cont)
-        else
-          pretransformExpr(elsep)(cont)
+    pretransformExpr(cond) { tcond =>
+      tcond match {
+        case _ if tcond.tpe.isNothingType =>
+          cont(tcond)
 
-      case _ =>
-        tryOrRollback { cancelFun =>
-          pretransformExprs(thenp, elsep) { (tthenp, telsep) =>
-            if (tthenp.tpe.isNothingType) {
-              cont(PreTransBlock(
-                  If(newCond, finishTransformStat(tthenp), Skip())(VoidType),
-                  telsep))
-            } else if (telsep.tpe.isNothingType) {
-              val negCond = finishTransformExpr(
-                  foldUnaryOp(UnaryOp.Boolean_!, newCond.toPreTransform))
-              cont(PreTransBlock(
-                  If(negCond, finishTransformStat(telsep), Skip())(VoidType),
-                  tthenp))
-            } else {
-              (resolveLocalDef(tthenp), resolveLocalDef(telsep)) match {
-                case (PreTransRecordTree(thenTree, thenStructure, thenCancelFun),
-                    PreTransRecordTree(elseTree, elseStructure, elseCancelFun)) =>
-                  if (!thenStructure.sameClassAs(elseStructure))
-                    cancelFun()
-                  assert(thenTree.tpe == elseTree.tpe)
-                  cont(PreTransRecordTree(
-                      If(newCond, thenTree, elseTree)(thenTree.tpe),
-                      thenStructure,
-                      cancelFun))
+        case PreTransLit(BooleanLiteral(condValue)) =>
+          if (condValue)
+            pretransformExpr(thenp)(cont)
+          else
+            pretransformExpr(elsep)(cont)
 
-                case (tthenpNoLocalDef, telsepNoLocalDef) =>
-                  val newThenp = finishTransformExpr(tthenpNoLocalDef)
-                  val newElsep = finishTransformExpr(telsepNoLocalDef)
-                  val refinedType =
-                    constrainedLub(newThenp.tpe, newElsep.tpe, tree.tpe, isStat = false)
-                  cont(foldIf(newCond, newThenp, newElsep)(
-                      refinedType).toPreTransform)
+        case _ =>
+          tryOrRollback { cancelFun =>
+            pretransformExprs(thenp, elsep) { (tthenp, telsep) =>
+              if (tthenp.tpe.isNothingType) {
+                cont(PreTransBlock(
+                    If(finishTransformExpr(tcond), finishTransformStat(tthenp), Skip())(VoidType),
+                    telsep))
+              } else if (telsep.tpe.isNothingType) {
+                val negCond = finishTransformExpr(foldUnaryOp(UnaryOp.Boolean_!, tcond))
+                cont(PreTransBlock(
+                    If(negCond, finishTransformStat(telsep), Skip())(VoidType),
+                    tthenp))
+              } else {
+                (resolveRecordPreTransform(tthenp), resolveRecordPreTransform(telsep)) match {
+                  case (PreTransRecordTree(thenTree, thenStructure, thenCancelFun),
+                      PreTransRecordTree(elseTree, elseStructure, elseCancelFun)) =>
+                    if (!thenStructure.sameClassAs(elseStructure))
+                      cancelFun()
+                    assert(thenTree.tpe == elseTree.tpe)
+                    cont(PreTransRecordTree(
+                        If(finishTransformExpr(tcond), thenTree, elseTree)(thenTree.tpe),
+                        thenStructure,
+                        cancelFun))
+
+                  case (PreTransRecordTree(_, _, thenCancelFun), _) =>
+                    thenCancelFun()
+
+                  case (_, PreTransRecordTree(_, _, elseCancelFun)) =>
+                    elseCancelFun()
+
+                  case (tthenpNoRecord, telsepNoRecord) =>
+                    val refinedType =
+                      constrainedLub(tthenpNoRecord.tpe, telsepNoRecord.tpe, tree.tpe)
+                    cont(foldIf(tcond, tthenpNoRecord, telsepNoRecord)(refinedType))
+                }
               }
             }
+          } { () =>
+            /* If the If is canceled as a whole, it's because *both* the thenp
+             * and elsep resulted in a record, but either a) they did not have
+             * the same structure or b) the If was canceled later on.
+             * Either way, we want to retry but make sure that neither branch
+             * results in a record. So at this point we use a full transform
+             * for the branches.
+             * TODO This is not ideal; we might want to introduce a concept of
+             * "pretransform that cannot produce a record".
+             */
+            val newThenp = transformExpr(thenp)
+            val newElsep = transformExpr(elsep)
+            val constrainedType =
+              constrainedLub(newThenp.tpe, newElsep.tpe, tree.tpe, isStat = false)
+            cont(foldIf(tcond, newThenp.toPreTransform, newElsep.toPreTransform)(
+                RefinedType(constrainedType)))
           }
-        } { () =>
-          val newThenp = transformExpr(thenp)
-          val newElsep = transformExpr(elsep)
-          val refinedType =
-            constrainedLub(newThenp.tpe, newElsep.tpe, tree.tpe, isStat = false)
-          cont(foldIf(newCond, newThenp, newElsep)(
-              refinedType).toPreTransform)
-        }
+      }
     }
   }
 
@@ -1346,7 +1381,7 @@ private[optimizer] abstract class OptimizerCore(
             PreTransTree(finishTransformBindings(bindingsAndStats, tree), tpe)
         }
 
-      case _:PreTransUnaryOp | _:PreTransBinaryOp =>
+      case _:PreTransUnaryOp | _:PreTransBinaryOp | _:PreTransIf =>
         PreTransTree(finishTransformExpr(preTrans), preTrans.tpe)
 
       case PreTransLocalDef(localDef) =>
@@ -1373,6 +1408,45 @@ private[optimizer] abstract class OptimizerCore(
     }
   }
 
+  /** Resolves any LocalDef that would result in record in a [[PreTransform]]. */
+  private def resolveRecordPreTransform(preTrans: PreTransform): PreTransform = {
+    // TODO Remove code duplication wrt resolveLocalDef
+    implicit val pos = preTrans.pos
+
+    preTrans match {
+      case PreTransBlock(bindingsAndStats, result) =>
+        resolveRecordPreTransform(result) match {
+          case PreTransRecordTree(tree, structure, cancelFun) =>
+            PreTransRecordTree(finishTransformBindings(bindingsAndStats, tree),
+                structure, cancelFun)
+          case _ =>
+            preTrans
+        }
+
+      case _:PreTransUnaryOp | _:PreTransBinaryOp | _:PreTransIf | _:PreTransGenTree =>
+        preTrans
+
+      case PreTransLocalDef(localDef) =>
+        localDef.replacement match {
+          case ReplaceWithRecordVarRef(name, structure, used, cancelFun) =>
+            used.value = used.value.inc
+            PreTransRecordTree(VarRef(name)(structure.recordType), structure, cancelFun)
+
+          case InlineClassInstanceReplacement(structure, fieldLocalDefs, cancelFun) =>
+            val recordType = structure.recordType
+            if (!isImmutableType(recordType))
+              cancelFun()
+            PreTransRecordTree(
+                RecordValue(recordType, structure.fieldNames.map(
+                    id => fieldLocalDefs(id).newReplacement)),
+                structure, cancelFun)
+
+          case _ =>
+            preTrans
+        }
+    }
+  }
+
   /** Resolves the [[InlineableClassStructure]] of a [[PreTransform]], if any.
    *
    *  If `preTrans` would resolve to a `PreTransRecordTree`, returns a `Some`
@@ -1385,7 +1459,7 @@ private[optimizer] abstract class OptimizerCore(
       case PreTransBlock(_, result) =>
         resolveRecordStructure(result)
 
-      case _:PreTransUnaryOp | _:PreTransBinaryOp =>
+      case _:PreTransUnaryOp | _:PreTransBinaryOp | _:PreTransIf =>
         None
 
       case PreTransLocalDef(localDef @ LocalDef(tpe, _, replacement)) =>
@@ -1441,6 +1515,9 @@ private[optimizer] abstract class OptimizerCore(
         UnaryOp(op, finishTransformExpr(lhs))
       case PreTransBinaryOp(op, lhs, rhs) =>
         BinaryOp(op, finishTransformExpr(lhs), finishTransformExpr(rhs))
+      case PreTransIf(cond, thenp, elsep, tpe) =>
+        If(finishTransformExpr(cond), finishTransformExpr(thenp),
+            finishTransformExpr(elsep))(tpe.base)
       case PreTransLocalDef(localDef) =>
         localDef.newReplacement
 
@@ -1529,6 +1606,22 @@ private[optimizer] abstract class OptimizerCore(
           finishWithSideEffects
         case _ =>
           finishNoSideEffects
+      }
+
+    case PreTransIf(cond, thenp, elsep, tpe) =>
+      implicit val pos = stat.pos
+
+      val newThenp = finishTransformStat(thenp)
+      val newElsep = finishTransformStat(elsep)
+      (newThenp, newElsep) match {
+        case (Skip(), Skip()) =>
+          finishTransformStat(cond)
+        case (Skip(), _) =>
+          val newCond = finishTransformExpr(foldUnaryOp(UnaryOp.Boolean_!, cond))
+          If(newCond, newElsep, newThenp)(VoidType)
+        case _ =>
+          val newCond = finishTransformExpr(cond)
+          If(newCond, newThenp, newElsep)(VoidType)
       }
 
     case PreTransLocalDef(_) =>
@@ -3336,31 +3429,37 @@ private[optimizer] abstract class OptimizerCore(
     }
   }
 
-  private def foldIf(cond: Tree, thenp: Tree, elsep: Tree)(tpe: Type)(
-      implicit pos: Position): Tree = {
+  private def foldIf(cond: PreTransform, thenp: PreTransform, elsep: PreTransform)(
+      tpe: RefinedType)(
+      implicit pos: Position): PreTransform = {
     import BinaryOp._
 
-    @inline def default = If(cond, thenp, elsep)(tpe)
+    @inline def default = PreTransIf(cond, thenp, elsep, tpe)
+
+    def isLitOrLocalDef(preTrans: PreTransform): Boolean = preTrans match {
+      case PreTransLit(_) | PreTransLocalDef(_) => true
+      case _                                    => false
+    }
+
     cond match {
-      case BooleanLiteral(v) =>
+      case PreTransLit(BooleanLiteral(v)) =>
         if (v) thenp
         else elsep
 
       case _ =>
-        @inline def negCond =
-          finishTransformExpr(foldUnaryOp(UnaryOp.Boolean_!, cond.toPreTransform))
+        @inline def negCond = foldUnaryOp(UnaryOp.Boolean_!, cond)
 
-        if (thenp.tpe == BooleanType && elsep.tpe == BooleanType) {
+        if (thenp.tpe.base == BooleanType && elsep.tpe.base == BooleanType) {
           (cond, thenp, elsep) match {
-            case (_, BooleanLiteral(t), BooleanLiteral(e)) =>
-              if (t == e) Block(keepOnlySideEffects(cond), thenp)
+            case (_, PreTransLit(BooleanLiteral(t)), PreTransLit(BooleanLiteral(e))) =>
+              if (t == e) PreTransBlock(finishTransformStat(cond), thenp)
               else if (t) cond
               else        negCond
 
-            case (_, BooleanLiteral(false), _) =>
-              foldIf(negCond, elsep, BooleanLiteral(false))(tpe) // canonical && form
-            case (_, _, BooleanLiteral(true)) =>
-              foldIf(negCond, BooleanLiteral(true), thenp)(tpe) // canonical || form
+            case (_, PreTransLit(BooleanLiteral(false)), _) =>
+              foldIf(negCond, elsep, thenp)(tpe) // canonical && form
+            case (_, _, PreTransLit(BooleanLiteral(true))) =>
+              foldIf(negCond, elsep, thenp)(tpe) // canonical || form
 
             /* if (lhs === null) rhs === null else lhs.as![T!] === rhs
              * -> lhs === rhs
@@ -3368,19 +3467,17 @@ private[optimizer] abstract class OptimizerCore(
              * the equals() method has been inlined as a reference
              * equality test.
              */
-            case (BinaryOp(BinaryOp.===, VarRef(lhsName), Null()),
-                BinaryOp(BinaryOp.===, VarRef(rhsName), Null()),
-                BinaryOp(BinaryOp.===, MaybeCast(l: VarRef), r: VarRef))
-                if l.name == lhsName && r.name == rhsName =>
-              BinaryOp(BinaryOp.===, l, r)(elsep.pos)
+            case (PreTransBinaryOp(BinaryOp.===, lhs: PreTransLocalDef, PreTransLit(Null())),
+                PreTransBinaryOp(BinaryOp.===, rhs: PreTransLocalDef, PreTransLit(Null())),
+                PreTransBinaryOp(BinaryOp.===, lhs2: PreTransLocalDef, rhs2: PreTransLocalDef))
+                if lhs2 == lhs && rhs2 == rhs =>
+              PreTransBinaryOp(BinaryOp.===, lhs, rhs)(elsep.pos)
 
             // Example: (x > y) || (x == y)  ->  (x >= y)
-            case (BinaryOp(op1 @ (Int_== | Int_!= | Int_< | Int_<= | Int_> | Int_>=), l1, r1),
-                  BooleanLiteral(true),
-                  BinaryOp(op2 @ (Int_== | Int_!= | Int_< | Int_<= | Int_> | Int_>=), l2, r2))
-                if ((l1.isInstanceOf[Literal] || l1.isInstanceOf[VarRef]) &&
-                    (r1.isInstanceOf[Literal] || r1.isInstanceOf[VarRef]) &&
-                    (l1 == l2 && r1 == r2)) =>
+            case (PreTransBinaryOp(op1 @ (Int_== | Int_!= | Int_< | Int_<= | Int_> | Int_>=), l1, r1),
+                  PreTransLit(BooleanLiteral(true)),
+                  PreTransBinaryOp(op2 @ (Int_== | Int_!= | Int_< | Int_<= | Int_> | Int_>=), l2, r2))
+                if isLitOrLocalDef(l1) && isLitOrLocalDef(r1) && l1 == l2 && r1 == r2 =>
               val canBeEqual =
                 ((op1 == Int_==) || (op1 == Int_<=) || (op1 == Int_>=)) ||
                 ((op2 == Int_==) || (op2 == Int_<=) || (op2 == Int_>=))
@@ -3391,17 +3488,14 @@ private[optimizer] abstract class OptimizerCore(
                 ((op1 == Int_!=) || (op1 == Int_>) || (op1 == Int_>=)) ||
                 ((op2 == Int_!=) || (op2 == Int_>) || (op2 == Int_>=))
 
-              finishTransformExpr(
-                  fold3WayIntComparison(canBeEqual, canBeLessThan,
-                      canBeGreaterThan, l1.toPreTransform, r1.toPreTransform))
+              fold3WayIntComparison(canBeEqual, canBeLessThan,
+                  canBeGreaterThan, l1, r1)
 
             // Example: (x >= y) && (x <= y)  ->  (x == y)
-            case (BinaryOp(op1 @ (Int_== | Int_!= | Int_< | Int_<= | Int_> | Int_>=), l1, r1),
-                  BinaryOp(op2 @ (Int_== | Int_!= | Int_< | Int_<= | Int_> | Int_>=), l2, r2),
-                  BooleanLiteral(false))
-                if ((l1.isInstanceOf[Literal] || l1.isInstanceOf[VarRef]) &&
-                    (r1.isInstanceOf[Literal] || r1.isInstanceOf[VarRef]) &&
-                    (l1 == l2 && r1 == r2)) =>
+            case (PreTransBinaryOp(op1 @ (Int_== | Int_!= | Int_< | Int_<= | Int_> | Int_>=), l1, r1),
+                  PreTransBinaryOp(op2 @ (Int_== | Int_!= | Int_< | Int_<= | Int_> | Int_>=), l2, r2),
+                  PreTransLit(BooleanLiteral(false)))
+                if isLitOrLocalDef(l1) && isLitOrLocalDef(r1) && l1 == l2 && r1 == r2 =>
               val canBeEqual =
                 ((op1 == Int_==) || (op1 == Int_<=) || (op1 == Int_>=)) &&
                 ((op2 == Int_==) || (op2 == Int_<=) || (op2 == Int_>=))
@@ -3412,19 +3506,13 @@ private[optimizer] abstract class OptimizerCore(
                 ((op1 == Int_!=) || (op1 == Int_>) || (op1 == Int_>=)) &&
                 ((op2 == Int_!=) || (op2 == Int_>) || (op2 == Int_>=))
 
-              finishTransformExpr(
-                  fold3WayIntComparison(canBeEqual, canBeLessThan,
-                      canBeGreaterThan, l1.toPreTransform, r1.toPreTransform))
+              fold3WayIntComparison(canBeEqual, canBeLessThan,
+                  canBeGreaterThan, l1, r1)
 
             case _ => default
           }
         } else {
-          (thenp, elsep) match {
-            case (Skip(), Skip()) => keepOnlySideEffects(cond)
-            case (Skip(), _)      => foldIf(negCond, elsep, thenp)(tpe)
-
-            case _ => default
-          }
+          default
         }
     }
   }
@@ -5343,7 +5431,7 @@ private[optimizer] abstract class OptimizerCore(
                   tryDropReturn(body) match {
                     case Some(newBody) =>
                       constructOptimized(revAltsRest,
-                          foldIf(cond, newBody, elsep)(refinedType)(cond.pos))
+                          If(cond, newBody, elsep)(refinedType)(cond.pos))
 
                     case None =>
                       None
@@ -6175,6 +6263,8 @@ private[optimizer] object OptimizerCore {
         lhs.contains(localDef)
       case PreTransBinaryOp(_, lhs, rhs) =>
         lhs.contains(localDef) || rhs.contains(localDef)
+      case PreTransIf(cond, thenp, elsep, _) =>
+        cond.contains(localDef) || thenp.contains(localDef) || elsep.contains(localDef)
       case PreTransLocalDef(thisLocalDef) =>
         thisLocalDef.contains(localDef)
       case _: PreTransGenTree =>
@@ -6314,6 +6404,12 @@ private[optimizer] object OptimizerCore {
 
     val tpe: RefinedType = RefinedType(BinaryOp.resultTypeOf(op))
   }
+
+  /** A `PreTransform` for an `If` that does not produce a record. */
+  private final case class PreTransIf(cond: PreTransform,
+      thenp: PreTransform, elsep: PreTransform, tpe: RefinedType)(
+      implicit val pos: Position)
+      extends PreTransResult
 
   /** A virtual reference to a `LocalDef`. */
   private final case class PreTransLocalDef(localDef: LocalDef)(
