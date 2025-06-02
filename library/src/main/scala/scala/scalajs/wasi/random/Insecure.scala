@@ -1,4 +1,4 @@
-package java.lang.wasi.random
+package scala.scalajs.wasi.random
 
 import scala.scalajs.component.annotation._
 import scala.scalajs.component.unsigned._

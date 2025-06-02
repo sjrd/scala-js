@@ -1,4 +1,4 @@
-package java.lang.wasi.clocks
+package scala.scalajs.wasi.clocks
 
 import scala.scalajs.component.annotation._
 import scala.scalajs.component.unsigned._
@@ -15,4 +15,5 @@ object WallClock {
 
   @ComponentRecord
   final class Datetime(val seconds: ULong, val nanoseconds: UInt)
+
 }

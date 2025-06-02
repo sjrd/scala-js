@@ -137,7 +137,8 @@ object WasmInterfaceTypes {
     case F64Type => jstpe.DoubleRef
     case CharType => jstpe.CharRef
     case StringType => jstpe.ClassRef(BoxedStringClass)
-    case ListType(elemType, length) => throw new AssertionError(s"$tpe")
+    case ListType(elemType, length) =>
+      jstpe.ArrayTypeRef.of(toTypeRef(elemType))
     case RecordType(className, fields) => jstpe.ClassRef(className)
     case TupleType(ts) => jstpe.ClassRef(ClassName("scala.Tuple" + ts.size))
     case VariantType(className, cases) => jstpe.ClassRef(className)

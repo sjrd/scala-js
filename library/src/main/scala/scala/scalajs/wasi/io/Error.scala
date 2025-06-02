@@ -1,4 +1,4 @@
-package java.lang.wasi.io
+package scala.scalajs.wasi.io
 
 import scala.scalajs.component.annotation._
 import scala.scalajs.{component => cm}
