@@ -273,6 +273,8 @@ private[optimizer] abstract class OptimizerCore(
       (lhs, rhs) match {
         case (LongType, ClassType(LongImpl.RuntimeLongClass, _)) =>
           true
+        case (ClassType(LongImpl.RuntimeLongClass, false), LongType) =>
+          true
         case (ClassType(BoxedLongClass, lhsNullable),
             ClassType(LongImpl.RuntimeLongClass, rhsNullable)) =>
           rhsNullable || !lhsNullable
@@ -2870,17 +2872,6 @@ private[optimizer] abstract class OptimizerCore(
 
       // java.lang.Integer
 
-      case IntegerNLZ =>
-        val tvalue = targs.head
-        tvalue match {
-          case PreTransLit(IntLiteral(value)) =>
-            contTree(IntLiteral(Integer.numberOfLeadingZeros(value)))
-          case _ =>
-            if (isWasm)
-              contTree(wasmUnaryOp(WasmUnaryOp.I32Clz, tvalue))
-            else
-              default
-        }
       case IntegerNTZ =>
         val tvalue = targs.head
         tvalue match {
@@ -2917,14 +2908,6 @@ private[optimizer] abstract class OptimizerCore(
 
       // java.lang.Long
 
-      case LongNLZ =>
-        val tvalue = targs.head
-        tvalue match {
-          case PreTransLit(LongLiteral(value)) =>
-            contTree(IntLiteral(java.lang.Long.numberOfLeadingZeros(value)))
-          case _ =>
-            contTree(longToInt(wasmUnaryOp(WasmUnaryOp.I64Clz, tvalue)))
-        }
       case LongNTZ =>
         val tvalue = targs.head
         tvalue match {
@@ -3610,6 +3593,9 @@ private[optimizer] abstract class OptimizerCore(
             expandBinaryOp(LongImpl.bitsToDouble,
                 arg, PreTransTree(Transient(GetFPBitsDataView)))
 
+          case Long_clz =>
+            expandUnaryOp(LongImpl.clz, arg, IntType)
+
           case _ =>
             cont(pretrans)
         }
@@ -3949,6 +3935,23 @@ private[optimizer] abstract class OptimizerCore(
         arg match {
           case PreTransLit(LongLiteral(v)) =>
             PreTransLit(DoubleLiteral(java.lang.Double.longBitsToDouble(v)))
+          case _ =>
+            default
+        }
+
+      // clz
+
+      case Int_clz =>
+        arg match {
+          case PreTransLit(IntLiteral(v)) =>
+            PreTransLit(IntLiteral(Integer.numberOfLeadingZeros(v)))
+          case _ =>
+            default
+        }
+      case Long_clz =>
+        arg match {
+          case PreTransLit(LongLiteral(v)) =>
+            PreTransLit(IntLiteral(java.lang.Long.numberOfLeadingZeros(v)))
           case _ =>
             default
         }
@@ -6563,14 +6566,12 @@ private[optimizer] object OptimizerCore {
     final val ArrayUpdate = ArrayApply       + 1
     final val ArrayLength = ArrayUpdate      + 1
 
-    final val IntegerNLZ = ArrayLength + 1
-    final val IntegerNTZ = IntegerNLZ + 1
+    final val IntegerNTZ = ArrayLength + 1
     final val IntegerBitCount = IntegerNTZ + 1
     final val IntegerRotateLeft = IntegerBitCount + 1
     final val IntegerRotateRight = IntegerRotateLeft + 1
 
-    final val LongNLZ = IntegerRotateRight + 1
-    final val LongNTZ = LongNLZ + 1
+    final val LongNTZ = IntegerRotateRight + 1
     final val LongBitCount = LongNTZ + 1
     final val LongRotateLeft = LongBitCount + 1
     final val LongRotateRight = LongRotateLeft + 1
@@ -6649,9 +6650,6 @@ private[optimizer] object OptimizerCore {
             m("array_update", List(O, I, O), V) -> ArrayUpdate,
             m("array_length", List(O), I) -> ArrayLength
         ),
-        ClassName("java.lang.Integer$") -> List(
-            m("numberOfLeadingZeros", List(I), I) -> IntegerNLZ
-        ),
         ClassName("java.lang.Class") -> List(
             m("getName", Nil, StringClassRef) -> ClassGetName
         ),
@@ -6707,14 +6705,12 @@ private[optimizer] object OptimizerCore {
 
     private val wasmIntrinsics: List[(ClassName, List[(MethodName, Int)])] = List(
         ClassName("java.lang.Integer$") -> List(
-            // note: numberOfLeadingZeros in already in the commonIntrinsics
             m("numberOfTrailingZeros", List(I), I) -> IntegerNTZ,
             m("bitCount", List(I), I) -> IntegerBitCount,
             m("rotateLeft", List(I, I), I) -> IntegerRotateLeft,
             m("rotateRight", List(I, I), I) -> IntegerRotateRight
         ),
         ClassName("java.lang.Long$") -> List(
-            m("numberOfLeadingZeros", List(J), I) -> LongNLZ,
             m("numberOfTrailingZeros", List(J), I) -> LongNTZ,
             m("bitCount", List(J), I) -> LongBitCount,
             m("rotateLeft", List(J, I), J) -> LongRotateLeft,
