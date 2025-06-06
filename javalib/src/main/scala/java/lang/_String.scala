@@ -377,7 +377,11 @@ final class _String private () // scalastyle:ignore
             str += str
             remainingIters -= 1
           }
-          str += str.jsSubstring(0, resultLength - str.length)
+          LinkingInfo.linkTimeIf(LinkingInfo.targetPureWasm) {
+            str += str.substring(0, resultLength - str.length)
+          } {
+            str += str.jsSubstring(0, resultLength - str.length)
+          }
           str
         }
       }
@@ -928,52 +932,45 @@ for (cp <- 0 to Character.MAX_CODE_POINT) {
     start == len
   }
 
-  private def splitLines(): js.Array[String] = {
-    val xs = js.Array[String]()
+  // (line, isLastLine) -> ()
+  @inline private def foreachLine(f: BiFunction[String, scala.Boolean, Unit]): Unit = {
     val len = length()
     var idx = 0
     var last = 0
     while (idx < len) {
       val c = charAt(idx)
       if (c == '\n' || c == '\r') {
-        xs.push(substring(last, idx))
+        val line = substring(last, idx)
         if (c == '\r' && idx + 1 < len && charAt(idx + 1) == '\n')
           idx += 1
         last = idx + 1
+        f(line, last == len)
       }
       idx += 1
     }
     // make sure we add the last segment, but not the last new line
     if (last != len)
-      xs.push(substring(last))
-    xs
+      f(substring(last), true)
   }
 
   def indent(n: Int): String = {
-
-    def forEachLn(f: Function[String, String]): String = {
-      var out = ""
-      var i = 0
-      val xs = splitLines()
-      while (i < xs.length) {
-        out += f(xs(i)) + "\n"
-        i += 1
-      }
-      out
-    }
-
+    val out = new StringBuilder()
     if (n < 0) {
-      forEachLn { l =>
+      foreachLine { (l, isLastLine) =>
         // n is negative here
         var idx = 0
         val lim = if (l.length() <= -n) l.length() else -n
         while (idx < lim && Character.isWhitespace(l.charAt(idx)))
           idx += 1
-        l.substring(idx)
+        out.append(l.substring(idx) + "\n")
       }
+      out.toString()
     } else {
       val padding = " ".asInstanceOf[_String].repeat(n)
-      forEachLn(padding + _)
+      foreachLine { (l, _) =>
+        out.append(padding + l + "\n")
+      }
+      out.toString()
     }
   }
 
@@ -989,38 +986,32 @@ for (cp <- 0 to Character.MAX_CODE_POINT) {
         case _           => false
       }
 
-      val xs = splitLines()
       var i = 0
       var minLeading = Int.MaxValue
 
-      while (i < xs.length) {
-        val l = xs(i)
+      foreachLine { (l, isLastLine) =>
         // count the last line even if blank
-        if (i == xs.length - 1 || !l.asInstanceOf[_String].isBlank()) {
+        if (isLastLine || !l.asInstanceOf[_String].isBlank()) {
           var idx = 0
           while (idx < l.length() && isWS(l.charAt(idx)))
             idx += 1
           if (idx < minLeading)
             minLeading = idx
         }
-        i += 1
       }
       // if trailingNL, then the last line is zero width
       if (trailingNL || minLeading == Int.MaxValue)
         minLeading = 0
 
       var out = ""
-      var j = 0
-      while (j < xs.length) {
-        val line = xs(j)
+      foreachLine { (line, isLastLine) =>
         if (!line.asInstanceOf[_String].isBlank()) {
           // we strip the computed leading WS and also any *trailing* WS
           out += line.substring(minLeading).asInstanceOf[_String].stripTrailing()
         }
         // different from indent, we don't add an LF at the end unless there's already one
-        if (j != xs.length - 1)
+        if (!isLastLine)
           out += "\n"
-        j += 1
       }
       if (trailingNL)
         out += "\n"

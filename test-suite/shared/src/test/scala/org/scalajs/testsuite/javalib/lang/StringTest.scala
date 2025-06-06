@@ -621,6 +621,37 @@ class StringTest {
     assertTrue(compare("Java", "Scala") < 0)
   }
 
+  @Test def indent(): Unit = {
+    assertEquals("  test\n", "test".indent(2))
+    assertEquals("  test\n", "test\n".indent(2))
+    // add newline at the end
+    assertEquals("Hello\nWorld\n", "Hello\nWorld".indent(0))
+    assertEquals("Hello\nWorld\n", "Hello\nWorld\n".indent(0))
+    assertEquals("    Hello\n    World\n", "Hello\nWorld".indent(4))
+
+    // negative
+    assertEquals("  Hello\nWorld\n", "    Hello\n  World".indent(-2))
+    assertEquals("Hello\nWorld\n", "  Hello\n World".indent(-2))
+    assertEquals("Hello\nWorld\n", " Hello\n World".indent(-2))
+
+    // empty lines
+    assertEquals("  Hello\n  \n  World\n", "Hello\n\nWorld".indent(2))
+    assertEquals("  \n  Hello\n  World\n", "\nHello\nWorld".indent(2))
+    assertEquals("  \n", "\n".indent(2))
+    assertEquals("  \n  \n", "\n\n".indent(2))
+
+    assertEquals("", "".indent(2))
+    assertEquals("", "".indent(0))
+    assertEquals("", "".indent(-2))
+  }
+
+  @Test def stripIndent(): Unit = {
+    assertEquals("Hello\nWorld\n", "Hello    \nWorld\n".stripIndent())
+    assertEquals("Hello\nWorld", "Hello    \nWorld".stripIndent())
+    assertEquals("Hello\nWorld\n", "Hello\nWorld\n".stripIndent())
+    assertEquals("Hello\n  World\n", "Hello\n  World  \n".stripIndent())
+  }
+
   @inline private def erased(array: Array[String]): Array[AnyRef] = {
     array.asInstanceOf[Array[AnyRef]]
   }
