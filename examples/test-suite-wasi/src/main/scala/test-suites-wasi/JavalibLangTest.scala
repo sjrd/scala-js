@@ -533,6 +533,9 @@ object JavalibLangTest {
       createFromLargeCodePointArray_Issue2553()
 
       stringCaseInsensitiveOrdering()
+
+      indent()
+      stripIndent()
     }
 
     locally {
