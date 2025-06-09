@@ -58,9 +58,6 @@ private[linker] object LongImpl {
 
   // Operator methods
 
-  final val neg = unaryOp("neg")
-  final val not = unaryOp("not")
-
   final val add = binaryOp("add")
   final val sub = binaryOp("sub")
   final val mul = binaryOp("mul")
@@ -84,6 +81,10 @@ private[linker] object LongImpl {
   final val le = compareOp("le")
   final val gt = compareOp("gt")
   final val ge = compareOp("ge")
+  final val ltu = compareOp("ltu")
+  final val leu = compareOp("leu")
+  final val gtu = compareOp("gtu")
+  final val geu = compareOp("geu")
 
   final val toInt = MethodName("toInt", OneRTLongRef, IntRef)
   final val toFloat = MethodName("toFloat", OneRTLongRef, FloatRef)
@@ -92,17 +93,17 @@ private[linker] object LongImpl {
   final val clz = MethodName("clz", OneRTLongRef, IntRef)
 
   final val fromInt = MethodName("fromInt", List(IntRef), RTLongRef)
+  final val fromUnsignedInt = MethodName("fromUnsignedInt", List(IntRef), RTLongRef)
   final val fromDouble = MethodName("fromDouble", List(DoubleRef), RTLongRef)
   final val fromDoubleBits = MethodName("fromDoubleBits", List(DoubleRef, ObjectRef), RTLongRef)
 
   val OperatorMethods = Set(
-    neg, not,
     add, sub, mul,
     divide, remainder, divideUnsigned, remainderUnsigned,
     or, and, xor, shl, shr, sar,
-    equals_, notEquals, lt, le, gt, ge,
+    equals_, notEquals, lt, le, gt, ge, ltu, leu, gtu, geu,
     toInt, toFloat, toDouble, bitsToDouble, clz,
-    fromInt, fromDouble, fromDoubleBits
+    fromInt, fromUnsignedInt, fromDouble, fromDoubleBits
   )
 
   // Methods used for intrinsics
