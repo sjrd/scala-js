@@ -1818,6 +1818,9 @@ private class FunctionEmitter private (
       case Long_clz =>
         fb += wa.I64Clz
         fb += wa.I32WrapI64
+
+      case UnsignedIntToLong =>
+        fb += wa.I64ExtendI32U
     }
 
     tree.tpe
@@ -2130,6 +2133,18 @@ private class FunctionEmitter private (
       case Double_<= => wa.F64Le
       case Double_>  => wa.F64Gt
       case Double_>= => wa.F64Ge
+
+      case Class_newArray => wa.Call(genFunctionID.newArray)
+
+      case Int_unsigned_<  => wa.I32LtU
+      case Int_unsigned_<= => wa.I32LeU
+      case Int_unsigned_>  => wa.I32GtU
+      case Int_unsigned_>= => wa.I32GeU
+
+      case Long_unsigned_<  => wa.I64LtU
+      case Long_unsigned_<= => wa.I64LeU
+      case Long_unsigned_>  => wa.I64GtU
+      case Long_unsigned_>= => wa.I64GeU
     }
   }
 
