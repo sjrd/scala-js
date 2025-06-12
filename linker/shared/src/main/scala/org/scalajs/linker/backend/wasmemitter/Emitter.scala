@@ -209,7 +209,8 @@ final class Emitter(config: Emitter.Config) {
           SWasmGen.genArrayValue(fb, stringArrayTypeRef, args.size, coreSpec.wasmFeatures.targetPureWasm) {
             for (arg <- args) {
               fb ++= ctx.stringPool.getConstantStringInstr(arg)
-              fb += wa.AnyConvertExtern
+              if (!coreSpec.wasmFeatures.targetPureWasm)
+                fb += wa.AnyConvertExtern
             }
           }
           genCallStatic(className, encodedMainMethodName)
