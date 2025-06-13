@@ -11,6 +11,7 @@ import com.typesafe.tools.mima.plugin.MimaPlugin.autoImport._
 import de.heikoseeberger.sbtheader.HeaderPlugin.autoImport._
 import sbtbuildinfo.BuildInfoPlugin
 import sbtbuildinfo.BuildInfoPlugin.autoImport._
+import sbtbuildinfo.ScalaCaseClassRenderer
 import ScriptedPlugin.autoImport._
 
 import java.util.Arrays
@@ -2488,6 +2489,7 @@ object Build {
 
       buildInfoOrStubs(Compile, Def.setting(baseDirectory.value / "src/main")),
 
+      buildInfoRenderFactory := ScalaCaseClassRenderer.apply,
       buildInfoPackage in Compile := "org.scalajs.testsuite.utils",
       buildInfoOptions in Compile += BuildInfoOption.PackagePrivate,
       buildInfoKeys in Compile := {

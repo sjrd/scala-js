@@ -15,7 +15,11 @@ package org.scalajs.testsuite.utils
 import scala.scalajs.js
 import scala.scalajs.LinkingInfo.ESVersion
 
+import org.scalajs.testsuite.utils.{BuildInfo => ScalaJSBuildInfo}
+
 object Platform {
+
+  private val BuildInfo = ScalaJSBuildInfo.apply
 
   def scalaVersion: String = BuildInfo.scalaVersion
 
