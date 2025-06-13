@@ -34,6 +34,8 @@ object Platform {
 
   def executingInWebAssembly: Boolean = BuildInfo.isWebAssembly
 
+  def executingInPureWebAssembly: Boolean = BuildInfo.targetPureWasm
+
   def executingInNodeJS: Boolean = {
     js.typeOf(js.Dynamic.global.process) != "undefined" &&
     !js.isUndefined(js.Dynamic.global.process.release) &&

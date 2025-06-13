@@ -201,6 +201,8 @@ class ReflectiveCallTest {
     // See https://github.com/scala/bug/issues/10469
     assumeFalse("Reflective call prim.+(String) broken on the JVM",
         Platform.executingInJVM)
+    assumeFalse("TODO: Float to String isn't yet implemented in pure Wasm",
+        Platform.executingInPureWebAssembly)
 
     def concat(x: Any { def +(y: String): String }, y: String): String = x + y
 
@@ -347,6 +349,10 @@ class ReflectiveCallTest {
     assumeFalse(
         "GCC is a bit too eager in its optimizations in this error case",
         Platform.usesClosureCompiler)
+
+    assumeFalse(
+        "TODO: Currently it throws an ArrayIndexOutOfBoundsException in pure Wasm, but should throw MethodNotFound exception",
+        Platform.executingInPureWebAssembly)
 
     type ObjWithAnyRefPrimitives = Any {
       def eq(that: AnyRef): Boolean

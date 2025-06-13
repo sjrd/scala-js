@@ -2273,17 +2273,7 @@ object Build {
 
         (sources in Test).value
           .filter(f =>
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/compiler") && (
-              !endsWith(f, "/ArrayTest.scala") &&
-              !endsWith(f, "/DefaultMethodsTest.scala") &&
-              !endsWith(f, "/IntTest.scala") &&
-              !endsWith(f, "/LongTest.scala") &&
-              !endsWith(f, "/NullPointersTest.scala") &&
-              !endsWith(f, "/ReflectiveCallTest.scala") &&
-              !endsWith(f, "/RegressionTest.scala") &&
-              !endsWith(f, "/RuntimeTypeTestsTest.scala") &&
-              !endsWith(f, "/SourceMapTest.scala")
-            ) ||
+            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/compiler") ||
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/utils") ||
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/util") && (
               endsWith(f, "/TrivialImmutableCollection.scala") ||
@@ -2522,6 +2512,7 @@ object Build {
           "esVersion" -> linkerConfig.esFeatures.esVersion.edition,
           "useECMAScript2015Semantics" -> linkerConfig.esFeatures.useECMAScript2015Semantics,
           "isWebAssembly" -> linkerConfig.experimentalUseWebAssembly,
+          "targetPureWasm" -> linkerConfig.wasmFeatures.targetPureWasm,
         )
       },
 

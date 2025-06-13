@@ -22,6 +22,8 @@ import org.scalajs.testsuite.utils.AssertThrows.{assertThrows, _}
 
 import org.scalajs.testsuite.utils.Platform._
 
+import scala.scalajs.LinkingInfo
+
 class RegressionTest {
   import RegressionTest._
 
@@ -106,6 +108,10 @@ class RegressionTest {
   }
 
   @Test def buffer_Issue268(): Unit = {
+    assumeFalse("TODO: mutable.Buffer doesn't link in pure Wasm, it uses typedarray",
+        executingInPureWebAssembly)
+
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     val a = scala.collection.mutable.Buffer.empty[Int]
     a.insert(0, 0)
     a.remove(0)
@@ -113,6 +119,7 @@ class RegressionTest {
       a.insert(a.length / 2, i)
     }
     assertEquals("1, 3, 5, 7, 9, 10, 8, 6, 4, 2, 0", a.mkString(", "))
+    } {}
   }
 
   @Test def doNotCallEqualsWhenComparingWithLiteralNull_Issue362(): Unit = {
@@ -621,6 +628,7 @@ class RegressionTest {
   }
 
   @Test def eqEqJLDouble(): Unit = {
+    assumeFalse("TODO: assertion fail in pure Wasm", executingInPureWebAssembly)
     // Taken from run/sd329.scala in scala/scala
 
     def d1: Double = 0.0
@@ -662,6 +670,7 @@ class RegressionTest {
   }
 
   @Test def eqEqJLFloat(): Unit = {
+    assumeFalse("TODO: assertion fail in pure Wasm", executingInPureWebAssembly)
     // Taken from run/sd329.scala in scala/scala
 
     def f1: Float = 0.0f
