@@ -2235,7 +2235,69 @@ object Build {
         List(sharedMainDir / "scala")
       },
 
+      unmanagedSourceDirectories in Test := {
+        val config = (scalaJSLinkerConfig in Test).value
+        val targetPureWasm = config.wasmFeatures.targetPureWasm
+
+        val testDir = (sourceDirectory in Test).value
+
+        val jsTestDir =
+          testDir.getParentFile.getParentFile.getParentFile / "js/src/test"
+        val jsTestSuiteDir =
+          jsTestDir / "scala" / "org" / "scalajs" / "testsuite"
+
+
+        val sharedTestDir =
+          testDir.getParentFile.getParentFile.getParentFile / "shared/src/test"
+        val sharedTestSuiteDir = sharedTestDir / "scala" / "org" / "scalajs" / "testsuite"
+
+        if (targetPureWasm) {
+          List(
+            sharedTestSuiteDir / "compiler",
+            sharedTestSuiteDir / "utils",
+            sharedTestSuiteDir / "javalib" / "util",
+            jsTestSuiteDir / "compiler"
+          )
+        } else {
+          (unmanagedSourceDirectories in Test).value
+        }
+      },
+
+      sources in Test := {
+        def endsWith(f: File, suffix: String): Boolean =
+          f.getPath().replace('\\', '/').endsWith(suffix)
+
+        def contains(f: File, substr: String): Boolean =
+          f.getPath().replace('\\', '/').contains(substr)
+
+        (sources in Test).value
+          .filter(f =>
+            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/compiler") && (
+              !endsWith(f, "/ArrayTest.scala") &&
+              !endsWith(f, "/DefaultMethodsTest.scala") &&
+              !endsWith(f, "/IntTest.scala") &&
+              !endsWith(f, "/LongTest.scala") &&
+              !endsWith(f, "/NullPointersTest.scala") &&
+              !endsWith(f, "/ReflectiveCallTest.scala") &&
+              !endsWith(f, "/RegressionTest.scala") &&
+              !endsWith(f, "/RuntimeTypeTestsTest.scala") &&
+              !endsWith(f, "/SourceMapTest.scala")
+            ) ||
+            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/utils") ||
+            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/util") && (
+              endsWith(f, "/TrivialImmutableCollection.scala") ||
+              endsWith(f, "/TrivialImmutableMap.scala")
+            ) ||
+            contains(f, "/js/src/test/scala/org/scalajs/testsuite/compiler") && (
+              endsWith(f, "/ModuleInitializersTest.scala")
+            )
+          )
+      },
+
       unmanagedSourceDirectories in Test ++= {
+        val config = (scalaJSLinkerConfig in Test).value
+        val targetPureWasm = config.wasmFeatures.targetPureWasm
+
         val testDir = (sourceDirectory in Test).value
         val sharedTestDir =
           testDir.getParentFile.getParentFile.getParentFile / "shared/src/test"
@@ -2243,12 +2305,15 @@ object Build {
         val javaV = javaVersion.value
         val scalaV = scalaVersion.value
 
-        List(sharedTestDir / "scala", sharedTestDir / "require-scala2") :::
-        collectionsEraDependentDirectory(scalaV, sharedTestDir) ::
-        includeIf(sharedTestDir / "require-jdk11", javaV >= 11) :::
-        includeIf(sharedTestDir / "require-jdk17", javaV >= 17) :::
-        includeIf(sharedTestDir / "require-jdk21", javaV >= 21) :::
-        includeIf(testDir / "require-scala2", isJSTest)
+        if (targetPureWasm) Nil
+        else {
+          List(sharedTestDir / "scala", sharedTestDir / "require-scala2") :::
+          collectionsEraDependentDirectory(scalaV, sharedTestDir) ::
+          includeIf(sharedTestDir / "require-jdk11", javaV >= 11) :::
+          includeIf(sharedTestDir / "require-jdk17", javaV >= 17) :::
+          includeIf(sharedTestDir / "require-jdk21", javaV >= 21) :::
+          includeIf(testDir / "require-scala2", isJSTest)
+        }
       },
   )
 
@@ -2362,37 +2427,45 @@ object Build {
         val moduleKind = linkerConfig.moduleKind
         val hasModules = moduleKind != ModuleKind.NoModule
         val isWebAssembly = linkerConfig.experimentalUseWebAssembly
+        val targetPureWasm = linkerConfig.wasmFeatures.targetPureWasm
 
-        collectionsEraDependentDirectory(scalaV, testDir) ::
-        includeIf(testDir / "require-new-target",
-            esVersion >= ESVersion.ES2015) :::
-        includeIf(testDir / "require-exponent-op",
-            esVersion >= ESVersion.ES2016) :::
-        includeIf(testDir / "require-async-await",
-            esVersion >= ESVersion.ES2017) :::
-        includeIf(testDir / "require-orphan-await",
-            esVersion >= ESVersion.ES2017 && isWebAssembly) :::
-        includeIf(testDir / "require-modules",
-            hasModules) :::
-        includeIf(testDir / "require-no-modules",
-            !hasModules) :::
-        includeIf(testDir / "require-multi-modules",
-            hasModules && !linkerConfig.closureCompiler && !isWebAssembly) :::
-        includeIf(testDir / "require-dynamic-import",
-            moduleKind == ModuleKind.ESModule && !isWebAssembly) ::: // this is an approximation that works for now
-        includeIf(testDir / "require-esmodule",
-            moduleKind == ModuleKind.ESModule) :::
-        includeIf(testDir / "require-commonjs",
-            moduleKind == ModuleKind.CommonJSModule)
+        if (targetPureWasm) Nil
+        else {
+          collectionsEraDependentDirectory(scalaV, testDir) ::
+          includeIf(testDir / "require-new-target",
+              esVersion >= ESVersion.ES2015) :::
+          includeIf(testDir / "require-exponent-op",
+              esVersion >= ESVersion.ES2016) :::
+          includeIf(testDir / "require-async-await",
+              esVersion >= ESVersion.ES2017) :::
+          includeIf(testDir / "require-orphan-await",
+              esVersion >= ESVersion.ES2017 && isWebAssembly) :::
+          includeIf(testDir / "require-modules",
+              hasModules) :::
+          includeIf(testDir / "require-no-modules",
+              !hasModules) :::
+          includeIf(testDir / "require-multi-modules",
+              hasModules && !linkerConfig.closureCompiler && !isWebAssembly) :::
+          includeIf(testDir / "require-dynamic-import",
+              moduleKind == ModuleKind.ESModule && !isWebAssembly) ::: // this is an approximation that works for now
+          includeIf(testDir / "require-esmodule",
+              moduleKind == ModuleKind.ESModule) :::
+          includeIf(testDir / "require-commonjs",
+              moduleKind == ModuleKind.CommonJSModule)
+        }
       },
 
       unmanagedResourceDirectories in Test ++= {
         val testDir = (sourceDirectory in Test).value
+        val targetPureWasm = scalaJSLinkerConfig.value.wasmFeatures.targetPureWasm
 
-        scalaJSLinkerConfig.value.moduleKind match {
-          case ModuleKind.NoModule       => Nil
-          case ModuleKind.CommonJSModule => Seq(testDir / "resources-commonjs")
-          case ModuleKind.ESModule       => Seq(testDir / "resources-esmodule")
+        if (targetPureWasm) Nil
+        else {
+          scalaJSLinkerConfig.value.moduleKind match {
+            case ModuleKind.NoModule       => Nil
+            case ModuleKind.CommonJSModule => Seq(testDir / "resources-commonjs")
+            case ModuleKind.ESModule       => Seq(testDir / "resources-esmodule")
+          }
         }
       },
 
@@ -2410,6 +2483,7 @@ object Build {
             | */
           """.stripMargin.trim() + "\n"
         )
+        .withPrettyPrint(true)
       },
 
       buildInfoOrStubs(Compile, Def.setting(baseDirectory.value / "src/main")),
