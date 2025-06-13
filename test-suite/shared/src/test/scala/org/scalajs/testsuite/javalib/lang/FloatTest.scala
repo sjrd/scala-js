@@ -21,7 +21,9 @@ import java.lang.{Float => JFloat}
 import scala.util.Try
 
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
-import org.scalajs.testsuite.utils.Platform.executingInJVM
+import org.scalajs.testsuite.utils.Platform.{executingInJVM, executingInPureWebAssembly}
+
+import scala.scalajs.LinkingInfo
 
 class FloatTest {
 
@@ -61,6 +63,8 @@ class FloatTest {
   }
 
   @Test def toStringWithIntegerValuesWhenAnInteger(): Unit = {
+    assumeFalse("Floating point to string doesn't work in pure Wasm.",
+        executingInPureWebAssembly)
     if (executingInJVM) {
       assertEquals("0.0", 0.0f.toString)
       assertEquals("-0.0", (-0.0f).toString)
@@ -86,6 +90,8 @@ class FloatTest {
   }
 
   @Test def toHexStringTest(): Unit = {
+    assumeFalse("Floating point to string doesn't work in pure Wasm.",
+        executingInPureWebAssembly)
     import java.lang.Float.toHexString
 
     assertEquals("NaN", toHexString(Float.NaN))
@@ -108,6 +114,9 @@ class FloatTest {
   }
 
   @Test def parseStringMethods(): Unit = {
+    assumeFalse("Parse floating point doesn't link in pure Wasm",
+        executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(expected: Float, s: String): Unit = {
       assertEquals(s, expected: Any, JFloat.parseFloat(s))
       assertEquals(s, expected: Any, JFloat.valueOf(s).floatValue())
@@ -367,9 +376,13 @@ class FloatTest {
     test(-4.8238549e15f, "-0x1.123454fffffffffffffffffffffffffffffffp52")
     test(-4.8238549e15f, "-0x1.1234550000000000000000000000000000000p52")
     test(-4.8238555e15f, "-0x1.1234550000000000000000000000000000001p52")
+    } {}
   }
 
   @Test def parseFloatInvalidThrows(): Unit = {
+    assumeFalse("Parse floating point doesn't link in pure Wasm",
+        executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String): Unit =
       assertThrows(classOf[NumberFormatException], JFloat.parseFloat(s))
 
@@ -383,6 +396,7 @@ class FloatTest {
 
     test("NaNf")
     test("Infinityf")
+    } {}
   }
 
   @Test def compareTo(): Unit = {
@@ -556,10 +570,16 @@ class FloatTest {
   }
 
   @Test def max(): Unit = {
-    assertEquals(7f, JFloat.max(5f, 7f), 0f)
+    assumeFalse("Doesn't link in pure Wasm, Math.max", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
+      assertEquals(7f, JFloat.max(5f, 7f), 0f)
+    } {}
   }
 
   @Test def min(): Unit = {
-    assertEquals(5f, JFloat.min(5f, 7f), 0f)
+    assumeFalse("Doesn't link in pure Wasm, Math.min", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
+      assertEquals(5f, JFloat.min(5f, 7f), 0f)
+    } {}
   }
 }

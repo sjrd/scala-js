@@ -21,7 +21,9 @@ import java.lang.{Double => JDouble}
 import scala.util.Try
 
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
-import org.scalajs.testsuite.utils.Platform.executingInJVM
+import org.scalajs.testsuite.utils.Platform.{executingInJVM, executingInPureWebAssembly}
+
+import scala.scalajs.LinkingInfo
 
 class DoubleTest {
 
@@ -62,6 +64,8 @@ class DoubleTest {
   }
 
   @Test def toStringWithIntegerValuesWhenAnInteger(): Unit = {
+    assumeFalse("Floating point to string doesn't work in pure Wasm.",
+        executingInPureWebAssembly)
     if (executingInJVM) {
       assertEquals("0.0", 0.0.toString)
       assertEquals("-0.0", (-0.0).toString)
@@ -83,6 +87,8 @@ class DoubleTest {
   }
 
   @Test def toHexStringTest(): Unit = {
+    assumeFalse("Floating point to string doesn't work in pure Wasm.",
+        executingInPureWebAssembly)
     import java.lang.Double.toHexString
 
     assertEquals("0x0.0p0", toHexString(0.0))
@@ -105,6 +111,9 @@ class DoubleTest {
   }
 
   @Test def parseStringMethods(): Unit = {
+    assumeFalse("Parse floating point doesn't link in pure Wasm",
+        executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     // scalastyle:off line.size.limit
 
     /* First, a selection of large categories for which test the combination of
@@ -341,9 +350,13 @@ class DoubleTest {
     test("-0x1.1111111111112800000000000000000000001p52", -4.803839602528531e15)
 
     // scalastyle:on line.size.limit
+    } {}
   }
 
   @Test def parseDoubleInvalidThrows(): Unit = {
+    assumeFalse("Parse floating point doesn't link in pure Wasm",
+        executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     for (padding <- List("", "  ", (0 to 0x20).map(x => x.toChar).mkString)) {
       def pad(s: String): String = padding + s + padding
 
@@ -360,6 +373,7 @@ class DoubleTest {
       test("0x.p1") // hex notation with both integral and fractional parts empty
       test("0x1.2") // missing 'p'
     }
+    } {}
   }
 
   @Test def compareToJavaDouble(): Unit = {
@@ -560,10 +574,16 @@ class DoubleTest {
   }
 
   @Test def max(): Unit = {
-    assertEquals(7d, JDouble.max(5d, 7d), 0d)
+    assumeFalse("Doesn't link in pure Wasm, Math.max", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
+      assertEquals(7d, JDouble.max(5d, 7d), 0d)
+    } {}
   }
 
   @Test def min(): Unit = {
-    assertEquals(5d, JDouble.min(5d, 7d), 0d)
+    assumeFalse("Doesn't link in pure Wasm, Math.min", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
+      assertEquals(5d, JDouble.min(5d, 7d), 0d)
+    } {}
   }
 }

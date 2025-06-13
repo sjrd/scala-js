@@ -21,6 +21,8 @@ import scala.runtime.BoxedUnit
 import org.scalajs.testsuite.utils.AssertThrows.{assertThrows, _}
 import org.scalajs.testsuite.utils.Platform._
 
+import scala.scalajs.LinkingInfo
+
 class ClassTest {
 
   private val PrimitiveClassOfs = Seq(
@@ -79,6 +81,8 @@ class ClassTest {
   }
 
   @Test def getClassGetName(): Unit = {
+    assumeFalse("TODO: className of java.lang.Boolean => java.lang.BooleanBox in pure Wasm",
+        executingInPureWebAssembly)
     // x.getClass().getName() is subject to optimizations
 
     @noinline
@@ -156,6 +160,10 @@ class ClassTest {
   object TestObject
 
   @Test def getSimpleName(): Unit = {
+    assumeFalse("TODO: assertMatch doesn't link in pure Wasm",
+        executingInPureWebAssembly)
+
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     class LocalClassForGetSimpleName
     object LocalObjectForGetSimpleName
 
@@ -185,6 +193,7 @@ class ClassTest {
         classOf[Array[LocalClassForGetSimpleName]].getSimpleName())
     assertMatch("^LocalObjectForGetSimpleName\\$[0-9]+\\$\\[\\]$",
         Array(LocalObjectForGetSimpleName).getClass.getSimpleName())
+    } {}
   }
 
   @Test def isAssignableFrom(): Unit = {
