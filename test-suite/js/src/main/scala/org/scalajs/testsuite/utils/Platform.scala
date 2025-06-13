@@ -15,7 +15,11 @@ package org.scalajs.testsuite.utils
 import scala.scalajs.js
 import scala.scalajs.LinkingInfo.ESVersion
 
+import org.scalajs.testsuite.utils.{BuildInfo => ScalaJSBuildInfo}
+
 object Platform {
+
+  private val BuildInfo = ScalaJSBuildInfo.apply
 
   def scalaVersion: String = BuildInfo.scalaVersion
 
@@ -29,6 +33,8 @@ object Platform {
   def executingInJVMWithJDKIn(range: Range): Boolean = false
 
   def executingInWebAssembly: Boolean = BuildInfo.isWebAssembly
+
+  def executingInPureWebAssembly: Boolean = BuildInfo.targetPureWasm
 
   def executingInNodeJS: Boolean = {
     js.typeOf(js.Dynamic.global.process) != "undefined" &&

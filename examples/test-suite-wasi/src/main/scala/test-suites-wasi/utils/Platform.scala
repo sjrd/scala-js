@@ -25,6 +25,8 @@ object Platform {
 
   final val executingInWebAssembly = true
 
+  final val executingInPureWebAssembly = true
+
   def usesClosureCompiler: Boolean = false
 
   def hasMinifiedNames: Boolean = false

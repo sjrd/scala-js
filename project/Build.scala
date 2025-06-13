@@ -11,6 +11,7 @@ import com.typesafe.tools.mima.plugin.MimaPlugin.autoImport._
 import de.heikoseeberger.sbtheader.HeaderPlugin.autoImport._
 import sbtbuildinfo.BuildInfoPlugin
 import sbtbuildinfo.BuildInfoPlugin.autoImport._
+import sbtbuildinfo.ScalaCaseClassRenderer
 import ScriptedPlugin.autoImport._
 
 import java.util.Arrays
@@ -2272,17 +2273,7 @@ object Build {
 
         (sources in Test).value
           .filter(f =>
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/compiler") && (
-              !endsWith(f, "/ArrayTest.scala") &&
-              !endsWith(f, "/DefaultMethodsTest.scala") &&
-              !endsWith(f, "/IntTest.scala") &&
-              !endsWith(f, "/LongTest.scala") &&
-              !endsWith(f, "/NullPointersTest.scala") &&
-              !endsWith(f, "/ReflectiveCallTest.scala") &&
-              !endsWith(f, "/RegressionTest.scala") &&
-              !endsWith(f, "/RuntimeTypeTestsTest.scala") &&
-              !endsWith(f, "/SourceMapTest.scala")
-            ) ||
+            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/compiler") ||
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/utils") ||
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/util") && (
               endsWith(f, "/TrivialImmutableCollection.scala") ||
@@ -2488,6 +2479,7 @@ object Build {
 
       buildInfoOrStubs(Compile, Def.setting(baseDirectory.value / "src/main")),
 
+      buildInfoRenderFactory := ScalaCaseClassRenderer.apply,
       buildInfoPackage in Compile := "org.scalajs.testsuite.utils",
       buildInfoOptions in Compile += BuildInfoOption.PackagePrivate,
       buildInfoKeys in Compile := {
@@ -2520,6 +2512,7 @@ object Build {
           "esVersion" -> linkerConfig.esFeatures.esVersion.edition,
           "useECMAScript2015Semantics" -> linkerConfig.esFeatures.useECMAScript2015Semantics,
           "isWebAssembly" -> linkerConfig.experimentalUseWebAssembly,
+          "targetPureWasm" -> linkerConfig.wasmFeatures.targetPureWasm,
         )
       },
 
