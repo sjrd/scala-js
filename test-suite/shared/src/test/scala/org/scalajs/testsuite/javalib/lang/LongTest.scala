@@ -753,6 +753,35 @@ class LongTest {
     assertThrows(classOf[ArithmeticException], JLong.divideUnsigned(5L, 0L))
   }
 
+  /*@Test def fuzzDivUnsigned(): Unit = {
+    val Seed = 4075846924374047794L
+    val Sign = Long.MinValue
+
+    @inline
+    def doTest(num: Long, div: Long): Unit = {
+      val quot = JLong.divideUnsigned(num, div)
+      val rem = JLong.remainderUnsigned(num, div)
+      if ((rem ^ Sign) >= (div ^ Sign))
+        fail(s"impossible remainder: ${num.toHexString} /% ${div.toHexString} = (${quot.toHexString}, ${rem.toHexString})")
+      if (quot * div + rem != num)
+        fail(s"invalid result: ${num.toHexString} /% ${div.toHexString} = (${quot.toHexString}, ${rem.toHexString})")
+    }
+
+    val rnd = new java.util.SplittableRandom(Seed)
+    var i = 0
+    while (true) {
+      if ((i & ((1 << 28) - 1)) == 0)
+        System.err.println(s"${i.toHexString}")
+
+      val num = rnd.nextLong()
+      val div1 = (rnd.nextLong() & 0xc000000000000fffL) - 0x800L
+      val div = if (div1 == 0L) div1 + 0x800L else div1
+      doTest(num, div)
+
+      i += 1
+    }
+  }*/
+
   @Test def remainderUnsigned(): Unit = {
     @inline def test(x: Long, y: Long, result: Long): Unit = {
       assertEquals(result, JLong.remainderUnsigned(x, y))
@@ -818,6 +847,10 @@ class LongTest {
     test(-9223372036846154797L, 11L, 0L)
     test(-9212519596031121696L, 1L, 0L)
     test(0L, 2L, 0L)
+
+    // Very large divisor corner cases
+
+    test(-3L, -2L, -3L)
 
     assertThrows(classOf[ArithmeticException], JLong.remainderUnsigned(5L, 0L))
   }

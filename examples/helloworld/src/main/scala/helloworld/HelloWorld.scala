@@ -10,86 +10,26 @@ import js.annotation._
 
 object HelloWorld {
   def main(args: Array[String]): Unit = {
-    import js.DynamicImplicits.truthValue
-
-    if (js.typeOf(js.Dynamic.global.document) != "undefined" &&
-        js.Dynamic.global.document &&
-        js.Dynamic.global.document.getElementById("playground")) {
-      sayHelloFromDOM()
-      sayHelloFromTypedDOM()
-      sayHelloFromJQuery()
-      sayHelloFromTypedJQuery()
-    } else {
-      println("Hello world!")
-    }
+    test(-63003L, -2L, 0L, -63003L)
   }
 
-  def sayHelloFromDOM(): Unit = {
-    val document = js.Dynamic.global.document
-    val playground = document.getElementById("playground")
-
-    val newP = document.createElement("p")
-    newP.innerHTML = "Hello world! <i>-- DOM</i>"
-    playground.appendChild(newP)
+  @noinline
+  def test(num: Long, div: Long, expectedQuot: Long, expectedRem: Long): Unit = {
+    println(java.lang.Long.toUnsignedString(num))
+    println(java.lang.Long.toUnsignedString(div))
+    val approxNum = approx(num)
+    val approxDiv = approx(div)
+    val approxQuot = approxNum / approxDiv
+    println(approxNum)
+    println(approxDiv)
+    println(approxQuot)
+    val quot = java.lang.Long.divideUnsigned(num, div)
+    val rem = java.lang.Long.remainderUnsigned(num, div)
+    println(java.lang.Long.toUnsignedString(quot))
+    println(java.lang.Long.toUnsignedString(rem))
+    assert(expectedQuot == quot && expectedRem == rem)
   }
 
-  def sayHelloFromTypedDOM(): Unit = {
-    val document = window.document
-    val playground = document.getElementById("playground")
-
-    val newP = document.createElement("p")
-    newP.innerHTML = "Hello world! <i>-- typed DOM</i>"
-    playground.appendChild(newP)
-  }
-
-  def sayHelloFromJQuery(): Unit = {
-    // val $ is fine too, but not very recommended in Scala code
-    val jQuery = js.Dynamic.global.jQuery
-    val newP = jQuery("<p>").html("Hello world! <i>-- jQuery</i>")
-    newP.appendTo(jQuery("#playground"))
-  }
-
-  def sayHelloFromTypedJQuery(): Unit = {
-    val jQuery = helloworld.JQuery
-    val newP = jQuery("<p>").html("Hello world! <i>-- typed jQuery</i>")
-    newP.appendTo(jQuery("#playground"))
-  }
-}
-
-@js.native
-@JSGlobalScope
-object window extends js.Object {
-  val document: DOMDocument = js.native
-
-  def alert(msg: String): Unit = js.native
-}
-
-@js.native
-trait DOMDocument extends js.Object {
-  def getElementById(id: String): DOMElement = js.native
-  def createElement(tag: String): DOMElement = js.native
-}
-
-@js.native
-trait DOMElement extends js.Object {
-  var innerHTML: String = js.native
-
-  def appendChild(child: DOMElement): Unit = js.native
-}
-
-@js.native
-@JSGlobal("jQuery")
-object JQuery extends js.Object {
-  def apply(selector: String): JQuery = js.native
-}
-
-@js.native
-trait JQuery extends js.Object {
-  def text(value: String): JQuery = js.native
-  def text(): String = js.native
-
-  def html(value: String): JQuery = js.native
-  def html(): String = js.native
-
-  def appendTo(parent: JQuery): JQuery = js.native
+  def approx(x: Long): Double =
+    (x >>> 32).toDouble * (1L << 32).toDouble + (x & 0xffffffffL).toDouble
 }
