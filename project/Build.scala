@@ -2283,7 +2283,7 @@ object Build {
               !endsWith(f, "/SystemPropertiesTest.scala") // dictionary in SystemProperties
             ) ||
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/util") && (
-              !contains(f, "/util/regex") &&
+              //!contains(f, "/util/regex") &&
 
               !endsWith(f, "/PriorityQueueTest.scala") && // js.Array
               !endsWith(f, "/Base64Test.scala") && // String.replaceAll in Base64Test

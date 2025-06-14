@@ -57,7 +57,7 @@ class RegexEngineTest  {
       case '\t'         => "`t"
       case '\n'         => "`n"
       case '\r'         => "`r"
-      case c if c < ' ' => "`x%02X".format(c.toInt)
+      case c if c < ' ' => "`x0" + c.toInt.toHexString
       case c            => c.toString()
     }
   }
