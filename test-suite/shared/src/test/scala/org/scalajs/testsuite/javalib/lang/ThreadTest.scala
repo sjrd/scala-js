@@ -14,8 +14,11 @@ package org.scalajs.testsuite.javalib.lang
 
 import org.junit.Test
 import org.junit.Assert._
+import org.junit.Assume._
 
-import org.scalajs.testsuite.utils.Platform.executingInJVM
+import org.scalajs.testsuite.utils.Platform.{executingInJVM, executingInPureWebAssembly}
+
+import scala.scalajs.LinkingInfo
 
 class ThreadTest {
 
@@ -34,7 +37,10 @@ class ThreadTest {
   }
 
   @Test def currentThreadGetStackTrace(): Unit = {
-    Thread.currentThread().getStackTrace()
+    assumeFalse("Doesn't link in pure Wasm", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
+      val _ = Thread.currentThread().getStackTrace()
+    } {}
   }
 
   @Test def getId(): Unit = {

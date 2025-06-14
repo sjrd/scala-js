@@ -2256,6 +2256,7 @@ object Build {
           List(
             sharedTestSuiteDir / "compiler",
             sharedTestSuiteDir / "utils",
+            sharedTestSuiteDir / "javalib" / "lang",
             sharedTestSuiteDir / "javalib" / "util",
             jsTestSuiteDir / "compiler"
           )
@@ -2275,6 +2276,12 @@ object Build {
           .filter(f =>
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/compiler") ||
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/utils") ||
+            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/lang") && (
+              !endsWith(f, "/CharacterUnicodeBlockTest.scala") && // String.replace, String.split
+              !endsWith(f, "/ClassValueTest.scala") && // js.Map in ClassValue
+              !endsWith(f, "/MathTest.scala") &&
+              !endsWith(f, "/SystemPropertiesTest.scala") // dictionary in SystemProperties
+            ) ||
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/util") && (
               endsWith(f, "/TrivialImmutableCollection.scala") ||
               endsWith(f, "/TrivialImmutableMap.scala")

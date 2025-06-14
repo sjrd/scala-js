@@ -21,6 +21,8 @@ import org.junit.Assume._
 import org.scalajs.testsuite.utils.AssertThrows.{assertThrows, assertThrowsNPEIfCompliant}
 import org.scalajs.testsuite.utils.Platform._
 
+import scala.scalajs.LinkingInfo
+
 class StringTest {
 
   @Test def lengthTest(): Unit = {
@@ -397,29 +399,41 @@ class StringTest {
   }
 
   @Test def replace(): Unit = {
+    assumeFalse("String.replace", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals("Scala", "Scala.js".replace(".js", ""))
     assertEquals("Scala.js", "Scala.js".replace("JS", ""))
     assertEquals("bb", "aa".replace('a', 'b')) // #25
+    } {}
   }
 
   @Test def matches(): Unit = {
+    assumeFalse("regex doesn't link in pure Wasm", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertTrue("Scala.js".matches(".*js"))
     assertFalse("Scala.js".matches(".*JS"))
+    } {}
   }
 
   @Test def split(): Unit = {
+    assumeFalse("regex doesn't link in pure Wasm", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertArrayEquals(Array[AnyRef]("Sc", "l", ".js"), erased("Scala.js".split("a")))
     assertArrayEquals(Array[AnyRef]("a", "s", "d", "f"), erased("asdf".split("")))
     assertArrayEquals(Array[AnyRef]("a", "s", "d", "f", ""), erased("asdf".split("", -1)))
+    } {}
   }
 
   @Test def splitWithCharAsArgument(): Unit = {
+    assumeFalse("regex doesn't link in pure Wasm", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertArrayEquals(Array[AnyRef]("Scala","js"), erased("Scala.js".split('.')))
     for (i <- 0 to 32) {
       val c = i.toChar
       assertArrayEquals(Array[AnyRef]("blah", "blah", "blah", "blah"),
           erased(s"blah${c}blah${c}blah${c}blah".split(c)))
     }
+    } {}
   }
 
   @Test def startsWithPrefixToffset_Issue1603(): Unit = {
@@ -482,6 +496,8 @@ class StringTest {
   }
 
   @Test def format(): Unit = {
+    assumeFalse("String#format", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals("5", String.format("%d", new Integer(5)))
     assertEquals("00005", String.format("%05d", new Integer(5)))
     assertEquals("0x005", String.format("%0#5x", new Integer(5)))
@@ -492,10 +508,12 @@ class StringTest {
     assertEquals("fffffffd", String.format("%x", new Integer(-3)))
     if (!executingInJVM)
       assertEquals("fffffffc", String.format("%x", new java.lang.Byte(-4.toByte)))
+    } {}
   }
 
   @Test def getBytes(): Unit = {
-
+    assumeFalse("CharSet.CharsetMap", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertArrayEquals("hello-world".getBytes(Charset.forName("UTF-8")),
         Array[Byte](104, 101, 108, 108, 111, 45, 119, 111, 114, 108, 100))
     assertArrayEquals("ᚠᛇᚻ᛫ᛒᛦᚦ᛫ᚠᚱᚩᚠᚢᚱ᛫ᚠᛁᚱᚪ᛫ᚷᛖᚻᚹᛦᛚᚳᚢᛗ".getBytes(Charset.forName("UTF-16")),
@@ -504,6 +522,7 @@ class StringTest {
             -79, 22, -21, 22, -96, 22, -63, 22, -79, 22, -86, 22, -21, 22,
             -73, 22, -42, 22, -69, 22, -71, 22, -26, 22, -38, 22, -77, 22,
             -94, 22, -41))
+    } {}
   }
 
   @Test def regionMatches(): Unit = {
