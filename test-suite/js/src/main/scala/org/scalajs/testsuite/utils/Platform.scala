@@ -13,7 +13,7 @@
 package org.scalajs.testsuite.utils
 
 import scala.scalajs.js
-import scala.scalajs.LinkingInfo.ESVersion
+import scala.scalajs.LinkingInfo.{ESVersion, targetPureWasm, linkTimeIf}
 
 import org.scalajs.testsuite.utils.{BuildInfo => ScalaJSBuildInfo}
 
@@ -92,7 +92,8 @@ object Platform {
 
   def hasCompliantModuleInit: Boolean = BuildInfo.compliantModuleInit
 
-  def hasDirectBuffers: Boolean = typedArrays
+  def hasDirectBuffers: Boolean =
+    linkTimeIf(targetPureWasm) { false } { typedArrays }
 
   def regexSupportsUnicodeCase: Boolean =
     assumedESVersion >= ESVersion.ES2015

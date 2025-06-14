@@ -19,7 +19,9 @@ import org.junit.Assume._
 import org.junit.Test
 
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
-import org.scalajs.testsuite.utils.Platform.executingInJVM
+import org.scalajs.testsuite.utils.Platform.{executingInJVM, executingInPureWebAssembly}
+
+import scala.scalajs.LinkingInfo
 
 /**
   * tests the implementation of the java standard library Date
@@ -103,12 +105,15 @@ class DateTest {
   }
 
   @Test def toStringTest(): Unit = {
+    assumeFalse("String.matches", executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(expectedRegex: String, actual: String): Unit =
       assertTrue(s"expected:<$expectedRegex> to match:<$actual>", actual.matches(expectedRegex))
     test("Mon Nov 03 05:23:27 .+ 1997", new Date(97, 10, 3, 5, 23, 27).toString)
     test("Sun Dec 31 00:00:00 .+ 1899", new Date(0, 0, 0, 0, 0, 0).toString)
     test("Sun Jan 05 08:01:09 .+ 1902", new Date(1, 12, 5, 8, 1, 9).toString)
     test("Sat Jan 09 05:03:04 .+ 2900", new Date(1000, 0, 9, 5, 3, 4).toString)
+    } {}
   }
 
   @Test def toGMTString(): Unit = {

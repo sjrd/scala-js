@@ -172,6 +172,7 @@ trait MapTest {
   }
 
   @Test def testSizeGetPutWithDoublesCornerCasesOfEquals(): Unit = {
+    assumeFalse("signed 0 doesn't work well in pure Wasm", executingInPureWebAssembly)
     assumeNotIdentityHashMapOnJVM()
 
     val mp = factory.empty[Double, Double]
@@ -262,6 +263,7 @@ trait MapTest {
   }
 
   @Test def testRemoveWithDoublesCornerCasesOfEquals(): Unit = {
+    assumeFalse("Double value as a key doesn't work in pure Wasm", executingInPureWebAssembly)
     assumeNotIdentityHashMapOnJVM()
 
     val mp = factory.empty[Double, String]
@@ -720,6 +722,7 @@ trait MapTest {
   }
 
   @Test def testKeySetIsViewForQueriesWithDoublesCornerCaseOfEquals(): Unit = {
+    assumeFalse("signed 0 doesn't work well in pure Wasm", executingInPureWebAssembly)
     assumeNotIdentityHashMapOnJVM()
 
     val nummp = factory.empty[Double, Double]

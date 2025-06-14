@@ -2283,8 +2283,39 @@ object Build {
               !endsWith(f, "/SystemPropertiesTest.scala") // dictionary in SystemProperties
             ) ||
             contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/util") && (
-              endsWith(f, "/TrivialImmutableCollection.scala") ||
-              endsWith(f, "/TrivialImmutableMap.scala")
+              !contains(f, "/util/regex") &&
+
+              !endsWith(f, "/PriorityQueueTest.scala") && // js.Array
+              !endsWith(f, "/Base64Test.scala") && // String.replaceAll in Base64Test
+              !endsWith(f, "/FormatterTest.scala") &&
+              !endsWith(f, "/ToDoubleFunctionTest.scala") && // parseDouble
+              !endsWith(f, "/ToLongFunctionTest.scala") && // Long.parseUnsignedLongInternal, StringRadixInfos
+              !endsWith(f, "/ToLongBiFunctionTest.scala") && // Long.parseUnsignedLongInternal, StringRadixInfos
+              !endsWith(f, "/ToDoubleBiFunctionTest.scala") && // parse Double
+              !endsWith(f, "/RandomTest.scala") && // Math.sqrt
+              !endsWith(f, "/ArraysTest.scala") && // float/double to String
+              !endsWith(f, "/IntConsumerTest.scala") && // Long#StringRadixInfos
+              !endsWith(f, "/DateTest.scala") && // js.Date
+              !endsWith(f, "/PropertiesTest.scala") && // Date.toString
+              !endsWith(f, "/ThreadLocalRandomTest.scala") && // Math.min/max
+              !endsWith(f, "/CollectionsTest.scala") && // Math$.floor(double) from Random.<init>
+              !endsWith(f, "/SplittableRandomTest.scala") && // Math$.floor(double) from Random.<init>
+
+              !endsWith(f, "/ConcurrentSkipListSetTest.scala") && // RedBlackTree.fromOrdered
+              //depends on ConcurrentSkipListSetTest
+              !endsWith(f, "/CollectionsOnCheckedSetTest.scala") &&
+              !endsWith(f, "/CollectionsOnSetsTest.scala") &&
+              !endsWith(f, "/CollectionsOnSynchronizedSetTest.scala") &&
+              !endsWith(f, "/NavigableSetTest.scala") &&
+              !endsWith(f, "/TreeSetTest.scala") && //depends on NavigableSetTest
+
+              !endsWith(f, "/CopyOnWriteArrayListTest.scala") &&
+               // depends on CopyOnWriteArrayListTest
+              !endsWith(f, "/CollectionsOnSynchronizedListTest.scala") &&
+              !endsWith(f, "/CollectionsOnSynchronizedCollectionTest.scala") &&
+              !endsWith(f, "/CollectionsOnListsTest.scala") &&
+              !endsWith(f, "/CollectionsOnCheckedListTest.scala") &&
+              !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala")
             ) ||
             contains(f, "/js/src/test/scala/org/scalajs/testsuite/compiler") && (
               endsWith(f, "/ModuleInitializersTest.scala")

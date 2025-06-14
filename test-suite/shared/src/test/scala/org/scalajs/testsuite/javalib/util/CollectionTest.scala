@@ -16,10 +16,12 @@ import java.{util => ju, lang => jl}
 
 import org.junit.Test
 import org.junit.Assert._
+import org.junit.Assume._
 
 import org.scalajs.testsuite.javalib.lang.IterableFactory
 import org.scalajs.testsuite.javalib.lang.IterableTest
 import org.scalajs.testsuite.utils.AssertThrows.{assertThrows, _}
+import org.scalajs.testsuite.utils.Platform.executingInPureWebAssembly
 import scala.reflect.ClassTag
 
 import Utils._
@@ -278,6 +280,7 @@ trait CollectionTest extends IterableTest {
   }
 
   @Test def toStringCollectionDoubleOneElement(): Unit = {
+    assumeFalse("double to String", executingInPureWebAssembly)
     val coll = factory.fromElements[Double](1.01)
     // JavaScript displays n.0 as n, so one trailing digit must be non-zero.
     assertEquals("[1.01]", coll.toString())

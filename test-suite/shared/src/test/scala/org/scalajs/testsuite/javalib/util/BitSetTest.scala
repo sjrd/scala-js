@@ -20,6 +20,8 @@ import org.junit.Test
 import org.scalajs.testsuite.utils.AssertThrows._
 import org.scalajs.testsuite.utils.Platform._
 
+import scala.scalajs.LinkingInfo
+
 class BitSetTest {
   @Test def test_Constructor_empty(): Unit = {
     val bs = new BitSet
@@ -1481,6 +1483,9 @@ class BitSetTest {
   }
 
   @Test def valueOf_ByteBuffer_typedArrays(): Unit = {
+    assumeFalse("requires support for direct Buffers, which isn't available in pure Wasm",
+      executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assumeTrue("requires support for direct Buffers", hasDirectBuffers)
 
     val eightBS = makeEightBS()
@@ -1497,6 +1502,7 @@ class BitSetTest {
     assertEquals(1, directByteBuffer.position())
     assertEquals(eightBS, BitSet.valueOf(directByteBuffer))
     assertEquals(1, directByteBuffer.position())
+    } {}
   }
 
   @Test def valueOf_LongBuffer(): Unit = {
