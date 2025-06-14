@@ -48,28 +48,9 @@ private[regex] object PatternCompiler {
   def compile(regex: String, flags: Int): Pattern =
     new PatternCompiler(regex, flags).compile()
 
-  /** RegExp to match leading embedded flag specifiers in a pattern.
-   *
-   *  E.g. (?u), (?-i), (?U-i)
-   */
-  private val leadingEmbeddedFlagSpecifierRegExp =
-    new js.RegExp("^\\(\\?([idmsuxU]*)(?:-([idmsuxU]*))?\\)")
-
   /** RegExp to renumber backreferences (used for possessive quantifiers). */
   private val renumberingRegExp =
     new js.RegExp("(\\\\+)(\\d+)", "g")
-
-  /** Returns the flag that corresponds to an embedded flag specifier. */
-  private def charToFlag(c: Char): Int = (c: @switch) match {
-    case 'i' => CASE_INSENSITIVE
-    case 'd' => UNIX_LINES
-    case 'm' => MULTILINE
-    case 's' => DOTALL
-    case 'u' => UNICODE_CASE
-    case 'x' => COMMENTS
-    case 'U' => UNICODE_CHARACTER_CLASS
-    case _   => throw new IllegalArgumentException("bad in-pattern flag")
-  }
 
   private def featureTest(flags: String): Boolean = {
     try {
@@ -208,8 +189,13 @@ private[regex] object PatternCompiler {
     @inline def isHexDigit(c: Char): Boolean =
       isDigit(c) || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')
 
-    @inline def parseInt(s: String, radix: Int): Int =
-      js.Dynamic.global.parseInt(s, radix).asInstanceOf[Int]
+    @inline def parseInt(s: String, radix: Int): Int = {
+      LinkingInfo.linkTimeIf(LinkingInfo.isWebAssembly) {
+        Integer.parseInt(s, radix)
+      } {
+        js.Dynamic.global.parseInt(s, radix).asInstanceOf[Int]
+      }
+    }
   }
 
   import InlinedHelpers._
@@ -851,20 +837,36 @@ private final class PatternCompiler(private val pattern: String, private var fla
   }
 
   private def processLeadingEmbeddedFlags(): Unit = {
-    val m = leadingEmbeddedFlagSpecifierRegExp.exec(pattern)
-    if (m != null) {
-      undefOrForeach(m(1)) { chars =>
-        for (i <- 0 until chars.length())
-          flags |= charToFlag(chars.charAt(i))
+    // E.g. (?u), (?-i), (?U-i), (?ux-)
+
+    val pattern = this.pattern // local copy
+    val len = pattern.length()
+
+    // Note: pIndex is 0 upon entry in this method, by construction
+
+    val savedFlags = flags
+
+    if (len >= 4 && pattern.startsWith("(?") &&
+        (isLetter(pattern.charAt(2)) || pattern.charAt(2) == '-')) {
+      pIndex = 2
+
+      // Positive flags
+      while (pIndex != len && isLetter(pattern.charAt(pIndex))) {
+        flags |= charToFlag(pattern.charAt(pIndex))
+        pIndex += 1
       }
 
       // If U was in the flags, we need to enable UNICODE_CASE as well
       if (hasFlag(UNICODE_CHARACTER_CLASS))
         flags |= UNICODE_CASE
 
-      undefOrForeach(m(2)) { chars =>
-        for (i <- 0 until chars.length())
-          flags &= ~charToFlag(chars.charAt(i))
+      // Negative flags
+      if (pIndex != len && pattern.charAt(pIndex) == '-') {
+        pIndex += 1
+        while (pIndex != len && isLetter(pattern.charAt(pIndex))) {
+          flags &= ~charToFlag(pattern.charAt(pIndex))
+          pIndex += 1
+        }
       }
 
       /* The way things are done here, it is possible to *remove*
@@ -874,9 +876,31 @@ private final class PatternCompiler(private val pattern: String, private var fla
        * `RegexPatternTest.flags()`.
        */
 
-      // Advance past the embedded flags
-      pIndex += undefOrForceGet(m(0)).length()
+      if (pIndex != len && pattern.charAt(pIndex) == ':') {
+        /* It turns out this is a non-capturing group with specific flags,
+         * which is not supported. Roll back as if nothing had happened, to get
+         * the correct error message later on.
+         */
+        pIndex = 0
+        flags = savedFlags
+      } else {
+        if (pIndex == len || pattern.charAt(pIndex) != ')')
+          parseError("Unclosed embedded flag group")
+        pIndex += 1
+      }
     }
+  }
+
+  /** Returns the flag that corresponds to an embedded flag specifier. */
+  private def charToFlag(c: Char): Int = (c: @switch) match {
+    case 'i' => CASE_INSENSITIVE
+    case 'd' => UNIX_LINES
+    case 'm' => MULTILINE
+    case 's' => DOTALL
+    case 'u' => UNICODE_CASE
+    case 'x' => COMMENTS
+    case 'U' => UNICODE_CHARACTER_CLASS
+    case _   => parseError("bad in-pattern flag: " + c)
   }
 
   // The predefined character class for \w, depending on the UNICODE_CHARACTER_CLASS flag
