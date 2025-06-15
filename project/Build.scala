@@ -2258,7 +2258,7 @@ object Build {
             sharedTestSuiteDir / "utils",
             sharedTestSuiteDir / "javalib" / "lang",
             sharedTestSuiteDir / "javalib" / "util",
-            jsTestSuiteDir / "compiler"
+            jsTestSuiteDir
           )
         } else {
           (unmanagedSourceDirectories in Test).value
@@ -2317,8 +2317,13 @@ object Build {
               !endsWith(f, "/CollectionsOnCheckedListTest.scala") &&
               !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala")
             ) ||
-            contains(f, "/js/src/test/scala/org/scalajs/testsuite/compiler") && (
-              endsWith(f, "/ModuleInitializersTest.scala")
+            contains(f, "/js/src/test/scala/org/scalajs/testsuite/") && (
+              // compiler
+              endsWith(f, "/ModuleInitializersTest.scala") ||
+              endsWith(f, "/EqJSTest.scala") ||
+              // library
+              // endsWith(f, "/LinkTimeIfTest.scala") || Math.pow
+              endsWith(f, "/ReflectTest.scala")
             )
           )
       },
