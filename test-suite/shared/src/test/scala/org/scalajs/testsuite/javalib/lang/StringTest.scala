@@ -399,12 +399,9 @@ class StringTest {
   }
 
   @Test def replace(): Unit = {
-    assumeFalse("String.replace", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals("Scala", "Scala.js".replace(".js", ""))
     assertEquals("Scala.js", "Scala.js".replace("JS", ""))
     assertEquals("bb", "aa".replace('a', 'b')) // #25
-    } {}
   }
 
   @Test def matches(): Unit = {
