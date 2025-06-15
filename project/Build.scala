@@ -2257,8 +2257,6 @@ object Build {
                 !endsWith(f, "/scalalib/SymbolTestScala2.scala") // Symbol#JSUniquenessCache
               ) ||
               contains(f, "/shared/src/test/scala/org/scalajs/testsuite/") && (
-                !contains(f, "/niocharset/") && // String.replace
-
                 // scalalib
                 !endsWith(f, "/scalalib/EnumerationTest.scala") && // Enumeration.toString -> String.split -> regex
                 !endsWith(f, "/scalalib/RangesTest.scala") && // BigDecimal
@@ -2268,7 +2266,6 @@ object Build {
                 !contains(f, "/javalib/util/regex/") &&
                 !contains(f, "/javalib/math/") &&
                 // javalib/lang
-                !endsWith(f, "/lang/CharacterUnicodeBlockTest.scala") && // String.replace, String.split
                 !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
                 !endsWith(f, "/lang/MathTest.scala") &&
                 !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties

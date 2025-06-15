@@ -394,7 +394,39 @@ final class _String private () // scalastyle:ignore
 
   @inline
   def replace(target: CharSequence, replacement: CharSequence): String =
-    thisString.jsSplit(target.toString).join(replacement.toString)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
+      thisString.jsSplit(target.toString).join(replacement.toString)
+    } {
+      replaceInternal(target, replacement)
+    }
+
+  private def replaceInternal(target: CharSequence, replacement: CharSequence): String = {
+    val index = indexOf(target.toString, 0)
+    if (index == -1) {
+      thisString
+    } else if (target.toString.isEmpty()) {
+      val buffer = new StringBuilder(length + (replacement.length * (length + 1)))
+      buffer.append(replacement)
+      for (i <- 0 until length) {
+        buffer.append(charAt(i))
+        buffer.append(replacement)
+      }
+      buffer.toString()
+    } else {
+      val buffer = new StringBuilder()
+      val targetLength = target.length()
+      var curIdx = index
+      var tail = 0
+      while (curIdx != -1) {
+        buffer.append(thisString, tail, curIdx)
+        buffer.append(replacement)
+        tail = curIdx + targetLength
+        curIdx = indexOf(target.toString, tail)
+      }
+      buffer.append(thisString, tail, length)
+      buffer.toString
+    }
+  }
 
   def replaceAll(regex: String, replacement: String): String =
     Pattern.compile(regex).matcher(thisString).replaceAll(replacement)
