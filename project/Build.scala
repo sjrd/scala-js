@@ -2225,10 +2225,7 @@ object Build {
 
         if (targetPureWasm) {
           List(
-            sharedTestSuiteDir / "compiler",
-            sharedTestSuiteDir / "utils",
-            sharedTestSuiteDir / "javalib" / "lang",
-            sharedTestSuiteDir / "javalib" / "util",
+            sharedTestSuiteDir,
             jsTestSuiteDir
           )
         } else {
@@ -2245,17 +2242,24 @@ object Build {
 
         (sources in Test).value
           .filter(f =>
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/compiler") ||
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/utils") ||
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/lang") && (
-              !endsWith(f, "/CharacterUnicodeBlockTest.scala") && // String.replace, String.split
-              !endsWith(f, "/ClassValueTest.scala") && // js.Map in ClassValue
-              !endsWith(f, "/MathTest.scala") &&
-              !endsWith(f, "/SystemPropertiesTest.scala") // dictionary in SystemProperties
-            ) ||
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/util") && (
-              !contains(f, "/util/regex") &&
+            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/") && (
+              !contains(f, "/niocharset/") &&
 
+              // scalalib
+              !endsWith(f, "/scalalib/EnumerationTest.scala") && // Enumeration.toString -> String.split -> regex
+              !endsWith(f, "/scalalib/RangesTest.scala") && // BigDecimal
+              !endsWith(f, "/scalalib/SymbolTest.scala") && // Symbol#JSUniquenessCache
+
+              // javalib
+              !contains(f, "/javalib/util/regex/") &&
+              !contains(f, "/javalib/math/") &&
+              // javalib/lang
+              !endsWith(f, "/lang/CharacterUnicodeBlockTest.scala") && // String.replace, String.split
+              !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
+              !endsWith(f, "/lang/MathTest.scala") &&
+              !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
+
+              // javalib/util
               !endsWith(f, "/PriorityQueueTest.scala") && // js.Array
               !endsWith(f, "/Base64Test.scala") && // String.replaceAll in Base64Test
               !endsWith(f, "/FormatterTest.scala") &&
@@ -2286,7 +2290,17 @@ object Build {
               !endsWith(f, "/CollectionsOnSynchronizedCollectionTest.scala") &&
               !endsWith(f, "/CollectionsOnListsTest.scala") &&
               !endsWith(f, "/CollectionsOnCheckedListTest.scala") &&
-              !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala")
+              !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala") &&
+
+              // javalib/io
+              !endsWith(f, "/io/OutputStreamWriterTest.scala") && // CharSet.CharSetMap
+              !endsWith(f, "/io/PrintWriterTest.scala") && // Formatter
+              !endsWith(f, "/io/PrintStreamTest.scala") && // Formatter
+
+              // javalib/net
+              !endsWith(f, "/net/URLEncoderTest.scala") && // CharSet.CharSetMap
+              !endsWith(f, "/net/URLDecoderTest.scala") && // CharSet.CharSetMap
+              !endsWith(f, "/net/URITest.scala") // CharSet.CharSetMap, URI.normalize
             ) ||
             contains(f, "/js/src/test/scala/org/scalajs/testsuite/") && (
               // compiler
@@ -2310,8 +2324,9 @@ object Build {
         val javaV = javaVersion.value
         val scalaV = scalaVersion.value
 
-        if (targetPureWasm) Nil
-        else {
+        if (targetPureWasm) {
+          Nil
+        } else {
           List(sharedTestDir / "scala", sharedTestDir / "require-scala2") :::
           collectionsEraDependentDirectory(scalaV, sharedTestDir) ::
           includeIf(sharedTestDir / "require-jdk11", javaV >= 11) :::

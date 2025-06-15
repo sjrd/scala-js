@@ -95,6 +95,8 @@ class ClassTagTest {
   }
 
   @Test def classTagBasedPatternMatchingOfPrimitives(): Unit = {
+    assumeFalse("TODO: 5 must be a java.lang.Integer, but Byte in pure Wasm",
+        executingInPureWebAssembly)
     def test[A: ClassTag](x: Any): Boolean = x match {
       case x: A => true
       case _    => false
