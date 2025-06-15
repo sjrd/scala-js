@@ -2257,7 +2257,7 @@ object Build {
                 !endsWith(f, "/scalalib/SymbolTestScala2.scala") // Symbol#JSUniquenessCache
               ) ||
               contains(f, "/shared/src/test/scala/org/scalajs/testsuite/") && (
-                !contains(f, "/niocharset/") &&
+                !contains(f, "/niocharset/") && // String.replace
 
                 // scalalib
                 !endsWith(f, "/scalalib/EnumerationTest.scala") && // Enumeration.toString -> String.split -> regex
@@ -2307,14 +2307,11 @@ object Build {
                 !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala") &&
 
                 // javalib/io
-                !endsWith(f, "/io/OutputStreamWriterTest.scala") && // CharSet.CharSetMap
                 !endsWith(f, "/io/PrintWriterTest.scala") && // Formatter
                 !endsWith(f, "/io/PrintStreamTest.scala") && // Formatter
 
                 // javalib/net
-                !endsWith(f, "/net/URLEncoderTest.scala") && // CharSet.CharSetMap
-                !endsWith(f, "/net/URLDecoderTest.scala") && // CharSet.CharSetMap
-                !endsWith(f, "/net/URITest.scala") // CharSet.CharSetMap, URI.normalize
+                !endsWith(f, "/net/URITest.scala") // URI.normalize
               ) ||
               contains(f, "/js/src/test/scala/org/scalajs/testsuite/") && (
                 // compiler
