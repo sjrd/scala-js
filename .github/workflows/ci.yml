@@ -70,7 +70,7 @@ jobs:
       - name: testSuiteEx${{ matrix.suffix }}/test
         run: sbt 'set Global/enableWasmEverywhere := true' testSuiteEx${{ matrix.suffix }}/test
 
-  test-suite-wasi:
+  test-suite-pure-wasm:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -94,10 +94,7 @@ jobs:
         run: sbt "helloworldWasm${{ matrix.suffix }}/run"
       - name: helloworld-wasm${{ matrix.suffix }}/test
         run: sbt "helloworldWasm${{ matrix.suffix }}/test"
-      - name: testSuiteWASI${{ matrix.suffix }}/run
-        run: |
-          sbt "set Seq(Global/enableWasmEverywhere := true, testSuiteWASI.v${{ matrix.suffix }}/scalaJSLinkerConfig ~= (_.withWasmFeatures(_.withExceptionHandling(${{ matrix.eh-support }}))))" testSuiteWASI${{ matrix.suffix }}/run
-      - name: testSuite${{ matrix.suffix }}/run
+      - name: testSuite${{ matrix.suffix }}/test
         run: |
           sbt "set Seq(Global/enableWasmEverywhere := true, testSuite.v${{ matrix.suffix }}/scalaJSLinkerConfig ~= (_.withWasmFeatures(_.withTargetPureWasm(true).withExceptionHandling(${{ matrix.eh-support }}))))" testSuite${{ matrix.suffix }}/test
 

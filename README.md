@@ -19,13 +19,14 @@ This is a friendly fork of Scala.js, targeting stand-alone Wasm runtimes such as
 - [echo-server](./examples/echo-server/)
 
 ## Test
-### `test-suite-wasi`
-Copy of `test-suites` that works without JS-interop (except for some "essential imports").
-
+### `test-suite`
 ```sh
 sbt:Scala.js> set Global/enableWasmEverywhere := true
-sbt:Scala.js> testSuiteWASI2_12/run
+sbt:Scala.js> set scalaJSLinkerConfig in testSuite.v2_12 ~= (_.withWasmFeatures(_.withTargetPureWasm(true)))
+sbt:Scala.js> testSuite2_12/test
 ```
+
+Tests don't link in pure Wasm are filtered out from `unmanagedSourceDirectories` and `sources`, see `testSuiteCommonSettings`.
 
 ### `test-component-model`
 Test suites for Wasm Component Model based interop.

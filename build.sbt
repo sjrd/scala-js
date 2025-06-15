@@ -30,7 +30,6 @@ val echoserver = Build.echoserver
 val helloworld = Build.helloworld
 val helloworldWasm = Build.helloworldWasm
 val reversi = Build.reversi
-val testSuiteWASI = Build.testSuiteWASI
 val testComponentModel = Build.testComponentModel
 val testingExample = Build.testingExample
 val testSuite = Build.testSuite
@@ -42,6 +41,5 @@ val testSuiteLinker = Build.testSuiteLinker
 val partest = Build.partest
 val partestSuite = Build.partestSuite
 val scalaTestSuite = Build.scalaTestSuite
-val testSuiteSources = Build.testSuiteSources
 
 inThisBuild(Build.thisBuildSettings)
