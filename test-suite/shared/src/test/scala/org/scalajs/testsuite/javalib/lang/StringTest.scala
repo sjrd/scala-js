@@ -512,8 +512,6 @@ class StringTest {
   }
 
   @Test def getBytes(): Unit = {
-    assumeFalse("CharSet.CharsetMap", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertArrayEquals("hello-world".getBytes(Charset.forName("UTF-8")),
         Array[Byte](104, 101, 108, 108, 111, 45, 119, 111, 114, 108, 100))
     assertArrayEquals("ᚠᛇᚻ᛫ᛒᛦᚦ᛫ᚠᚱᚩᚠᚢᚱ᛫ᚠᛁᚱᚪ᛫ᚷᛖᚻᚹᛦᛚᚳᚢᛗ".getBytes(Charset.forName("UTF-16")),
@@ -522,7 +520,6 @@ class StringTest {
             -79, 22, -21, 22, -96, 22, -63, 22, -79, 22, -86, 22, -21, 22,
             -73, 22, -42, 22, -69, 22, -71, 22, -26, 22, -38, 22, -77, 22,
             -94, 22, -41))
-    } {}
   }
 
   @Test def regionMatches(): Unit = {
