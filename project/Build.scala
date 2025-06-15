@@ -2207,98 +2207,6 @@ object Build {
         List(sharedMainDir / "scala")
       },
 
-      unmanagedSourceDirectories in Test := {
-        val config = (scalaJSLinkerConfig in Test).value
-        val targetPureWasm = config.wasmFeatures.targetPureWasm
-
-        val testDir = (sourceDirectory in Test).value
-
-        val jsTestDir =
-          testDir.getParentFile.getParentFile.getParentFile / "js/src/test"
-        val jsTestSuiteDir =
-          jsTestDir / "scala" / "org" / "scalajs" / "testsuite"
-
-
-        val sharedTestDir =
-          testDir.getParentFile.getParentFile.getParentFile / "shared/src/test"
-        val sharedTestSuiteDir = sharedTestDir / "scala" / "org" / "scalajs" / "testsuite"
-
-        if (targetPureWasm) {
-          List(
-            sharedTestSuiteDir / "compiler",
-            sharedTestSuiteDir / "utils",
-            sharedTestSuiteDir / "javalib" / "lang",
-            sharedTestSuiteDir / "javalib" / "util",
-            jsTestSuiteDir
-          )
-        } else {
-          (unmanagedSourceDirectories in Test).value
-        }
-      },
-
-      sources in Test := {
-        def endsWith(f: File, suffix: String): Boolean =
-          f.getPath().replace('\\', '/').endsWith(suffix)
-
-        def contains(f: File, substr: String): Boolean =
-          f.getPath().replace('\\', '/').contains(substr)
-
-        (sources in Test).value
-          .filter(f =>
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/compiler") ||
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/utils") ||
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/lang") && (
-              !endsWith(f, "/CharacterUnicodeBlockTest.scala") && // String.replace, String.split
-              !endsWith(f, "/ClassValueTest.scala") && // js.Map in ClassValue
-              !endsWith(f, "/MathTest.scala") &&
-              !endsWith(f, "/SystemPropertiesTest.scala") // dictionary in SystemProperties
-            ) ||
-            contains(f, "/shared/src/test/scala/org/scalajs/testsuite/javalib/util") && (
-              !contains(f, "/util/regex") &&
-
-              !endsWith(f, "/PriorityQueueTest.scala") && // js.Array
-              !endsWith(f, "/Base64Test.scala") && // String.replaceAll in Base64Test
-              !endsWith(f, "/FormatterTest.scala") &&
-              !endsWith(f, "/ToDoubleFunctionTest.scala") && // parseDouble
-              !endsWith(f, "/ToLongFunctionTest.scala") && // Long.parseUnsignedLongInternal, StringRadixInfos
-              !endsWith(f, "/ToLongBiFunctionTest.scala") && // Long.parseUnsignedLongInternal, StringRadixInfos
-              !endsWith(f, "/ToDoubleBiFunctionTest.scala") && // parse Double
-              !endsWith(f, "/RandomTest.scala") && // Math.sqrt
-              !endsWith(f, "/ArraysTest.scala") && // float/double to String
-              !endsWith(f, "/IntConsumerTest.scala") && // Long#StringRadixInfos
-              !endsWith(f, "/DateTest.scala") && // js.Date
-              !endsWith(f, "/PropertiesTest.scala") && // Date.toString
-              !endsWith(f, "/ThreadLocalRandomTest.scala") && // Math.min/max
-              !endsWith(f, "/CollectionsTest.scala") && // Math$.floor(double) from Random.<init>
-              !endsWith(f, "/SplittableRandomTest.scala") && // Math$.floor(double) from Random.<init>
-
-              !endsWith(f, "/ConcurrentSkipListSetTest.scala") && // RedBlackTree.fromOrdered
-              //depends on ConcurrentSkipListSetTest
-              !endsWith(f, "/CollectionsOnCheckedSetTest.scala") &&
-              !endsWith(f, "/CollectionsOnSetsTest.scala") &&
-              !endsWith(f, "/CollectionsOnSynchronizedSetTest.scala") &&
-              !endsWith(f, "/NavigableSetTest.scala") &&
-              !endsWith(f, "/TreeSetTest.scala") && //depends on NavigableSetTest
-
-              !endsWith(f, "/CopyOnWriteArrayListTest.scala") &&
-               // depends on CopyOnWriteArrayListTest
-              !endsWith(f, "/CollectionsOnSynchronizedListTest.scala") &&
-              !endsWith(f, "/CollectionsOnSynchronizedCollectionTest.scala") &&
-              !endsWith(f, "/CollectionsOnListsTest.scala") &&
-              !endsWith(f, "/CollectionsOnCheckedListTest.scala") &&
-              !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala")
-            ) ||
-            contains(f, "/js/src/test/scala/org/scalajs/testsuite/") && (
-              // compiler
-              endsWith(f, "/ModuleInitializersTest.scala") ||
-              endsWith(f, "/EqJSTest.scala") ||
-              // library
-              // endsWith(f, "/LinkTimeIfTest.scala") || Math.pow
-              endsWith(f, "/ReflectTest.scala")
-            )
-          )
-      },
-
       unmanagedSourceDirectories in Test ++= {
         val config = (scalaJSLinkerConfig in Test).value
         val targetPureWasm = config.wasmFeatures.targetPureWasm
@@ -2306,12 +2214,20 @@ object Build {
         val testDir = (sourceDirectory in Test).value
         val sharedTestDir =
           testDir.getParentFile.getParentFile.getParentFile / "shared/src/test"
+        val jsTestDir =
+          testDir.getParentFile.getParentFile.getParentFile / "js/src/test"
 
         val javaV = javaVersion.value
         val scalaV = scalaVersion.value
 
-        if (targetPureWasm) Nil
-        else {
+        if (targetPureWasm) {
+          List(
+            sharedTestDir / "scala",
+            jsTestDir, // run only a few tests (filtered out in sources)
+            sharedTestDir / "require-scala2",
+            collectionsEraDependentDirectory(scalaV, sharedTestDir)
+          )
+        } else {
           List(sharedTestDir / "scala", sharedTestDir / "require-scala2") :::
           collectionsEraDependentDirectory(scalaV, sharedTestDir) ::
           includeIf(sharedTestDir / "require-jdk11", javaV >= 11) :::
@@ -2320,6 +2236,98 @@ object Build {
           includeIf(testDir / "require-scala2", isJSTest)
         }
       },
+
+      sources in Test := {
+        val config = (scalaJSLinkerConfig in Test).value
+        val targetPureWasm = config.wasmFeatures.targetPureWasm
+
+        def endsWith(f: File, suffix: String): Boolean =
+          f.getPath().replace('\\', '/').endsWith(suffix)
+
+        def contains(f: File, substr: String): Boolean =
+          f.getPath().replace('\\', '/').contains(substr)
+
+        val originalSources = (sources in Test).value
+        if (!targetPureWasm) originalSources
+        else {
+          originalSources
+            .filter(f =>
+              contains(f, "/shared/src/test/scala-old-collections/") ||
+              contains(f, "/shared/src/test/require-scala2/") && (
+                !endsWith(f, "/scalalib/SymbolTestScala2.scala") // Symbol#JSUniquenessCache
+              ) ||
+              contains(f, "/shared/src/test/scala/org/scalajs/testsuite/") && (
+                !contains(f, "/niocharset/") &&
+
+                // scalalib
+                !endsWith(f, "/scalalib/EnumerationTest.scala") && // Enumeration.toString -> String.split -> regex
+                !endsWith(f, "/scalalib/RangesTest.scala") && // BigDecimal
+                !endsWith(f, "/scalalib/SymbolTest.scala") && // Symbol#JSUniquenessCache
+
+                // javalib
+                !contains(f, "/javalib/util/regex/") &&
+                !contains(f, "/javalib/math/") &&
+                // javalib/lang
+                !endsWith(f, "/lang/CharacterUnicodeBlockTest.scala") && // String.replace, String.split
+                !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
+                !endsWith(f, "/lang/MathTest.scala") &&
+                !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
+
+                // javalib/util
+                !endsWith(f, "/PriorityQueueTest.scala") && // js.Array
+                !endsWith(f, "/Base64Test.scala") && // String.replaceAll in Base64Test
+                !endsWith(f, "/FormatterTest.scala") &&
+                !endsWith(f, "/ToDoubleFunctionTest.scala") && // parseDouble
+                !endsWith(f, "/ToLongFunctionTest.scala") && // Long.parseUnsignedLongInternal, StringRadixInfos
+                !endsWith(f, "/ToLongBiFunctionTest.scala") && // Long.parseUnsignedLongInternal, StringRadixInfos
+                !endsWith(f, "/ToDoubleBiFunctionTest.scala") && // parse Double
+                !endsWith(f, "/RandomTest.scala") && // Math.sqrt
+                !endsWith(f, "/ArraysTest.scala") && // float/double to String
+                !endsWith(f, "/IntConsumerTest.scala") && // Long#StringRadixInfos
+                !endsWith(f, "/DateTest.scala") && // js.Date
+                !endsWith(f, "/PropertiesTest.scala") && // Date.toString
+                !endsWith(f, "/ThreadLocalRandomTest.scala") && // Math.min/max
+                !endsWith(f, "/CollectionsTest.scala") && // Math$.floor(double) from Random.<init>
+                !endsWith(f, "/SplittableRandomTest.scala") && // Math$.floor(double) from Random.<init>
+
+                !endsWith(f, "/ConcurrentSkipListSetTest.scala") && // RedBlackTree.fromOrdered
+                //depends on ConcurrentSkipListSetTest
+                !endsWith(f, "/CollectionsOnCheckedSetTest.scala") &&
+                !endsWith(f, "/CollectionsOnSetsTest.scala") &&
+                !endsWith(f, "/CollectionsOnSynchronizedSetTest.scala") &&
+                !endsWith(f, "/NavigableSetTest.scala") &&
+                !endsWith(f, "/TreeSetTest.scala") && //depends on NavigableSetTest
+
+                !endsWith(f, "/CopyOnWriteArrayListTest.scala") &&
+                 // depends on CopyOnWriteArrayListTest
+                !endsWith(f, "/CollectionsOnSynchronizedListTest.scala") &&
+                !endsWith(f, "/CollectionsOnSynchronizedCollectionTest.scala") &&
+                !endsWith(f, "/CollectionsOnListsTest.scala") &&
+                !endsWith(f, "/CollectionsOnCheckedListTest.scala") &&
+                !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala") &&
+
+                // javalib/io
+                !endsWith(f, "/io/OutputStreamWriterTest.scala") && // CharSet.CharSetMap
+                !endsWith(f, "/io/PrintWriterTest.scala") && // Formatter
+                !endsWith(f, "/io/PrintStreamTest.scala") && // Formatter
+
+                // javalib/net
+                !endsWith(f, "/net/URLEncoderTest.scala") && // CharSet.CharSetMap
+                !endsWith(f, "/net/URLDecoderTest.scala") && // CharSet.CharSetMap
+                !endsWith(f, "/net/URITest.scala") // CharSet.CharSetMap, URI.normalize
+              ) ||
+              contains(f, "/js/src/test/scala/org/scalajs/testsuite/") && (
+                // compiler
+                endsWith(f, "/ModuleInitializersTest.scala") ||
+                endsWith(f, "/EqJSTest.scala") ||
+                // library
+                // endsWith(f, "/LinkTimeIfTest.scala") || Math.pow
+                endsWith(f, "/ReflectTest.scala")
+              )
+            )
+        }
+      },
+
   )
 
   def testSuiteBootstrapSetting(testSuiteLinker: Project) = Def.settings(
