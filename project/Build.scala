@@ -2087,35 +2087,6 @@ object Build {
       jUnitRuntime % "test", testBridge % "test"
   )
 
-  lazy val testSuiteWASI: MultiScalaProject = MultiScalaProject(
-      id = "testSuiteWASI", base = file("examples") / "test-suite-wasi"
-  ).enablePlugins(
-      MyScalaJSPlugin
-  ).settings(
-      commonSettings,
-      name := "test-suite-wasi",
-      scalacOptions ~= (_.filterNot(
-        Set("-deprecation") contains _)),
-      scalaJSUseMainModuleInitializer := true,
-      scalaJSLinkerConfig ~= {
-        _.withWasmFeatures(_.withExceptionHandling(true).withTargetPureWasm(true))
-         .withPrettyPrint(true)
-         .withModuleKind(ModuleKind.ESModule)
-         .withSemantics { semantics =>
-           semantics
-             // .withAsInstanceOfs(CheckedBehavior.Compliant)
-             .withArrayIndexOutOfBounds(CheckedBehavior.Compliant)
-             .withArrayStores(CheckedBehavior.Compliant)
-             .withNegativeArraySizes(CheckedBehavior.Compliant)
-             .withNullPointers(CheckedBehavior.Compliant)
-             .withStringIndexOutOfBounds(CheckedBehavior.Compliant)
-             // .withModuleInit(CheckedBehavior.Compliant)
-         }
-      },
-  ).withScalaJSCompiler.dependsOnLibrary.dependsOn(jUnitRuntime)
-   // with dependsOn(testSuiteJVM % "compiler->test"), the test classes doesn't exist in Analysis (not sure why)
-   .dependsOnSource(testSuiteSources)
-
   lazy val testComponentModel: MultiScalaProject = MultiScalaProject(
       id = "testComponentModel", base = file("examples") / "test-component-model"
   ).enablePlugins(
@@ -2693,27 +2664,6 @@ object Build {
       ),
 
       libraryDependencies ++= JUnitDeps,
-  )
-
-  lazy val testSuiteSources: MultiScalaProject = MultiScalaProject(
-      id = "testSuiteSources", base = file("test-suite")
-  ).settings(
-      commonSettings,
-      testSuiteCommonSettings(isJSTest = false),
-      name := "Scala.js test suite sources",
-
-      unmanagedSourceDirectories in Compile := {
-        val base = sourceDirectory.value.getParentFile()
-        val testSuite = base / "shared" / "src" / "test" / "scala" / "org" / "scalajs" / "testsuite"
-        Seq(
-          base / "shared" / "src" / "main" / "scala", // ClassDifersOnlyinCase
-          testSuite / "utils",
-          testSuite / "javalib",
-          testSuite / "compiler",
-        )
-      },
-      // libraryDependencies ++= JUnitDeps,
-
   )
 
   /* Dummies for javalib extensions that can be implemented outside the core.
