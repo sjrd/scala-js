@@ -448,13 +448,17 @@ private[regex] object PatternCompiler {
    * version of Unicode invalidates that assumption.
    */
 
-  private val scriptCanonicalizeRegExp = new js.RegExp("(?:^|_)[a-z]", "g")
-
-  /** A cache for verified and canonicalized script names.
+  /** A cache for verified canonicalized script names.
    *
    *  This is a `js.Map` (and a lazy val) because it is only used when `\\p` is
    *  already known to be supported by the underlying `js.RegExp` (ES 2018),
    *  and we assume that that implies that `js.Map` is supported (ES 2015).
+   *
+   *  Normally, the values are all the same as the corresponding keys. The only
+   *  exception is the pair `"Signwriting" -> "SignWriting"`. That script name
+   *  has an uppercase 'W' even though it is not after '_'. Installing it that
+   *  way in the dictionary allows the canonicalizing logic not to know about
+   *  it.
    */
   private lazy val canonicalizedScriptNameCache: js.Map[String, String] = {
     val result = new js.Map[String, String]()
@@ -462,7 +466,7 @@ private[regex] object PatternCompiler {
     /* SignWriting is an exception. It has an uppercase 'W' even though it is
      * not after '_'. We add the exception to the map immediately.
      */
-    mapSet(result, "signwriting", "SignWriting")
+    mapSet(result, "Signwriting", "SignWriting")
 
     result
   }
@@ -1694,14 +1698,29 @@ private final class PatternCompiler(private val pattern: String, private var fla
    *  uses it. If that fails, we report the (original) script name as unknown.
    */
   private def canonicalizeScriptName(scriptName: String): String = {
-    import js.JSStringOps._
+    // First compute the canonicalized form (with "SignWriting" as "Signwriting")
+    var builder = ""
+    val len = scriptName.length()
+    var i = 0
+    var nextIsUppercase = true
+    while (i != len) {
+      val c = scriptName.charAt(i)
+      builder += {
+        if (c >= 'a' && c <= 'z') {
+          (if (nextIsUppercase) (c - 'a' + 'A').toChar else c)
+        } else if (c >= 'A' && c <= 'Z')  {
+          (if (nextIsUppercase) c else (c - 'A' + 'a').toChar)
+        } else {
+          c
+        }
+      }
+      nextIsUppercase = c == '_'
+      i += 1
+    }
+    val canonical = builder // Make sure the lambda does not capture a var
 
-    val lowercase = scriptName.toLowerCase()
-
-    mapGetOrElseUpdate(canonicalizedScriptNameCache, lowercase) { () =>
-      val canonical = lowercase.jsReplace(scriptCanonicalizeRegExp,
-          ((s: String) => s.toUpperCase()): js.Function1[String, String])
-
+    // Then validate it, caching the result
+    mapGetOrElseUpdate(canonicalizedScriptNameCache, canonical) { () =>
       try {
         new js.RegExp(s"\\p{sc=$canonical}", "u")
       } catch {
