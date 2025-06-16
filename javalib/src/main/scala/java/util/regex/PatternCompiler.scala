@@ -390,12 +390,12 @@ private[regex] object PatternCompiler {
      * (resolved from the original definitions, which are in comments)
      */
 
-    mapSet(result, "Lower", posP("Lower")) // \p{IsLowercase}
-    mapSet(result, "Upper", posP("Upper")) // \p{IsUppercase}
+    mapSet(result, "Lower", posP("Lowercase")) // \p{IsLowercase}
+    mapSet(result, "Upper", posP("Uppercase")) // \p{IsUppercase}
     mapSet(result, "ASCII", posClass("\u0000-\u007f"))
-    mapSet(result, "Alpha", posP("Alpha")) // \p{IsAlphabetic}
+    mapSet(result, "Alpha", posP("Alphabetic")) // \p{IsAlphabetic}
     mapSet(result, "Digit", posP("Nd")) // \p{IsDigit}
-    mapSet(result, "Alnum", posClass("\\p{Alpha}\\p{Nd}")) // [\p{IsAlphabetic}\p{IsDigit}]
+    mapSet(result, "Alnum", posClass("\\p{Alphabetic}\\p{Nd}")) // [\p{IsAlphabetic}\p{IsDigit}]
     mapSet(result, "Punct", posP("P")) // \p{IsPunctuation}
 
     // [^\p{IsWhite_Space}\p{gc=Cc}\p{gc=Cs}\p{gc=Cn}]
@@ -430,7 +430,7 @@ private[regex] object PatternCompiler {
     mapSet(result, "Blank", posClass("\t\\p{Zs}"))
 
     mapSet(result, "Cntrl", posP("Cc")) // \p{gc=Cc}
-    mapSet(result, "XDigit", posClass("\\p{Nd}\\p{Hex}")) // [\p{gc=Nd}\p{IsHex_Digit}]
+    mapSet(result, "XDigit", posClass("\\p{Nd}\\p{Hex_Digit}")) // [\p{gc=Nd}\p{IsHex_Digit}]
     mapSet(result, "Space", posP("White_Space")) // \p{IsWhite_Space}
 
     result
