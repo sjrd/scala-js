@@ -54,11 +54,12 @@ class RegexEngineTest  {
 
   private def debugEscape(pattern: String): String = {
     pattern.flatMap {
-      case '\t'         => "`t"
-      case '\n'         => "`n"
-      case '\r'         => "`r"
-      case c if c < ' ' => "`x%02X".format(c.toInt)
-      case c            => c.toString()
+      case '\t'          => "`t"
+      case '\n'          => "`n"
+      case '\r'          => "`r"
+      case c if c < 0x10 => "`x0" + c.toInt.toHexString
+      case c if c < ' '  => "`x" + c.toInt.toHexString
+      case c             => c.toString()
     }
   }
 
@@ -627,12 +628,14 @@ class RegexEngineTest  {
 
   @Test def quotes(): Unit = {
     val str = "D($[^e" + DominoHigh + "\\R)]" + GClef + DominoLow
+    val strAltCase = "d($[^E" + DominoHigh + "\\r)]" + GClef + DominoLow
+
     val quoted = compile("a\\Q" + str + "\\Ec")
     assertMatches(quoted, "a" + str + "c")
-    assertNotFind(quoted, "A" + str.toUpperCase() + "c")
+    assertNotFind(quoted, "A" + strAltCase + "c")
 
     val caseInsensitive = compile("a\\Q" + str + "\\Ec", CaseInsensitive)
-    assertMatches(caseInsensitive, "A" + str.toUpperCase() + "c")
+    assertMatches(caseInsensitive, "A" + strAltCase + "c")
 
     // #1677
     assertMatches("^\\Qmember\\E.*\\Q\\E$", "member0")
@@ -640,12 +643,16 @@ class RegexEngineTest  {
 
   @Test def literal(): Unit = {
     val str = "aD($[^e" + DominoHigh + "\\R)]" + GClef + DominoLow + "c"
+    val strAltCase = "Ad($[^E" + DominoHigh + "\\R)]" + GClef + DominoLow + "c"
+
     val quoted = compile(str, Literal)
     assertMatches(quoted, str)
-    assertNotFind(quoted, str.toUpperCase())
+    assertNotFind(quoted, strAltCase)
 
     val caseInsensitive = compile(str, Literal | CaseInsensitive)
-    assertMatches(caseInsensitive, str.toUpperCase())
+    assertMatches(caseInsensitive, str)
+    assertMatches(caseInsensitive, strAltCase)
+    assertNotMatches(caseInsensitive, "B" + strAltCase.substring(1))
   }
 
   @Test def dot(): Unit = {
@@ -1291,6 +1298,15 @@ class RegexEngineTest  {
     assertMatches(javaUnicodeIdentifierPart, "0")
     assertMatches(javaUnicodeIdentifierPart, "_")
     assertNotMatches(javaUnicodeIdentifierPart, "+")
+
+    /* VERTICAL TILDE: In Lm, but excluded by Pattern_Syntax,
+     * but included anyway for `javaUnicodeIdentifier{Start,Part}`.
+     *
+     * It seems this is the only code point that would otherwise be excluded
+     * by Pattern_Syntax and Pattern_White_Space.
+     */
+    assertMatches(javaUnicodeIdentifierStart, "\u2E2F")
+    assertMatches(javaUnicodeIdentifierPart, "\u2E2F")
 
     /* Other javaX character classes are exhaustively tested in
      * unicodeCharClassesAreConsistentWithTheirDefinitions().
@@ -1978,6 +1994,37 @@ class RegexEngineTest  {
     assertMatches(s, "S")
     assertMatches(s, "\u017F") // ſ LATIN SMALL LETTER LONG S
     assertNotMatches(s, "t")
+
+    val ranges = compile("[g-l\uFB00\u0175-\u0182\u0540-\u0550\u1F68-\u1F8E\u1FAA-\u1FAF\u2126]",
+        CaseInsensitive | UnicodeCase)
+    // g-l
+    assertMatches(ranges, "H")
+    assertMatches(ranges, "\u212A") // K KELVIN SIGN, maps to k
+    // FB00
+    assertMatches(ranges, "\uFB00") // ﬀ LATIN SMALL LIGATURE FF
+    // 0175-0182 (contains 017F which folds to 's')
+    if (!executingInJVM) { // looks like a JVM bug
+      assertMatches(ranges, "s")
+      assertMatches(ranges, "S")
+    }
+    assertMatches(ranges, "\u017F") // ſ LATIN SMALL LETTER LONG S
+    assertMatches(ranges, "\u0180") // neither mapped to nor from, but in the specified range
+    // 0540-0550
+    assertMatches(ranges, "\u0547") // in range
+    assertMatches(ranges, "\u0577") // mapped from 0577
+    // 1F68-1F8E
+    assertMatches(ranges, "\u1F65") // mapped from 1F6D
+    assertMatches(ranges, "\u1F6D") // in range
+    assertMatches(ranges, "\u1F82") // mapped from 1F8A, but also in the range
+    // 1FAA-1FAF
+    assertMatches(ranges, "\u1FA4") // mapped from 1FAC only in simple case folding
+    // 2126
+    assertMatches(ranges, "\u2126") // in range
+    assertMatches(ranges, "\u03C9") // mapped from 2126
+    assertMatches(ranges, "\u03A9") // also maps to 03C9
+    // No matches
+    assertNotMatches(ranges, "t")
+    assertNotMatches(ranges, "ff") // ﬀ FB00 would only match with full case folding
   }
 
   @Test def wordBoundary(): Unit = {
