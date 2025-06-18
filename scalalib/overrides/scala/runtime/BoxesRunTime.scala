@@ -53,8 +53,12 @@ object BoxesRunTime {
 
   def equals(x: Object, y: Object): Boolean =
     linkTimeIf(LinkingInfo.targetPureWasm) {
-      if (x eq y) true
-      else equals2(x, y)
+      if (x eq y) {
+        x match {
+          case x: java.lang.Double => x == x // rejects NaN
+          case _                   => true
+        }
+      } else equals2(x, y)
     } {
       if (scala.scalajs.js.special.strictEquals(x, y)) true
       else equals2(x, y)
