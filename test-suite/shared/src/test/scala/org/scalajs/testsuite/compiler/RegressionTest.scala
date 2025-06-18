@@ -628,7 +628,6 @@ class RegressionTest {
   }
 
   @Test def eqEqJLDouble(): Unit = {
-    assumeFalse("TODO: assertion fail in pure Wasm", executingInPureWebAssembly)
     // Taken from run/sd329.scala in scala/scala
 
     def d1: Double = 0.0
@@ -670,7 +669,6 @@ class RegressionTest {
   }
 
   @Test def eqEqJLFloat(): Unit = {
-    assumeFalse("TODO: assertion fail in pure Wasm", executingInPureWebAssembly)
     // Taken from run/sd329.scala in scala/scala
 
     def f1: Float = 0.0f

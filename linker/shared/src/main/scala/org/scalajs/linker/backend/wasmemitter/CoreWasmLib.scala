@@ -3942,11 +3942,18 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       fb += I32Const(0)
       fb += Return
     }
-    fb += LocalTee(objNonNullLocal)
 
-    // If `obj` is one of our objects, skip all the jsValueType tests
-    fb += RefTest(RefType(genTypeID.ObjectStruct))
-    fb += I32Eqz
+    if (targetPureWasm) {
+      // In pure Wasm, the boxed primitives are our objects, and
+      // the scalaValueType tests are needed.
+      fb += LocalSet(objNonNullLocal)
+      fb += I32Const(1)
+    } else {
+      // If `obj` is one of our objects, skip all the jsValueType tests
+      fb += LocalTee(objNonNullLocal)
+      fb += RefTest(RefType(genTypeID.ObjectStruct))
+      fb += I32Eqz
+    }
     fb.ifThen() {
       fb.switch() { () =>
         fb += LocalGet(objNonNullLocal)
