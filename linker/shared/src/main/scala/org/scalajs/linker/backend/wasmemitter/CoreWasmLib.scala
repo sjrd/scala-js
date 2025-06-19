@@ -512,9 +512,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     }
 
     locally {
-      // Handle IntegerBoxClass, FloatBoxClass, and i16array (string), otherwise ref.eq
-      // Double, Long, Char should be handled by BoxedRuntime
-      // Boolean, Byte, Short (and 31bit int) should be i31ref and handled by ref.eq.
+      // a eq b
       val fb = newFunctionBuilder(genFunctionID.is)
       val aParam = fb.addParam("a", anyref)
       val bParam = fb.addParam("b", anyref)
@@ -1052,7 +1050,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       (genGlobalID.bZeroLong, SpecialNames.LongBoxClass, I64Const(0))
     ) ++ (if (targetPureWasm) List(
       (genGlobalID.bZeroInteger, SpecialNames.IntegerBoxClass, I32Const(0)),
-      (genGlobalID.bZeroFloat, SpecialNames.FloatBoxClass, F32Const(0)),
+      (genGlobalID.bZeroFloat, SpecialNames.DoubleBoxClass, F64Const(0)),
       (genGlobalID.bZeroDouble, SpecialNames.DoubleBoxClass, F64Const(0))
     ) else Nil)
 
@@ -1543,7 +1541,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
     val boxClass = targetTpe match {
       case IntType => SpecialNames.IntegerBoxClass
-      case FloatType => SpecialNames.FloatBoxClass
+      case FloatType => SpecialNames.DoubleBoxClass
       case DoubleType => SpecialNames.DoubleBoxClass
       case CharType => SpecialNames.CharBoxClass
       case LongType => SpecialNames.LongBoxClass
@@ -1554,6 +1552,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb += GlobalGet(genGlobalID.forVTable(boxClass))
     if (targetPureWasm) fb += I32Const(0)
     fb += LocalGet(xParam)
+    if (targetTpe == FloatType) fb += F64PromoteF32
     fb += StructNew(genTypeID.forClass(boxClass))
     fb.buildAndAddToModule()
   }
@@ -1567,8 +1566,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
     val boxClass = targetTpe match {
       case IntType => SpecialNames.IntegerBoxClass
-      case FloatType => SpecialNames.FloatBoxClass
-      case DoubleType => SpecialNames.DoubleBoxClass
       case CharType => SpecialNames.CharBoxClass
       case LongType => SpecialNames.LongBoxClass
       case BooleanType => SpecialNames.BooleanBoxClass
@@ -1605,16 +1602,17 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.block(FunctionType(List(RefType.anyref), List(resultType))) { doneLabel =>
       fb.block(FunctionType(List(RefType.anyref), Nil)) { isNullLabel =>
         fb.block(FunctionType(List(RefType.anyref), List(RefType.i31))) { isI31Label =>
-          fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.FloatBoxClass))))) { isFloatLabel =>
+          fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass))))) { isDoubleLabel =>
             fb += BrOnNull(isNullLabel)
             fb += BrOnCast(isI31Label, RefType.anyref, RefType.i31)
-            fb += BrOnCast(isFloatLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.FloatBoxClass)))
+            fb += BrOnCast(isDoubleLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))
             fb += Unreachable
-          } // FloatBoxClass
+          } // DoubleBoxClass
           fb += StructGet(
-            genTypeID.forClass(SpecialNames.FloatBoxClass),
-            genFieldID.forClassInstanceField(FieldName(SpecialNames.FloatBoxClass, SpecialNames.valueFieldSimpleName))
+            genTypeID.forClass(SpecialNames.DoubleBoxClass),
+            genFieldID.forClassInstanceField(FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
           )
+          fb += F32DemoteF64
           fb += Br(doneLabel)
         } // i31
         fb += I31GetS
@@ -1638,26 +1636,17 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       fb.block(FunctionType(List(RefType.anyref), Nil)) { isNullLabel =>
         fb.block(FunctionType(List(RefType.anyref), List(RefType.i31))) { isI31Label =>
           fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass))))) { isIntLabel =>
-            fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.FloatBoxClass))))) { isFloatLabel =>
-              fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass))))) { isDoubleLabel =>
-                fb += BrOnNull(isNullLabel)
-                fb += BrOnCast(isI31Label, RefType.anyref, RefType.i31)
-                fb += BrOnCast(isIntLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass)))
-                fb += BrOnCast(isFloatLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.FloatBoxClass)))
-                fb += BrOnCast(isDoubleLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))
-                fb += Unreachable
-              } // DoubleBoxClass
-              fb += StructGet(
-                genTypeID.forClass(SpecialNames.DoubleBoxClass),
-                genFieldID.forClassInstanceField(FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
-              )
-              fb += Br(doneLabel)
-            } // FloatBoxClass
+            fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass))))) { isDoubleLabel =>
+              fb += BrOnNull(isNullLabel)
+              fb += BrOnCast(isI31Label, RefType.anyref, RefType.i31)
+              fb += BrOnCast(isIntLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass)))
+              fb += BrOnCast(isDoubleLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))
+              fb += Unreachable
+            } // DoubleBoxClass
             fb += StructGet(
-              genTypeID.forClass(SpecialNames.FloatBoxClass),
-              genFieldID.forClassInstanceField(FieldName(SpecialNames.FloatBoxClass, SpecialNames.valueFieldSimpleName))
+              genTypeID.forClass(SpecialNames.DoubleBoxClass),
+              genFieldID.forClassInstanceField(FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
             )
-            fb += F64PromoteF32
             fb += Br(doneLabel)
           } // IntegerBoxClass
           fb += StructGet(
@@ -1835,7 +1824,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     }
     for (t <- List(
         SpecialNames.IntegerBoxClass,
-        SpecialNames.FloatBoxClass,
         SpecialNames.DoubleBoxClass
     )) {
       fb += LocalGet(xParam)
@@ -2142,35 +2130,45 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
     val fb = newFunctionBuilder(genFunctionID.valueDescription)
     val valueParam = fb.addParam("value", anyref)
+    val doubleValueLocal = fb.addLocal("doubleValue", Float64)
     fb.setResultType(stringType)
 
     if (targetPureWasm) {
+      val doubleBoxType = RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass))
       fb.block(anyref) { notOurObjectLabel =>
         fb.block(objectType) { isCharLabel =>
           fb.block(objectType) { isLongLabel =>
             fb.block(objectType) { isIntegerLabel =>
-              fb.block(objectType) { isFloatLabel =>
-                fb.block(objectType) { isDoubleLabel =>
-                  // If it not our object, jump out of notOurObject
-                  fb += LocalGet(valueParam)
-                  fb += BrOnCastFail(notOurObjectLabel, anyref, objectType)
+              fb.block(doubleBoxType) { isDoubleLabel =>
+                // If it not our object, jump out of notOurObject
+                fb += LocalGet(valueParam)
+                fb += BrOnCastFail(notOurObjectLabel, anyref, objectType)
 
-                  fb += BrOnCast(isLongLabel, objectType, RefType(genTypeID.forClass(SpecialNames.LongBoxClass)))
-                  fb += BrOnCast(isCharLabel, objectType, RefType(genTypeID.forClass(SpecialNames.CharBoxClass)))
-                  fb += BrOnCast(isIntegerLabel, objectType, RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass)))
-                  fb += BrOnCast(isFloatLabel, objectType, RefType(genTypeID.forClass(SpecialNames.FloatBoxClass)))
-                  fb += BrOnCast(isDoubleLabel, objectType, RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))
+                fb += BrOnCast(isLongLabel, objectType, RefType(genTypeID.forClass(SpecialNames.LongBoxClass)))
+                fb += BrOnCast(isCharLabel, objectType, RefType(genTypeID.forClass(SpecialNames.CharBoxClass)))
+                fb += BrOnCast(isIntegerLabel, objectType, RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass)))
+                fb += BrOnCast(isDoubleLabel, objectType, doubleBoxType)
 
-                  // Get and return the class name
-                  fb += StructGet(genTypeID.ObjectStruct, genFieldID.objStruct.vtable)
-                  fb += ReturnCall(genFunctionID.typeDataName)
-                }
-
-                fb ++= ctx.stringPool.getConstantStringInstr("double")
-                fb += Return
+                // Get and return the class name
+                fb += StructGet(genTypeID.ObjectStruct, genFieldID.objStruct.vtable)
+                fb += ReturnCall(genFunctionID.typeDataName)
               }
 
-              fb ++= ctx.stringPool.getConstantStringInstr("float")
+              // if doubleValue.toFloat.toDouble == doubleValue
+              fb += StructGet(
+                genTypeID.forClass(SpecialNames.DoubleBoxClass),
+                genFieldID.forClassInstanceField(FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
+              )
+              fb += LocalTee(doubleValueLocal)
+              fb += F32DemoteF64
+              fb += F64PromoteF32
+              fb += LocalGet(doubleValueLocal)
+              fb += F64Eq
+              fb.ifThenElse(stringType) {
+                fb ++= ctx.stringPool.getConstantStringInstr("double")
+              } {
+                fb ++= ctx.stringPool.getConstantStringInstr("float")
+              }
               fb += Return
             }
 
@@ -3160,12 +3158,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       },
       List(KindBoxedInteger) -> { () =>
         fb += LocalGet(valueParam)
-        if (targetPureWasm) {
-          val structTypeID = genTypeID.forClass(SpecialNames.IntegerBoxClass)
-          fb += RefTest(RefType(structTypeID))
-        } else {
-          fb += Call(genFunctionID.typeTest(IntRef))
-        }
+        fb += Call(genFunctionID.typeTest(IntRef))
       },
       List(KindBoxedLong) -> { () =>
         fb += LocalGet(valueParam)
@@ -3174,21 +3167,11 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       },
       List(KindBoxedFloat) -> { () =>
         fb += LocalGet(valueParam)
-        if (targetPureWasm) {
-          val structTypeID = genTypeID.forClass(SpecialNames.FloatBoxClass)
-          fb += RefTest(RefType(structTypeID))
-        } else {
-          fb += Call(genFunctionID.typeTest(FloatRef))
-        }
+        fb += Call(genFunctionID.typeTest(FloatRef))
       },
       List(KindBoxedDouble) -> { () =>
         fb += LocalGet(valueParam)
-        if (targetPureWasm) {
-          val structTypeID = genTypeID.forClass(SpecialNames.DoubleBoxClass)
-          fb += RefTest(RefType(structTypeID))
-        } else {
-          fb += Call(genFunctionID.typeTest(DoubleRef))
-        }
+        fb += Call(genFunctionID.typeTest(DoubleRef))
       },
       List(KindBoxedString) -> { () =>
         fb += LocalGet(valueParam)
@@ -3878,9 +3861,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
             fb += getHijackedClassTypeDataInstr(BoxedIntegerClass)
           } {
             fb += LocalGet(ourObjectLocal)
-            fb += RefTest(RefType(genTypeID.forClass(SpecialNames.FloatBoxClass)))
+            fb += RefTest(RefType(genTypeID.forClass(SpecialNames.BooleanBoxClass)))
             fb.ifThenElse(typeDataType) {
-              fb += getHijackedClassTypeDataInstr(BoxedFloatClass)
+              fb += getHijackedClassTypeDataInstr(BoxedBooleanClass)
             } {
               fb += LocalGet(ourObjectLocal)
               fb += RefTest(RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))

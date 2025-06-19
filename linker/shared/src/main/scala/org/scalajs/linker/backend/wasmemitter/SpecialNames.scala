@@ -29,7 +29,6 @@ object SpecialNames {
   // targetPureWasm
   val BooleanBoxClass = BoxedBooleanClass.withSuffix("Box")
   val IntegerBoxClass = BoxedIntegerClass.withSuffix("Box")
-  val FloatBoxClass = BoxedFloatClass.withSuffix("Box")
   val DoubleBoxClass = BoxedDoubleClass.withSuffix("Box")
   val BooleanBoxCtor = MethodName.constructor(List(BooleanRef))
 

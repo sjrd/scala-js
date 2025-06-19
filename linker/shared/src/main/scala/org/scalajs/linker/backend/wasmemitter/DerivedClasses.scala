@@ -39,7 +39,6 @@ object DerivedClasses {
         case clazz if clazz.className == BoxedCharacterClass ||
             clazz.className == BoxedLongClass ||
             clazz.className == BoxedIntegerClass ||
-            clazz.className == BoxedFloatClass ||
             clazz.className == BoxedDoubleClass ||
             clazz.className == BoxedBooleanClass =>
           deriveBoxClass(clazz)
