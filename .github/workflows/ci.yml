@@ -147,3 +147,22 @@ jobs:
       - name: Run tests
         run: wasmtime -W function-references,gc -C collector=null out.wasm
         working-directory: examples/test-component-model
+
+  test-suite-jvm:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suffix: [2_12, 2_13]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'sbt'
+      - uses: sbt/setup-sbt@v1
+      - name: testSuiteJVM${{ matrix.suffix }}/test
+        run: sbt "testSuiteJVM${{ matrix.suffix }}/test"
+      - name: testSuiteExJVM${{ matrix.suffix }}/test
+        run: sbt "testSuiteExJVM${{ matrix.suffix }}/test"
