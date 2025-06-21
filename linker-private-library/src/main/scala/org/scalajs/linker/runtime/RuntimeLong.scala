@@ -768,11 +768,8 @@ object RuntimeLong {
   }
 
   @inline
-  def clz(a: RuntimeLong): Int = {
-    val hi = a.hi
-    if (hi != 0) Integer.numberOfLeadingZeros(hi)
-    else 32 + Integer.numberOfLeadingZeros(a.lo)
-  }
+  def clz(a: RuntimeLong): Int =
+    inlineNumberOfLeadingZeros(a.lo, a.hi)
 
   @inline
   def fromInt(value: Int): RuntimeLong =
@@ -1242,9 +1239,15 @@ object RuntimeLong {
     31 - Integer.numberOfLeadingZeros(i)
 
   /** Returns the number of leading zeros in the given long (lo, hi). */
-  @inline def inlineNumberOfLeadingZeros(lo: Int, hi: Int): Int =
-    if (hi != 0) Integer.numberOfLeadingZeros(hi)
-    else Integer.numberOfLeadingZeros(lo) + 32
+  @inline def inlineNumberOfLeadingZeros(lo: Int, hi: Int): Int = {
+    /* (hiz << 26 >> 31) takes bit 5 (31-26) of hiz and expands it everywhere.
+     * That bit is 1 iff hiz == 32 and 0 iff hiz < 32. hiz == 32 iff hi == 0.
+     * Therefore, we have 1's everywhere if hi == 0 and 0's everywhere otherwise.
+     * Using that as mask on clz(lo) takes it into account iff hi == 0.
+     */
+    val hiz = Integer.numberOfLeadingZeros(hi)
+    hiz + ((hiz << 26 >> 31) & Integer.numberOfLeadingZeros(lo))
+  }
 
   /** Tests whether the unsigned long (alo, ahi) is >= (blo, bhi). */
   @inline
