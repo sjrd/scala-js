@@ -417,7 +417,7 @@ private[emitter] final class SJSGen(
             !globalKnowledge.isInterface(className)) {
           genIsInstanceOfClass(expr, className)
         } else {
-          Apply(globalVar(VarField.is, className), List(expr))
+          !(!Apply(globalVar(VarField.is, className), List(expr)))
         }
 
       case ArrayType(arrayTypeRef, false) =>
@@ -425,17 +425,17 @@ private[emitter] final class SJSGen(
           case ArrayTypeRef(_:PrimRef | ClassRef(ObjectClass), 1) =>
             expr instanceof genArrayConstrOf(arrayTypeRef)
           case ArrayTypeRef(base, depth) =>
-            Apply(typeRefVar(VarField.isArrayOf, base), List(expr, IntLiteral(depth)))
+            !(!Apply(typeRefVar(VarField.isArrayOf, base), List(expr, IntLiteral(depth))))
         }
 
       case UndefType   => expr === Undefined()
       case BooleanType => typeof(expr) === "boolean"
       case CharType    => expr instanceof globalVar(VarField.Char, CoreVar)
-      case ByteType    => genCallHelper(VarField.isByte, expr)
-      case ShortType   => genCallHelper(VarField.isShort, expr)
-      case IntType     => genCallHelper(VarField.isInt, expr)
+      case ByteType    => !(!genCallHelper(VarField.isByte, expr))
+      case ShortType   => !(!genCallHelper(VarField.isShort, expr))
+      case IntType     => !(!genCallHelper(VarField.isInt, expr))
       case LongType    => genIsLong(expr)
-      case FloatType   => genCallHelper(VarField.isFloat, expr)
+      case FloatType   => !(!genCallHelper(VarField.isFloat, expr))
       case DoubleType  => typeof(expr) === "number"
       case StringType  => typeof(expr) === "string"
 
@@ -472,11 +472,11 @@ private[emitter] final class SJSGen(
       case BoxedUnitClass      => expr === Undefined()
       case BoxedBooleanClass   => typeof(expr) === "boolean"
       case BoxedCharacterClass => expr instanceof globalVar(VarField.Char, CoreVar)
-      case BoxedByteClass      => genCallHelper(VarField.isByte, expr)
-      case BoxedShortClass     => genCallHelper(VarField.isShort, expr)
-      case BoxedIntegerClass   => genCallHelper(VarField.isInt, expr)
+      case BoxedByteClass      => !(!genCallHelper(VarField.isByte, expr))
+      case BoxedShortClass     => !(!genCallHelper(VarField.isShort, expr))
+      case BoxedIntegerClass   => !(!genCallHelper(VarField.isInt, expr))
       case BoxedLongClass      => genIsLong(expr)
-      case BoxedFloatClass     => genCallHelper(VarField.isFloat, expr)
+      case BoxedFloatClass     => !(!genCallHelper(VarField.isFloat, expr))
       case BoxedDoubleClass    => typeof(expr) === "number"
       case BoxedStringClass    => typeof(expr) === "string"
     }
@@ -487,7 +487,7 @@ private[emitter] final class SJSGen(
       pos: Position): Tree = {
     import TreeDSL._
 
-    if (useBigIntForLongs) genCallHelper(VarField.isLong, expr)
+    if (useBigIntForLongs) !(!genCallHelper(VarField.isLong, expr))
     else expr instanceof globalVar(VarField.c, LongImpl.RuntimeLongClass)
   }
 
@@ -506,7 +506,7 @@ private[emitter] final class SJSGen(
 
         case UndefType                     => wg(Block(expr, Undefined()))
         case BooleanType                   => wg(!(!expr))
-        case CharType                      => wg(genCallHelper(VarField.uC, expr))
+        case CharType                      => wg(genCallHelper(VarField.uC, expr) | 0)
         case ByteType | ShortType| IntType => wg(expr | 0)
         case LongType                      => wg(genCallHelper(VarField.uJ, expr))
         case DoubleType                    => wg(UnaryOp(irt.JSUnaryOp.+, expr))
@@ -530,14 +530,14 @@ private[emitter] final class SJSGen(
           Apply(typeRefVar(VarField.asArrayOf, base), List(expr, IntLiteral(depth)))
 
         case UndefType   => genCallHelper(VarField.uV, expr)
-        case BooleanType => genCallHelper(VarField.uZ, expr)
-        case CharType    => genCallHelper(VarField.uC, expr)
-        case ByteType    => genCallHelper(VarField.uB, expr)
-        case ShortType   => genCallHelper(VarField.uS, expr)
-        case IntType     => genCallHelper(VarField.uI, expr)
+        case BooleanType => !(!genCallHelper(VarField.uZ, expr))
+        case CharType    => genCallHelper(VarField.uC, expr) | 0
+        case ByteType    => genCallHelper(VarField.uB, expr) | 0
+        case ShortType   => genCallHelper(VarField.uS, expr) | 0
+        case IntType     => genCallHelper(VarField.uI, expr) | 0
         case LongType    => genCallHelper(VarField.uJ, expr)
-        case FloatType   => genCallHelper(VarField.uF, expr)
-        case DoubleType  => genCallHelper(VarField.uD, expr)
+        case FloatType   => +genCallHelper(VarField.uF, expr)
+        case DoubleType  => +genCallHelper(VarField.uD, expr)
         case StringType  => genCallHelper(VarField.uT, expr)
         case AnyType     => expr
 
