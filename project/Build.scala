@@ -2258,12 +2258,10 @@ object Build {
               ) ||
               contains(f, "/shared/src/test/scala/org/scalajs/testsuite/") && (
                 // scalalib
-                !endsWith(f, "/scalalib/EnumerationTest.scala") && // Enumeration.toString -> String.split -> regex
                 !endsWith(f, "/scalalib/RangesTest.scala") && // BigDecimal
                 !endsWith(f, "/scalalib/SymbolTest.scala") && // Symbol#JSUniquenessCache
 
                 // javalib
-                !contains(f, "/javalib/util/regex/") &&
                 !contains(f, "/javalib/math/") &&
                 // javalib/lang
                 !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
