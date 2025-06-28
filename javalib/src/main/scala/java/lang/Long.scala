@@ -442,13 +442,37 @@ object Long {
 
   // Wasm intrinsic
   @inline
-  def rotateLeft(i: scala.Long, distance: scala.Int): scala.Long =
-    (i << distance) | (i >>> -distance)
+  def rotateLeft(i: scala.Long, distance: scala.Int): scala.Long = {
+    // (i << distance) | (i >>> -distance)
+
+    val lo = i.toInt
+    val hi = (i >>> 32).toInt
+    val n = distance
+
+    val loIfSmallShift = (lo << n) | (hi >>> 1 >>> (31 - n))
+    val hiIfSmallShift = (hi << n) | (lo >>> 1 >>> (31 - n))
+
+    val rlo = if ((n & 32) == 0) loIfSmallShift else hiIfSmallShift
+    val rhi = if ((n & 32) == 0) hiIfSmallShift else loIfSmallShift
+    makeLongFromLoHi(rlo, rhi)
+  }
 
   // Wasm intrinsic
   @inline
-  def rotateRight(i: scala.Long, distance: scala.Int): scala.Long =
-    (i >>> distance) | (i << -distance)
+  def rotateRight(i: scala.Long, distance: scala.Int): scala.Long = {
+    // (i >>> distance) | (i << -distance)
+
+    val lo = i.toInt
+    val hi = (i >>> 32).toInt
+    val n = distance
+
+    val loIfSmallShift = (lo >>> n) | (hi << 1 << (31 - n))
+    val hiIfSmallShift = (hi >>> n) | (lo << 1 << (31 - n))
+
+    val rlo = if ((n & 32) == 0) loIfSmallShift else hiIfSmallShift
+    val rhi = if ((n & 32) == 0) hiIfSmallShift else loIfSmallShift
+    makeLongFromLoHi(rlo, rhi)
+  }
 
   @inline
   def signum(i: scala.Long): Int = {
