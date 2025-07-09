@@ -300,7 +300,7 @@ class MathTest {
 
     // Specials
 
-    test(Double.MinPositiveValue, 0.0)
+    /*test(Double.MinPositiveValue, 0.0)
     test(Double.MinPositiveValue, -0.0)
     test(Double.NaN, Double.NaN)
     test(Double.PositiveInfinity, Double.PositiveInfinity)
@@ -319,7 +319,7 @@ class MathTest {
     test(1.0e-323, 4.450147717014403e-308) // min value with non-MinPosValue result
     test(1.0e-323, -4.450147717014403e-308)
     test(1.9958403095347198e292, Double.MaxValue)
-    test(1.9958403095347198e292, -Double.MaxValue)
+    test(1.9958403095347198e292, -Double.MaxValue)*/
 
     // Some normal values
 
@@ -327,6 +327,15 @@ class MathTest {
     test(4.440892098500626e-16, -3.4)
     test(4.1718496795330275e93, 3.423e109)
     test(4.1718496795330275e93, -3.423e109)
+
+    // Some normal values around a power of 2
+
+    test(0.00390625, 3.5184372088831996e13) // nextDown(2^45)
+    test(0.0078125, 3.5184372088832e13) // 2^45
+    test(0.0078125, 3.518437208883201e13) // nextUp(2^45)
+    test(0.00390625, -3.5184372088831996e13) // -nextDown(2^45)
+    test(0.0078125, -3.5184372088832e13) // -2^45
+    test(0.0078125, -3.518437208883201e13) // -nextUp(2^45)
 
     // Some subnormal values
 

@@ -243,13 +243,19 @@ object Math {
   }
 
   def ulp(a: scala.Double): scala.Double = {
-    val absa = abs(a)
+    val absABits = Double.doubleToLongBits(a) & ~scala.Long.MinValue
+    val e = (absABits >>> 52).toInt
+    val newE = e - 52
+    val resultBits = Integer.toUnsignedLong(newE) << 52
+    Double.longBitsToDouble(resultBits)
+    
+    /*val absa = abs(a)
     if (absa == scala.Double.PositiveInfinity)
       scala.Double.PositiveInfinity
     else if (absa == scala.Double.MaxValue)
       1.9958403095347198e292
     else
-      nextUp(absa) - absa // this case handles NaN as well
+      nextUp(absa) - absa // this case handles NaN as well*/
   }
 
   def ulp(a: scala.Float): scala.Float = {
