@@ -1086,6 +1086,103 @@ object RuntimeLong {
    *  If `askQuotient` is true, computes the quotient, otherwise computes the
    *  remainder. Stores the hi word of the result in `hiReturn`, and returns
    *  the lo word.
+   
+The algorithm uses 3 different cases, depending on the magnitude of b.
+
+- 0 < b < 2^21
+- 2^21 <= b < 2^62
+- 2^62 <= b < 2^64
+
+The last case should be rare, as it is virtually useless in practice.    ------
+It delegates to a separate method `unsignedDivModHugeDivisor`.
+The proof for the first two cases follows.
+
+The overall shape of the algorithm is inspired by Hacker's Delight,
+Section 9-?, Figure ? (64-64 division based on 64-32 division).
+We do not have 64-32 division, but we do have a double division,
+which we will use with similar intent.
+
+Below, we use the mathematical definition of operators, on reals.
+The functions div(a, b) and rem(a, b) denote the floor division and
+its remainder. Formally, they are defined as div(a, b) = floor(a / b) 
+and  rem(a, b) = a - b * div(a, b). They are not limited to any bit 
+width, nor to naturals. When the operands are known to be whole and 
+fit in a particular bit width, they correspond to the computer semantics 
+of unsigned integer division and remainder.
+
+The method we are implementing here computes div(a, b) if askQuotient 
+is true, and rem(a, b) otherwise.
+
+For all a and b, 0 <= rem(a, b) < b.
+
+The function ◦(x) rounds the real value x to the nearest `double` 
+value, breaking ties to even. Double division can be expressed in 
+terms of ◦ as ◦(a / b).
+
+The function wrap32(x) denotes the JavaScript operation (x | 0), with
+the result interpreted as unsigned. For x real and >= 0, it computes 
+r in [0, 2^32) such that r ≡ floor(x) (mod 2^32).
+
+For all a, b, naturals < 2^53, if div(a, b) < 2^32, we have
+
+  wrap32(◦(a / b)) = floor(a / b) = div(a, b)
+  
+TODO: can we find a definitive reference for that property?
+
+The quantities alo, ahi, blo and bhi are interpreted as unsigned,
+and are therefore mathematical values in the range [0, 2^32).
+By definition, a = 2^32 * ahi + alo and b = 2^32 * bhi + blo.
+
+Case 0 < b < 2^21
+=================
+
+In this case, b = blo, as bhi = 0.
+
+We apply the "school division algorithm" in base 2^32.
+We decompose a as
+
+  a = 2^32 * ahi + alo
+    = 2^32 * (b * div(ahi, b) + rem(ahi, b)) + alo
+    = 2^32 * b * div(ahi, b) + 2^32 * rem(ahi, b) + alo
+    
+We prove for the case askQuotient = true.
+
+  div(a, b)
+    = floor(a / b)
+    = floor( (2^32 * b * div(ahi, b) + 2^32 * rem(ahi, b) + alo) / b )
+    = floor( (2^32 * b * div(ahi, b)) / b + (2^32 * rem(ahi, b) + alo) / b )
+    = floor( (2^32 * div(ahi, b)) + (2^32 * rem(ahi, b) + alo) / b )
+      since the first term is whole, we can take it out of the floor function:
+    = 2^32 * div(ahi, b) + floor((2^32 * rem(ahi, b) + alo) / b)
+    
+Since rem(ahi, b) < b and alo < 2^32, we know that
+2^32 * rem(ahi, b) + alo < 2^32 * b. That means the result of the floor
+function is < 2^32. We can decompose the result in hi and lo words as
+
+  quotHi = div(ahi, b)
+  quotLo = floor((2^32 * rem(ahi, b) + alo) / b)
+  
+Since ahi < 2^32 and b < 2^21 < 2^32, quotHi can be computed with a
+32-bit unsigned division. We then compute
+
+  k = rem(ahi, b) = ahi - quotHi * b
+  
+We still need to compute
+
+  quotLo = floor((2^32 * k + alo) / b)
+    = div(2^32 * k + alo, b)
+    
+By construction, k < b < 2^21, hence, k < 2^21. Therefore,
+2^32 * k + alo < 2^53. Since both operands fit in 53 bits, and since
+quotLo < 2^32, we can compute it with a double division as
+
+  quotLo = wrap32(◦((2^32 * k + alo) / b))
+  
+For the askQuotient = false case, a similar reasoning applies.
+
+Case 2^21 < b < 2^62
+====================
+
    */
   @inline // inlined twice; specializes for askQuotient
   private def unsignedDivModHelper(alo: Int, ahi: Int, blo: Int, bhi: Int,
@@ -1096,7 +1193,7 @@ object RuntimeLong {
     val result = if (bothZero(bhi, blo & 0xffe00000)) {
       // b < 2^21
 
-      val quotHi = Integer.divideUnsigned(ahi, blo) // takes care of the division by zero check
+      val quotHi = Integer.divideUnsigned(ahi, blo)
       val k = ahi - quotHi * blo // remainder of the above division; k < blo
       // (alo, k) is exact because it uses at most 32 + 21 = 53 bits
       val remainingNum = asSafeDouble(alo, k)
