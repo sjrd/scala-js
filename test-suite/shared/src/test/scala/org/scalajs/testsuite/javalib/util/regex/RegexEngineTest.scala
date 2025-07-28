@@ -1992,7 +1992,7 @@ class RegexEngineTest  {
     val s = compile("s", CaseInsensitive | UnicodeCase)
     assertMatches(s, "s")
     assertMatches(s, "S")
-    assertMatches(s, "\u017F") // 017F folds to 's'
+    assertMatches(s, "\u017F") // ſ LATIN SMALL LETTER LONG S; 017F folds to 's'
     assertNotMatches(s, "t")
 
     val ranges = compile("[g-l\uFB00\u0175-\u0182\u0540-\u0550\u1F68-\u1F8E\u1FAA-\u1FAF\u2126]",
@@ -2004,7 +2004,7 @@ class RegexEngineTest  {
     assertMatches(ranges, "\uFB00") // ﬀ LATIN SMALL LIGATURE FF
     // 0175-0182 (contains 017F which folds to 's')
     if (!executingInJVM) {
-      // bug report pending; see below for demonstrations that the JVM is inconsistent
+      // https://bugs.openjdk.org/browse/JDK-8360459
       assertMatches(ranges, "s")
       assertMatches(ranges, "S")
     }

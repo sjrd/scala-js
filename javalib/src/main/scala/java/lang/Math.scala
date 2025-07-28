@@ -194,7 +194,7 @@ object Math {
     } else if (a == -0.0) { // also matches +0.0 but that's fine
       scala.Double.MinPositiveValue
     } else {
-      val abits = Double.doubleToLongBits(a)
+      val abits = Double.doubleToRawLongBits(a)
       val rbits = if (a > 0) abits + 1L else abits - 1L
       Double.longBitsToDouble(rbits)
     }
@@ -206,7 +206,7 @@ object Math {
     } else if (a == -0.0f) { // also matches +0.0f but that's fine
       scala.Float.MinPositiveValue
     } else {
-      val abits = Float.floatToIntBits(a)
+      val abits = Float.floatToRawIntBits(a)
       val rbits = if (a > 0) abits + 1 else abits - 1
       Float.intBitsToFloat(rbits)
     }
@@ -218,7 +218,7 @@ object Math {
     } else if (a == 0.0) { // also matches -0.0 but that's fine
       -scala.Double.MinPositiveValue
     } else {
-      val abits = Double.doubleToLongBits(a)
+      val abits = Double.doubleToRawLongBits(a)
       val rbits = if (a > 0) abits - 1L else abits + 1L
       Double.longBitsToDouble(rbits)
     }
@@ -230,7 +230,7 @@ object Math {
     } else if (a == 0.0f) { // also matches -0.0f but that's fine
       -scala.Float.MinPositiveValue
     } else {
-      val abits = Float.floatToIntBits(a)
+      val abits = Float.floatToRawIntBits(a)
       val rbits = if (a > 0) abits - 1 else abits + 1
       Float.intBitsToFloat(rbits)
     }
