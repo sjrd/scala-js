@@ -2276,7 +2276,7 @@ object Build {
                 !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
 
                 // javalib/util
-                !endsWith(f, "/PriorityQueueTest.scala") && // js.Array
+                !endsWith(f, "/PriorityQueueTest.scala") && // RedBlackTree.fromOrdered
                 !endsWith(f, "/Base64Test.scala") && // String.replaceAll in Base64Test
                 !endsWith(f, "/FormatterTest.scala") &&
                 !endsWith(f, "/ToDoubleFunctionTest.scala") && // parseDouble
@@ -2300,11 +2300,10 @@ object Build {
                 !endsWith(f, "/NavigableSetTest.scala") &&
                 !endsWith(f, "/TreeSetTest.scala") && //depends on NavigableSetTest
 
-                !endsWith(f, "/CopyOnWriteArrayListTest.scala") &&
+                !endsWith(f, "/CollectionsOnListsTest.scala") && // Random -> Math.floor
                  // depends on CopyOnWriteArrayListTest
                 !endsWith(f, "/CollectionsOnSynchronizedListTest.scala") &&
                 !endsWith(f, "/CollectionsOnSynchronizedCollectionTest.scala") &&
-                !endsWith(f, "/CollectionsOnListsTest.scala") &&
                 !endsWith(f, "/CollectionsOnCheckedListTest.scala") &&
                 !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala") &&
 
