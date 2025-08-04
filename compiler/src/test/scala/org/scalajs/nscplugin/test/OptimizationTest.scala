@@ -702,7 +702,7 @@ class OptimizationTest extends JSASTTest {
 object OptimizationTest {
 
   private val ArrayModuleClass = ClassName("scala.Array$")
-  private val ScalaRunTimeModuleClass = ClassName("scala.runtime.ScalaRunTime$")
+  private val ScalaJSRunTimeModuleClass = ClassName("scala.scalajs.runtime.package$")
 
   private val applySimpleMethodName = SimpleMethodName("apply")
 
@@ -728,8 +728,8 @@ object OptimizationTest {
     def unapply(tree: js.Apply): Boolean = {
       tree.method.name.simpleName.nameString.endsWith("VarArgs") && {
         tree.receiver match {
-          case js.LoadModule(ScalaRunTimeModuleClass) => true
-          case _                                      => false
+          case js.LoadModule(ScalaJSRunTimeModuleClass) => true
+          case _                                        => false
         }
       }
     }

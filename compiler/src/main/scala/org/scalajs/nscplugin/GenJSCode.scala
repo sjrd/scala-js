@@ -5917,9 +5917,9 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
             /* If the argument is a call to the compiler's chosen `wrapArray`
              * method with an array literal as argument, we know it actually
              * came from expanded varargs. In that case, rewrite to calling our
-             * custom `ScalaRunTime.to*VarArgs` method. These methods choose
-             * the best implementation of varargs depending on the target
-             * platform.
+             * custom `scala.scalajs.runtime.to*VarArgs` method. These methods
+             * choose the best implementation of varargs depending on the
+             * target platform.
              */
             arg match {
               case MaybeAsInstanceOf(wrapArray @ WrapArray(
@@ -5927,7 +5927,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
                 implicit val pos = wrapArray.pos
                 js.Apply(
                   js.ApplyFlags.empty,
-                  genLoadModule(ScalaRunTimeModule),
+                  genLoadModule(RuntimePackageModule),
                   js.MethodIdent(WrapArray.wrapArraySymToToVarArgsName(wrapArray.symbol)),
                   List(genExpr(arrayValue))
                 )(jstpe.ClassType(encodeClassName(SeqClass), nullable = true))
