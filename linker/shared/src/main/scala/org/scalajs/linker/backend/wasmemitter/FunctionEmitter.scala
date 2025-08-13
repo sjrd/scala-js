@@ -1443,7 +1443,11 @@ private class FunctionEmitter private (
 
     markPosition(tree)
     fb += wa.Call(genFunctionID.loadModule(className))
-    tree.tpe
+
+    if (semantics.moduleInit == CheckedBehavior.Compliant)
+      tree.tpe
+    else
+      tree.tpe.toNonNullable
   }
 
   private def genUnaryOp(tree: UnaryOp): Type = {
@@ -2389,6 +2393,14 @@ private class FunctionEmitter private (
       genTree(expr, VoidType)
       fb += wa.Unreachable
       NothingType
+    } else if (expr.isInstanceOf[LoadModule] && targetTpe == sourceTpe.toNonNullable &&
+        semantics.moduleInit != CheckedBehavior.Compliant) {
+      /* Cast away nullability of LoadModule. We do not need to do anything
+       * because our module accessors return non-nullable types when moduleInit
+       * is not Compliant.
+       */
+      genTree(expr, targetTpe)
+      targetTpe
     } else {
       /* At this point, neither sourceTpe nor targetTpe can be NothingType,
        * VoidType or RecordType, so we can use `transformSingleType`.
