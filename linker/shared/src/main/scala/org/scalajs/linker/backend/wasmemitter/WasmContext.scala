@@ -47,6 +47,7 @@ final class WasmContext(
     val coreLib: CoreWasmLib,
     classInfo: Map[ClassName, WasmContext.ClassInfo],
     reflectiveProxies: Map[MethodName, Int],
+    val privateJSFields: Map[FieldName, String],
     val itablesLength: Int
 ) {
   import WasmContext._
@@ -100,6 +101,7 @@ final class WasmContext(
   val stringPool: StringPool =
     if (coreSpec.wasmFeatures.targetPureWasm) new DataStringPool
     else new JSStringPool
+  val constantArrayPool: ConstantArrayPool = new ConstantArrayPool
 
   /** The main `rectype` containing the object model types. */
   val mainRecType: ModuleBuilder.RecTypeBuilder = new ModuleBuilder.RecTypeBuilder

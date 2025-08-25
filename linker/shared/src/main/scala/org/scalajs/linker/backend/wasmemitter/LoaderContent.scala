@@ -26,23 +26,6 @@ object LoaderContent {
   val pureWasmBytesContent: Array[Byte] =
     pureWasmStringContent.getBytes(StandardCharsets.UTF_8)
 
-  private def doLoadFunctionContent: String = {
-    raw"""
-async function doLoad(wasmFileURL, importsObj, options) {
-  const resolvedURL = new URL(wasmFileURL, import.meta.url);
-  if (resolvedURL.protocol === 'file:') {
-    const { fileURLToPath } = await import("node:url");
-    const { readFile } = await import("node:fs/promises");
-    const wasmPath = fileURLToPath(resolvedURL);
-    const body = await readFile(wasmPath);
-    return WebAssembly.instantiate(body, importsObj, options);
-  } else {
-    return WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj, options);
-  }
-}
-    """
-  }
-
   private def stringContent: String = {
     raw"""
 // This implementation follows no particular specification, but is the same as the JS backend.
@@ -170,10 +153,7 @@ const scalaJSHelpers = {
   // JS interop
   jsNewArray: () => [],
   jsNewObject: () => ({}),
-  jsSelect: (o, p) => o[p],
-  jsSelectSet: (o, p, v) => o[p] = v,
   jsNewNoArg: (constr) => new constr(),
-  jsImportCall: (s) => import(s),
   jsImportMeta: () => import.meta,
   jsAwait: (WebAssembly.Suspending ? new WebAssembly.Suspending((x) => x) : ((x) => {
     /* This should not happen. We cannot get here without going through a
@@ -189,7 +169,6 @@ const scalaJSHelpers = {
   jsIsTruthy: (x) => !!x,
 
   // Non-native JS class support
-  newSymbol: Symbol,
   jsSuperSelect: superSelect,
   jsSuperSelectSet: superSelectSet,
 }
@@ -212,9 +191,8 @@ const stringConstantsPolyfills = new Proxy({}, {
   },
 });
 
-$doLoadFunctionContent
-
-export function load(wasmFileURL, exportSetters, customJSHelpers, wtf16Strings) {
+export async function load(wasmFileURL, exportSetters, privateJSFieldGetters,
+    privateJSFieldSetters, customJSHelpers, wtf16Strings) {
   const myScalaJSHelpers = {
     ...scalaJSHelpers,
     idHashCodeMap: new WeakMap()
@@ -222,6 +200,8 @@ export function load(wasmFileURL, exportSetters, customJSHelpers, wtf16Strings) 
   const importsObj = {
     "$CoreHelpersModule": myScalaJSHelpers,
     "$ExportSettersModule": exportSetters,
+    "$PrivateJSFieldGetters": privateJSFieldGetters,
+    "$PrivateJSFieldSetters": privateJSFieldSetters,
     "$CustomHelpersModule": customJSHelpers,
     "$WTF16StringConstantsModule": wtf16Strings,
     "$JSStringBuiltinsModule": stringBuiltinPolyfills,
@@ -231,7 +211,16 @@ export function load(wasmFileURL, exportSetters, customJSHelpers, wtf16Strings) 
     builtins: ["js-string"],
     importedStringConstants: "$UTF8StringConstantsModule",
   };
-  return doLoad(wasmFileURL, importsObj, options);
+  const resolvedURL = new URL(wasmFileURL, import.meta.url);
+  if (resolvedURL.protocol === 'file:') {
+    const { fileURLToPath } = await import("node:url");
+    const { readFile } = await import("node:fs/promises");
+    const wasmPath = fileURLToPath(resolvedURL);
+    const body = await readFile(wasmPath);
+    return WebAssembly.instantiate(body, importsObj, options);
+  } else {
+    return await WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj, options);
+  }
 }
     """
   }
@@ -366,13 +355,20 @@ const essentialExterns = {
   init: (handleMessage) => scalajsCom.init((msg) => handleMessage(stringToWasmArray(msg))),
 };
 
-$doLoadFunctionContent
-
-export function load(wasmFileURL) {
+export async function load(wasmFileURL) {
   const importsObj = {
     "$EssentialExternsModule": essentialExterns,
   }
-  return doLoad(wasmFileURL, importsObj, {});
+  const resolvedURL = new URL(wasmFileURL, import.meta.url);
+  if (resolvedURL.protocol === 'file:') {
+    const { fileURLToPath } = await import("node:url");
+    const { readFile } = await import("node:fs/promises");
+    const wasmPath = fileURLToPath(resolvedURL);
+    const body = await readFile(wasmPath);
+    return WebAssembly.instantiate(body, importsObj);
+  } else {
+    return await WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj);
+  }
 }
     """
   }

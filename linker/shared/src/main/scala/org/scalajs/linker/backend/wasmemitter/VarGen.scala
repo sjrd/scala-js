@@ -39,7 +39,6 @@ object VarGen {
     }
 
     final case class forStaticField(fieldName: FieldName) extends GlobalID
-    final case class forJSPrivateField(fieldName: FieldName) extends GlobalID
 
     final case class forStringLiteral(str: String) extends GlobalID
 
@@ -83,6 +82,8 @@ object VarGen {
 
     final case class forExport(exportedName: String) extends FunctionID
     final case class forTopLevelExportSetter(exportedName: String) extends FunctionID
+    final case class forPrivateJSFieldGetter(fieldName: FieldName) extends FunctionID
+    final case class forPrivateJSFieldSetter(fieldName: FieldName) extends FunctionID
 
     final case class loadModule(className: ClassName) extends FunctionID
     final case class newDefault(className: ClassName) extends FunctionID
@@ -182,10 +183,7 @@ object VarGen {
 
     case object jsNewArray extends JSHelperFunctionID
     case object jsNewObject extends JSHelperFunctionID
-    case object jsSelect extends JSHelperFunctionID
-    case object jsSelectSet extends JSHelperFunctionID
     case object jsNewNoArg extends JSHelperFunctionID
-    case object jsImportCall extends JSHelperFunctionID
     case object jsImportMeta extends JSHelperFunctionID
     case object jsAwait extends JSHelperFunctionID
     case object jsDelete extends JSHelperFunctionID
@@ -193,7 +191,6 @@ object VarGen {
     case object jsForInNext extends JSHelperFunctionID
     case object jsIsTruthy extends JSHelperFunctionID
 
-    case object newSymbol extends JSHelperFunctionID
     case object jsSuperSelect extends JSHelperFunctionID
     case object jsSuperSelectSet extends JSHelperFunctionID
 
@@ -558,6 +555,9 @@ object VarGen {
   object genDataID {
     // target pure Wasm
     case object string extends DataID
+
+    /** Data segment for constant arrays whose elements take 2^log2ByteSize bytes. */
+    final case class constantArrays(log2ByteSize: Int) extends DataID
   }
 
   object genMemoryID {
