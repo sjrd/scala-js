@@ -862,10 +862,9 @@ private class FunctionEmitter private (
 
       case JSPrivateSelect(qualifier, field) if !targetPureWasm =>
         genTree(qualifier, AnyType)
-        fb += wa.GlobalGet(genGlobalID.forJSPrivateField(field.name))
         genTree(rhs, AnyType)
         markPosition(tree)
-        fb += wa.Call(genFunctionID.jsSelectSet)
+        fb += wa.Call(genFunctionID.forPrivateJSFieldSetter(field.name))
 
       case JSSelect(qualifier, item) if !targetPureWasm =>
         genThroughCustomJSHelper(List(qualifier, item, rhs), VoidType) { allJSArgs =>
@@ -3086,10 +3085,18 @@ private class FunctionEmitter private (
   private def genJSImportCall(tree: JSImportCall): Type = {
     val JSImportCall(arg) = tree
 
-    genTree(arg, AnyType)
-    markPosition(tree)
-    fb += wa.Call(genFunctionID.jsImportCall)
-    AnyType
+    implicit val pos = tree.pos
+
+    /* Generate one custom helper for every import(...) call.
+     * This is particularly useful when
+     * - the argument is a constant string, and
+     * - the output of Scala.js is given to a bundler that really wants to see
+     *    constant strings in import(...) calls.
+     */
+    genThroughCustomJSHelper(List(arg)) { allJSArgs =>
+      val List(jsArg) = allJSArgs
+      js.Return(js.ImportCall(jsArg))
+    }
   }
 
   private def genJSImportMeta(tree: JSImportMeta): Type = {
@@ -3426,20 +3433,71 @@ private class FunctionEmitter private (
   private def genArrayValue(tree: ArrayValue): Type = {
     val ArrayValue(arrayTypeRef, elems) = tree
 
-    val expectedElemType = arrayTypeRef match {
-      case ArrayTypeRef(base: PrimRef, 1) => base.tpe
-      case _                              => AnyType
-    }
-
-    // Mark the position for the header of `genArrayValue`
     markPosition(tree)
 
-    SWasmGen.genArrayValue(fb, arrayTypeRef, elems.size, targetPureWasm) {
-      // Create the underlying array
-      elems.foreach(genTree(_, expectedElemType))
+    arrayTypeRef match {
+      case ArrayTypeRef(base: PrimRef, 1) if elems.forall(_.isInstanceOf[Literal]) =>
+        // Use a constant array in a data segment
+        val length = elems.size
 
-      // Re-mark the position for the footer of `genArrayValue`
-      markPosition(tree)
+        val (dataID, offset) = base.tpe match {
+          case BooleanType =>
+            ctx.constantArrayPool.addArray8(elems) { (buffer, elem) =>
+              buffer.put(if (elem.asInstanceOf[BooleanLiteral].value) 1.toByte else 0.toByte)
+            }
+          case CharType =>
+            ctx.constantArrayPool.addArray16(elems) { (buffer, elem) =>
+              buffer.putChar(elem.asInstanceOf[CharLiteral].value)
+            }
+          case ByteType =>
+            ctx.constantArrayPool.addArray8(elems) { (buffer, elem) =>
+              buffer.put(elem.asInstanceOf[ByteLiteral].value)
+            }
+          case ShortType =>
+            ctx.constantArrayPool.addArray16(elems) { (buffer, elem) =>
+              buffer.putShort(elem.asInstanceOf[ShortLiteral].value)
+            }
+          case IntType =>
+            ctx.constantArrayPool.addArray32(elems) { (buffer, elem) =>
+              buffer.putInt(elem.asInstanceOf[IntLiteral].value)
+            }
+          case LongType =>
+            ctx.constantArrayPool.addArray64(elems) { (buffer, elem) =>
+              buffer.putLong(elem.asInstanceOf[LongLiteral].value)
+            }
+          case FloatType =>
+            ctx.constantArrayPool.addArray32(elems) { (buffer, elem) =>
+              // Explicitly use floatToIntBits for determinism
+              buffer.putInt(java.lang.Float.floatToIntBits(elem.asInstanceOf[FloatLiteral].value))
+            }
+          case DoubleType =>
+            ctx.constantArrayPool.addArray64(elems) { (buffer, elem) =>
+              // Explicitly use doubleToLongBits for determinism
+              buffer.putLong(java.lang.Double.doubleToLongBits(elem.asInstanceOf[DoubleLiteral].value))
+            }
+          case NothingType | NullType | VoidType =>
+            throw new AssertionError(s"Invalid array type $arrayTypeRef at ${tree.pos}")
+        }
+
+        SWasmGen.genArrayValueFromUnderlying(fb, arrayTypeRef, targetPureWasm) {
+          fb += wa.I32Const(offset)
+          fb += wa.I32Const(length)
+          fb += wa.ArrayNewData(genTypeID.underlyingOf(arrayTypeRef), dataID)
+        }
+
+      case _ =>
+        val expectedElemType = arrayTypeRef match {
+          case ArrayTypeRef(base: PrimRef, 1) => base.tpe
+          case _                              => AnyType
+        }
+
+        SWasmGen.genArrayValue(fb, arrayTypeRef, elems.size, targetPureWasm) {
+          // Create the underlying array
+          elems.foreach(genTree(_, expectedElemType))
+
+          // Re-mark the position for the footer of `genArrayValue`
+          markPosition(tree)
+        }
     }
 
     tree.tpe
@@ -3649,8 +3707,7 @@ private class FunctionEmitter private (
 
     markPosition(tree)
 
-    fb += wa.GlobalGet(genGlobalID.forJSPrivateField(fieldName))
-    fb += wa.Call(genFunctionID.jsSelect)
+    fb += wa.Call(genFunctionID.forPrivateJSFieldGetter(fieldName))
 
     AnyType
   }

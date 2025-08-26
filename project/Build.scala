@@ -2442,27 +2442,27 @@ object Build {
 
         if (targetPureWasm) Nil
         else {
-          collectionsEraDependentDirectory(scalaV, testDir) ::
-          includeIf(testDir / "require-new-target",
-              esVersion >= ESVersion.ES2015) :::
-          includeIf(testDir / "require-exponent-op",
-              esVersion >= ESVersion.ES2016) :::
-          includeIf(testDir / "require-async-await",
-              esVersion >= ESVersion.ES2017) :::
-          includeIf(testDir / "require-orphan-await",
-              esVersion >= ESVersion.ES2017 && isWebAssembly) :::
-          includeIf(testDir / "require-modules",
-              hasModules) :::
-          includeIf(testDir / "require-no-modules",
-              !hasModules) :::
-          includeIf(testDir / "require-multi-modules",
-              hasModules && !linkerConfig.closureCompiler && !isWebAssembly) :::
-          includeIf(testDir / "require-dynamic-import",
-              moduleKind == ModuleKind.ESModule && !isWebAssembly) ::: // this is an approximation that works for now
-          includeIf(testDir / "require-esmodule",
-              moduleKind == ModuleKind.ESModule) :::
-          includeIf(testDir / "require-commonjs",
-              moduleKind == ModuleKind.CommonJSModule)
+        collectionsEraDependentDirectory(scalaV, testDir) ::
+        includeIf(testDir / "require-new-target",
+            esVersion >= ESVersion.ES2015) :::
+        includeIf(testDir / "require-exponent-op",
+            esVersion >= ESVersion.ES2016) :::
+        includeIf(testDir / "require-async-await",
+            esVersion >= ESVersion.ES2017) :::
+        includeIf(testDir / "require-orphan-await",
+            esVersion >= ESVersion.ES2017 && isWebAssembly) :::
+        includeIf(testDir / "require-modules",
+            hasModules) :::
+        includeIf(testDir / "require-no-modules",
+            !hasModules) :::
+        includeIf(testDir / "require-multi-modules",
+            hasModules && !linkerConfig.closureCompiler && !isWebAssembly) :::
+        includeIf(testDir / "require-dynamic-import",
+            moduleKind == ModuleKind.ESModule) :::
+        includeIf(testDir / "require-esmodule",
+            moduleKind == ModuleKind.ESModule) :::
+        includeIf(testDir / "require-commonjs",
+            moduleKind == ModuleKind.CommonJSModule)
         }
       },
 
