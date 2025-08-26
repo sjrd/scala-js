@@ -22,6 +22,7 @@ import java.util.PriorityQueue
 import java.util.Comparator
 
 import org.scalajs.testsuite.utils.Platform.executingInJVM
+import scala.scalajs.LinkingInfo.targetPureWasm
 
 class PriorityQueueTest extends CollectionTest {
   def factory: PriorityQueueFactory = new PriorityQueueFactory
@@ -351,6 +352,7 @@ class PriorityQueueTest extends CollectionTest {
   }
 
   @Test def iteratorRemoveDoubleCornerCase(): Unit = {
+    assumeFalse("TODO: double to string in pure Wasm", targetPureWasm)
     /* This tests that when `Iterator.remove()` is supposed to remove a zero,
      * it does not accidentally remove a zero of the opposite sign.
      *
