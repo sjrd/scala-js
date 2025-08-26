@@ -2275,8 +2275,10 @@ object Build {
                 !endsWith(f, "/lang/MathTest.scala") &&
                 !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
 
+                // TODO: iteratorRemoveDoubleCornerCase (double to String)
+                // !endsWith(f, "/PriorityQueueTest.scala") &&
+
                 // javalib/util
-                !endsWith(f, "/PriorityQueueTest.scala") && // RedBlackTree.fromOrdered
                 !endsWith(f, "/Base64Test.scala") && // String.replaceAll in Base64Test
                 !endsWith(f, "/FormatterTest.scala") &&
                 !endsWith(f, "/ToDoubleFunctionTest.scala") && // parseDouble
@@ -2292,20 +2294,10 @@ object Build {
                 !endsWith(f, "/CollectionsTest.scala") && // Math$.floor(double) from Random.<init>
                 !endsWith(f, "/SplittableRandomTest.scala") && // Math$.floor(double) from Random.<init>
 
-                !endsWith(f, "/ConcurrentSkipListSetTest.scala") && // RedBlackTree.fromOrdered
-                //depends on ConcurrentSkipListSetTest
-                !endsWith(f, "/CollectionsOnCheckedSetTest.scala") &&
-                !endsWith(f, "/CollectionsOnSetsTest.scala") &&
-                !endsWith(f, "/CollectionsOnSynchronizedSetTest.scala") &&
-                !endsWith(f, "/NavigableSetTest.scala") &&
-                !endsWith(f, "/TreeSetTest.scala") && //depends on NavigableSetTest
-
                 !endsWith(f, "/CollectionsOnListsTest.scala") && // Random -> Math.floor
-                 // depends on CopyOnWriteArrayListTest
+                 // depends on CollectionsOnListsTest
                 !endsWith(f, "/CollectionsOnSynchronizedListTest.scala") &&
-                !endsWith(f, "/CollectionsOnSynchronizedCollectionTest.scala") &&
                 !endsWith(f, "/CollectionsOnCheckedListTest.scala") &&
-                !endsWith(f, "/CollectionsOnCheckedCollectionTest.scala") &&
 
                 // javalib/io
                 !endsWith(f, "/io/PrintWriterTest.scala") && // Formatter
