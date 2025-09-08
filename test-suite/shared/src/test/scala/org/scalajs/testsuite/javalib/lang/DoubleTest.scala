@@ -111,9 +111,6 @@ class DoubleTest {
   }
 
   @Test def parseStringMethods(): Unit = {
-    assumeFalse("Parse floating point doesn't link in pure Wasm",
-        executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     // scalastyle:off line.size.limit
 
     /* First, a selection of large categories for which test the combination of
@@ -349,14 +346,61 @@ class DoubleTest {
     test("-0x1.1111111111112800000000000000000000000p52", -4.80383960252853e15)
     test("-0x1.1111111111112800000000000000000000001p52", -4.803839602528531e15)
 
+    // The following test data is derived from test cases in the Rust compiler,
+    // which is available under the MIT License. The original source can be found at:
+    // https://github.com/rust-lang/rust/blob/dfa22235d858086511bedc4acde9db1c045ffbac/library/coretests/tests/num/dec2flt/mod.rs
+    //
+    // The original Rust macro `test_literal!(x)` was translated
+    // into the format: `test(x.toString, java.lang.Double.parseDouble(x.toString))`
+
+    // ordinary
+    test("1.0", 1.0)
+    test("3e-5", 3.0E-5)
+    test("0.1", 0.1)
+    test("12345.", 12345.0)
+    test("0.9999999", 0.9999999)
+    test("2.2250738585072014e-308", 2.2250738585072014E-308)
+
+    // special_code_paths
+    test("36893488147419103229.0", 3.6893488147419103E19)
+    test("101e-33", 1.01E-31)
+    test("1e23", 1.0E23)
+    test("2075e23", 2.075E26)
+    test("8713e-23", 8.713E-20)
+
+    // large
+    test("1e300", 1.0E300)
+    test("123456789.34567e250", 1.2345678934567E258)
+    test("943794359898089732078308743689303290943794359843568973207830874368930329.", 9.437943598980897E71)
+
+    // subnormals
+    test("5e-324", 4.9E-324)
+    test("91e-324", 8.9E-323)
+    test("1e-322", 9.9E-323)
+    test("13245643e-320", 1.3245643E-313)
+    test("2.22507385851e-308", 2.22507385851E-308)
+    test("2.1e-308", 2.1E-308)
+    test("4.9406564584124654e-324", 4.9E-324)
+
+    // infinity
+    test("1e400", Double.PositiveInfinity)
+    test("1e309", Double.PositiveInfinity)
+    test("2e308", Double.PositiveInfinity)
+    test("1.7976931348624e308", Double.PositiveInfinity)
+
+    // zero
+    test("0.0", 0.0)
+    test("1e-325", 0.0)
+    test("1e-326", 0.0)
+    test("1e-500", 0.0)
+
+    // fast_path_correct
+    test("1.448997445238699", 1.448997445238699)
+
     // scalastyle:on line.size.limit
-    } {}
   }
 
   @Test def parseDoubleInvalidThrows(): Unit = {
-    assumeFalse("Parse floating point doesn't link in pure Wasm",
-        executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     for (padding <- List("", "  ", (0 to 0x20).map(x => x.toChar).mkString)) {
       def pad(s: String): String = padding + s + padding
 
@@ -373,7 +417,6 @@ class DoubleTest {
       test("0x.p1") // hex notation with both integral and fractional parts empty
       test("0x1.2") // missing 'p'
     }
-    } {}
   }
 
   @Test def compareToJavaDouble(): Unit = {

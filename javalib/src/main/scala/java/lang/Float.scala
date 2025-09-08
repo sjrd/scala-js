@@ -13,6 +13,7 @@
 package java.lang
 
 import java.lang.constant.{Constable, ConstantDesc}
+import java.util.regex.{Matcher, Pattern, RegExpImpl}
 
 import scala.scalajs.js
 import scala.scalajs.LinkingInfo._
@@ -85,7 +86,7 @@ object Float {
 
   @inline def valueOf(s: String): Float = valueOf(parseFloat(s))
 
-  private[this] lazy val parseFloatRegExp = new js.RegExp(
+  private[this] lazy val parseFloatRegExp = RegExpImpl.impl.compile(
       "^" +
       "[\\x00-\\x20]*" +                 // optional whitespace
       "([+-]?)" +                        // 1: optional sign
@@ -108,36 +109,36 @@ object Float {
         "[fFdD]?" +                      // optional float / double specifier (ignored)
       ")" +
       "[\\x00-\\x20]*" +                 // optional whitespace
-      "$"
-  )
+      "$")
 
   def parseFloat(s: String): scala.Float = {
-    import Utils._
-
-    val groups = parseFloatRegExp.exec(s)
-    if (groups == null)
+    import RegExpImpl.impl
+    val groups = impl.exec(parseFloatRegExp, s)
+    if (!impl.matches(groups))
       throw new NumberFormatException(s"""For input string: "$s"""")
 
-    val absResult = if (undefOrIsDefined(groups(2))) {
+    val absResult = if (impl.exists(groups, 2)) {
       scala.Float.NaN
-    } else if (undefOrIsDefined(groups(3))) {
+    } else if (impl.exists(groups, 3)) {
       scala.Float.PositiveInfinity
-    } else if (undefOrIsDefined(groups(4))) {
+    } else if (impl.exists(groups, 4)) {
       // Decimal notation
-      val fullNumberStr = undefOrForceGet(groups(4))
-      val integralPartStr = undefOrGetOrElse(groups(5))(() => "")
-      val fractionalPartStr = undefOrGetOrElse(groups(6))(() => "") + undefOrGetOrElse(groups(7))(() => "")
-      val exponentStr = undefOrGetOrElse(groups(8))(() => "0")
+      val fullNumberStr = impl.get(groups, 4)
+      val integralPartStr = impl.getOrElse(groups, 5, "")
+      val fractionalPartStr =
+        impl.getOrElse(groups, 6, "") + impl.getOrElse(groups, 7, "")
+      val exponentStr = impl.getOrElse(groups, 8, "0")
       parseFloatDecimal(fullNumberStr, integralPartStr, fractionalPartStr, exponentStr)
     } else {
       // Hexadecimal notation
-      val integralPartStr = undefOrGetOrElse(groups(10))(() => "")
-      val fractionalPartStr = undefOrGetOrElse(groups(11))(() => "") + undefOrGetOrElse(groups(12))(() => "")
-      val binaryExpStr = undefOrForceGet(groups(13))
+      val integralPartStr = impl.getOrElse(groups, 10, "")
+      val fractionalPartStr =
+        impl.getOrElse(groups, 11, "") + impl.getOrElse(groups, 12, "")
+      val binaryExpStr = impl.get(groups, 13)
       parseFloatHexadecimal(integralPartStr, fractionalPartStr, binaryExpStr)
     }
 
-    val signStr = undefOrForceGet(groups(1))
+    val signStr = impl.get(groups, 1)
     if (signStr == "-")
       -absResult
     else
@@ -145,6 +146,29 @@ object Float {
   }
 
   private def parseFloatDecimal(fullNumberStr: String,
+      integralPartStr: String, fractionalPartStr: String,
+      exponentStr: String): scala.Float = {
+    linkTimeIf[scala.Float](targetPureWasm) {
+      parseFloatDecimalWasm(fullNumberStr, integralPartStr, fractionalPartStr, exponentStr)
+    } {
+      parseFloatDecimalJS(fullNumberStr, integralPartStr, fractionalPartStr, exponentStr)
+    }
+  }
+
+  private def parseFloatDecimalWasm(fullNumberStr: String,
+      integralPartStr: String, fractionalPartStr: String,
+      exponentStr: String): scala.Float = {
+
+    import java.math.BigInteger
+    import dectoflt.Bellerophon.bellerophonFloat
+
+    val f: BigInteger = new BigInteger(integralPartStr + fractionalPartStr)
+    val e: Int = Integer.parseInt(exponentStr) - fractionalPartStr.length()
+
+    bellerophonFloat(f, e)
+  }
+
+  private def parseFloatDecimalJS(fullNumberStr: String,
       integralPartStr: String, fractionalPartStr: String,
       exponentStr: String): scala.Float = {
 
