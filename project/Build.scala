@@ -239,14 +239,6 @@ object MyScalaJSPlugin extends AutoPlugin {
       jsEnv := {
         val baseConfig = NodeJSEnv.Config().withSourceMap(wantSourceMaps.value)
         val config = if (enableWasmEverywhere.value) {
-          val baseWasmArgs = List(
-            /* Force using the Turboshaft infrastructure for the optimizing compiler.
-             * It appears to be more stable for the Wasm that we throw at it.
-             * If you remove it, try running `scalaTestSuite2_13/test` with Wasm.
-             * See also the use of this flag in MainGenericRunner.scala.
-             */
-            "--turboshaft-wasm",
-          )
           val linkerConfig = scalaJSLinkerConfig.value
           val additionWasmArgs = if (!linkerConfig.wasmFeatures.targetPureWasm) {
             List(
@@ -263,7 +255,7 @@ object MyScalaJSPlugin extends AutoPlugin {
               "--no-experimental-wasm-exnref",
             )
           }
-          baseConfig.withArgs(additionWasmArgs ::: baseWasmArgs)
+          baseConfig.withArgs(additionWasmArgs)
         } else {
           baseConfig
         }
@@ -402,7 +394,7 @@ object Build {
       "1.3.0", "1.3.1", "1.4.0", "1.5.0", "1.5.1", "1.6.0", "1.7.0", "1.7.1",
       "1.8.0", "1.9.0", "1.10.0", "1.10.1", "1.11.0", "1.12.0", "1.13.0",
       "1.13.1", "1.13.2", "1.14.0", "1.15.0", "1.16.0", "1.17.0", "1.18.0",
-      "1.18.1", "1.18.2", "1.19.0")
+      "1.18.1", "1.18.2", "1.19.0", "1.20.0", "1.20.1")
   val previousVersion = previousVersions.last
 
   val previousBinaryCrossVersion = CrossVersion.binaryWith("sjs1_", "")
