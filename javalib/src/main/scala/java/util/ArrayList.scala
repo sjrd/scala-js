@@ -16,9 +16,8 @@ import java.lang.Cloneable
 import java.lang.Utils._
 import java.util.ScalaOps._
 
-import scala.scalajs._
+import scala.scalajs.js
 import scala.scalajs.LinkingInfo.{isWebAssembly, linkTimeIf}
-import scala.scalajs.js.Object.is
 
 class ArrayList[E] private (innerInit: AnyRef, private var _size: Int)
     extends AbstractList[E] with RandomAccess with Cloneable with Serializable {
