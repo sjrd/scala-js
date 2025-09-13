@@ -2077,7 +2077,6 @@ object Build {
       },
       jsEnv := {
         val config = NodeJSEnv.Config().withArgs(List(
-          "--turboshaft-wasm",
           "--experimental-wasm-exnref",
         ))
         new NodeJSEnv(config)
