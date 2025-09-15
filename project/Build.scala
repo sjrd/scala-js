@@ -2085,6 +2085,47 @@ object Build {
       jUnitRuntime % "test", testBridge % "test"
   )
 
+  lazy val helloworldWASI: MultiScalaProject = MultiScalaProject(
+      id = "helloworldWASI", base = file("examples") / "helloworld-wasi"
+  ).enablePlugins(
+      MyScalaJSPlugin
+  ).settings(
+      exampleSettings,
+      name := "HelloWorld WASI",
+      moduleName := "helloworld-wasi",
+      // scalaJSUseMainModuleInitializer := true,
+      scalaJSLinkerConfig ~= {
+        _.withPrettyPrint(true)
+         .withExperimentalUseWebAssembly(true)
+         .withModuleKind(ModuleKind.ESModule)
+         .withWasmFeatures(
+           _.withTargetPureWasm(true)
+              .withComponentModel(true)
+             .withExceptionHandling(false)
+          )
+      },
+  ).withScalaJSCompiler.dependsOnLibrary
+
+  lazy val helloworldComponentModel: MultiScalaProject = MultiScalaProject(
+      id = "helloworldComponentModel", base = file("examples") / "helloworld-component-model"
+  ).enablePlugins(
+      MyScalaJSPlugin
+  ).settings(
+      exampleSettings,
+      name := "HelloWorld Component Model",
+      moduleName := "helloworld-component-model",
+      scalaJSLinkerConfig ~= {
+        _.withPrettyPrint(true)
+         .withExperimentalUseWebAssembly(true)
+         .withModuleKind(ModuleKind.ESModule)
+         .withWasmFeatures(
+           _.withTargetPureWasm(true)
+              .withComponentModel(true)
+             .withExceptionHandling(false)
+          )
+      },
+  ).withScalaJSCompiler.dependsOnLibrary
+
   lazy val testComponentModel: MultiScalaProject = MultiScalaProject(
       id = "testComponentModel", base = file("examples") / "test-component-model"
   ).enablePlugins(

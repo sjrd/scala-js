@@ -1,0 +1,18 @@
+package scala-wasm:helloworld;
+
+interface greeter {
+  greet: func(name: string) -> string;
+}
+
+world scala {
+  export wasi:cli/run@0.2.0;
+
+  import wasi:cli/stdout@0.2.0;
+  import wasi:io/streams@0.2.0;
+
+  import greeter;
+}
+
+world rust {
+  export greeter;
+}

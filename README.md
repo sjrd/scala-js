@@ -16,6 +16,8 @@ This is a friendly fork of Scala.js, targeting stand-alone Wasm runtimes such as
     - `cargo component >= 0.18.0` may not work(?)
 
 ## Examples
+- [helloworld-wasi](./examples/helloworld-wasi/)
+- [helloworld-component-model](./examples/helloworld-component-model/)
 - [echo-server](./examples/echo-server/)
 
 ## Test

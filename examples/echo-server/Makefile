@@ -6,7 +6,7 @@ component:
 	wasm-tools component new main.wasm -o main.wasm
 
 run: component
-	wasmtime serve -W function-references,gc -C collector=null main.wasm
+	wasmtime serve -W function-references,gc main.wasm
 
 clean:
 	rm -f main.wasm main.wasm
