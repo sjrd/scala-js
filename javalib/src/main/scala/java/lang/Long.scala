@@ -120,21 +120,30 @@ object Long {
   def toString(i: scala.Long, radix: Int): String = {
     if (radix == 10 || radix < Character.MIN_RADIX || radix > Character.MAX_RADIX)
       toString(i)
+    else if (LinkingInfo.isWebAssembly)
+      toStringImplWasm(i, radix)
     else
-      toStringImpl(i, radix)
+      toStringImplJS(i, radix)
   }
 
   @inline // because radix is almost certainly constant at call site
   def toUnsignedString(i: scala.Long, radix: Int): String = {
-    (radix: @switch) match {
-      case 2  => toBinaryString(i)
-      case 8  => toOctalString(i)
-      case 16 => toHexString(i)
-      case _  =>
-        val radix1 =
-          if (radix < Character.MIN_RADIX || radix > Character.MAX_RADIX) 10
-          else radix
-        toUnsignedStringImpl(i, radix1)
+    if (LinkingInfo.isWebAssembly) {
+      val radix1 =
+        if (radix < Character.MIN_RADIX || radix > Character.MAX_RADIX) 10
+        else radix
+      toUnsignedStringImplWasm(i, radix1)
+    } else {
+      (radix: @switch) match {
+        case 2  => toBinaryString(i)
+        case 8  => toOctalString(i)
+        case 16 => toHexString(i)
+        case _  =>
+          val radix1 =
+            if (radix < Character.MIN_RADIX || radix > Character.MAX_RADIX) 10
+            else radix
+          toUnsignedStringImplJS(i, radix1)
+      }
     }
   }
 
@@ -142,10 +151,20 @@ object Long {
   @inline def toString(i: scala.Long): String = "" + i
 
   @inline def toUnsignedString(i: scala.Long): String =
-    toUnsignedStringImpl(i, 10)
+    if (LinkingInfo.isWebAssembly) toUnsignedStringWasmRadixNotPowOf2(i, 10)
+    else toUnsignedStringImplJS(i, 10)
 
   // Must be called only with valid radix
-  private def toStringImpl(i: scala.Long, radix: Int): String = {
+  private def toStringImplWasm(i: scala.Long, radix: Int): String = {
+    val digits = toUnsignedStringImplWasm(Math.abs(i), radix)
+    if (i >= 0L)
+      digits
+    else
+      "-" + digits
+  }
+
+  // Must be called only with valid radix
+  private def toStringImplJS(i: scala.Long, radix: Int): String = {
     import js.JSNumberOps.enableJSNumberOps
 
     val lo = i.toInt
@@ -165,7 +184,16 @@ object Long {
   }
 
   // Must be called only with valid radix
-  private def toUnsignedStringImpl(i: scala.Long, radix: Int): String = {
+  @inline
+  private def toUnsignedStringImplWasm(i: scala.Long, radix: Int): String = {
+    if ((radix & (radix - 1)) == 0) // is it a power of 2, knowing it's not 0?
+      toUnsignedStringWasmRadixPowOf2(i, radix)
+    else
+      toUnsignedStringWasmRadixNotPowOf2(i, radix)
+  }
+
+  // Must be called only with valid radix
+  private def toUnsignedStringImplJS(i: scala.Long, radix: Int): String = {
     import js.JSNumberOps.enableJSNumberOps
 
     val lo = i.toInt
@@ -592,9 +620,14 @@ object Long {
   }
 
   @inline def toBinaryString(l: scala.Long): String =
-    toBinaryString(l.toInt, (l >>> 32).toInt)
+    if (LinkingInfo.isWebAssembly) toBinaryStringWasm(l)
+    else toBinaryStringJS(l.toInt, (l >>> 32).toInt)
 
-  private def toBinaryString(lo: Int, hi: Int): String = {
+  @noinline
+  private def toBinaryStringWasm(l: scala.Long): String =
+    toUnsignedStringWasmRadixPowOf2Inline(l, 2)
+
+  private def toBinaryStringJS(lo: Int, hi: Int): String = {
     val zeros = "00000000000000000000000000000000" // 32 zeros
     @inline def padBinary32(i: Int) = {
       val s = Integer.toBinaryString(i)
@@ -606,9 +639,14 @@ object Long {
   }
 
   @inline def toHexString(l: scala.Long): String =
-    toHexString(l.toInt, (l >>> 32).toInt)
+    if (LinkingInfo.isWebAssembly) toHexStringWasm(l)
+    else toHexStringJS(l.toInt, (l >>> 32).toInt)
 
-  private def toHexString(lo: Int, hi: Int): String = {
+  @noinline
+  private def toHexStringWasm(l: scala.Long): String =
+    toUnsignedStringWasmRadixPowOf2Inline(l, 16)
+
+  private def toHexStringJS(lo: Int, hi: Int): String = {
     val zeros = "00000000" // 8 zeros
     @inline def padBinary8(i: Int) = {
       val s = Integer.toHexString(i)
@@ -620,9 +658,14 @@ object Long {
   }
 
   @inline def toOctalString(l: scala.Long): String =
-    toOctalString(l.toInt, (l >>> 32).toInt)
+    if (LinkingInfo.isWebAssembly) toOctalStringWasm(l)
+    else toOctalStringJS(l.toInt, (l >>> 32).toInt)
 
-  private def toOctalString(lo: Int, hi: Int): String = {
+  @noinline
+  private def toOctalStringWasm(l: scala.Long): String =
+    toUnsignedStringWasmRadixPowOf2Inline(l, 8)
+
+  private def toOctalStringJS(lo: Int, hi: Int): String = {
     val zeros = "0000000000" // 10 zeros
     @inline def padOctal10(i: Int) = {
       val s = Integer.toOctalString(i)
@@ -636,6 +679,66 @@ object Long {
     if (hp != 0) Integer.toOctalString(hp) + padOctal10(mp) + padOctal10(lp)
     else if (mp != 0) Integer.toOctalString(mp) + padOctal10(lp)
     else Integer.toOctalString(lp)
+  }
+
+  // `toUnsignedString` with a known-valid radix that is a power of 2
+  @noinline
+  private def toUnsignedStringWasmRadixPowOf2(l: scala.Long, radix: Int): String =
+    toUnsignedStringWasmRadixPowOf2Inline(l, radix)
+
+  @inline
+  private def toUnsignedStringWasmRadixPowOf2Inline(l: scala.Long, radix: Int): String = {
+    val logRadix = Integer.numberOfTrailingZeros(radix)
+    val radixM1 = radix - 1
+
+    /* Compute the number of digits we need. For l > 0L, we have
+     *   1 + floor(log_radix(l))
+     *     = 1 + floor(log2(l) / log2(radix))
+     *     = 1 + floor(log2(l) / logRadix)
+     *     = 1 + floor(floor(log2(l)) / logRadix)   (because logRadix is whole)
+     *     = 1 + divU(floor(log2(l)), logRadix)
+     *     = 1 + divU(63 - clz64(l), logRadix)
+     *
+     * We use clz64(l | 1L) to get a length of 1 when l == 0L.
+     */
+    val len = 1 + Integer.divideUnsigned(63 - numberOfLeadingZeros(l | 1L), logRadix)
+
+    val buffer = new Array[Char](len)
+    var rem = l
+    var i = len - 1
+    while (i >= 0) {
+      val digit = rem.toInt & radixM1 // i.e., remU(rem, radix).toInt
+      buffer(i) = ((if (digit < 10) '0' else ('a' - 10)) + digit).toChar
+      rem >>>= logRadix // i.e., rem = divU(rem, radix)
+      i -= 1
+    }
+
+    new String(buffer)
+  }
+
+  // `toUnsignedString` with a known-valid radix that is *not* a power of 2
+  @noinline
+  private def toUnsignedStringWasmRadixNotPowOf2(l: scala.Long, radix: Int): String = {
+    val MaxLen = 41 // = java.lang.Long.toUnsignedString(-1L, 3).length()
+
+    if (l == 0L) {
+      "0"
+    } else {
+      val longRadix = radix.toLong
+      val buffer = new Array[Char](MaxLen)
+      var rem = l
+      var i = MaxLen - 1
+      while (rem != 0L) {
+        val nextRem = divideUnsigned(rem, longRadix)
+        val digit = (rem - (nextRem * longRadix)).toInt // = remU(rem, longRadix).toInt
+        buffer(i) = ((if (digit < 10) '0' else ('a' - 10)) + digit).toChar
+        rem = nextRem
+        i -= 1
+      }
+
+      i += 1
+      new String(buffer, i, MaxLen - i)
+    }
   }
 
   @inline def sum(a: scala.Long, b: scala.Long): scala.Long =
