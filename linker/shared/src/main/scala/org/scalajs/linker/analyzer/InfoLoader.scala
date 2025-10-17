@@ -130,10 +130,11 @@ private[analyzer] object InfoLoader {
       val componentNativeMembers = classDef.componentNativeMembers
         .map(m => m.method.name -> generator.generateComponentNativeMember(m)).toMap
 
-      new Infos.ClassInfo(classDef.className, classDef.kind,
-          classDef.superClass.map(_.name), classDef.interfaces.map(_.name),
-          classDef.jsNativeLoadSpec, referencedFieldClasses, prevMethodInfos,
-          jsNativeMembers, componentNativeMembers, exportedMembers, topLevelExports)
+      new Infos.ClassInfo(classDef.className, classDef.kind, syntheticKind = None,
+          nonExistent = false, classDef.superClass.map(_.name),
+          classDef.interfaces.map(_.name), classDef.jsNativeLoadSpec,
+          referencedFieldClasses, prevMethodInfos, jsNativeMembers,
+          componentNativeMembers, exportedMembers, topLevelExports)
     }
 
     /** Returns true if the cache has been used and should be kept. */
