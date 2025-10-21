@@ -18,6 +18,8 @@ import scala.scalajs.js
 import scala.scalajs.LinkingInfo
 
 import Utils._
+import java.lang.{String => f}
+
 
 /* This is a hijacked class. Its instances are primitive numbers.
  * Constructors are not emitted.
@@ -253,37 +255,9 @@ object Double {
   @inline def toString(d: scala.Double): String =
     "" + d
 
-  def toHexString(d: scala.Double): String = {
-    val ebits = 11 // exponent size
-    val mbits = 52 // mantissa size
-    val bias = (1 << (ebits - 1)) - 1
-
-    val bits = doubleToRawLongBits(d)
-    val s = bits < 0
-    val m = bits & ((1L << mbits) - 1L)
-    val e = (bits >>> mbits).toInt & ((1 << ebits) - 1) // biased
-
-    val posResult = if (e > 0) {
-      if (e == (1 << ebits) - 1) {
-        // Special
-        if (m != 0L) "NaN"
-        else "Infinity"
-      } else {
-        // Normalized
-        "0x1." + mantissaToHexString(m) + "p" + (e - bias)
-      }
-    } else {
-      if (m != 0L) {
-        // Subnormal
-        "0x0." + mantissaToHexString(m) + "p-1022"
-      } else {
-        // Zero
-        "0x0.0p0"
-      }
-    }
-
-    if (bits < 0) "-" + posResult else posResult
-  }
+  @noinline
+  def toHexString(d: scala.Double): String =
+    FloatDouble.toHexString(d, mantissaToHexString(_))
 
   @inline
   private def mantissaToHexString(m: scala.Long): String =

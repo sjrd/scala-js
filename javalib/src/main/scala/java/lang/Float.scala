@@ -368,39 +368,10 @@ object Float {
   @inline def toString(f: scala.Float): String =
     "" + f
 
-  def toHexString(f: scala.Float): String = {
-    val ebits = 8 // exponent size
-    val mbits = 23 // mantissa size
-    val bias = (1 << (ebits - 1)) - 1
+  @noinline
+  def toHexString(f: scala.Float): String =
+    FloatDouble.toHexString(f, mantissaToHexString(_))
 
-    val bits = floatToIntBits(f)
-    val s = bits < 0
-    val m = bits & ((1 << mbits) - 1)
-    val e = (bits >>> mbits).toInt & ((1 << ebits) - 1) // biased
-
-    val posResult = if (e > 0) {
-      if (e == (1 << ebits) - 1) {
-        // Special
-        if (m != 0) "NaN"
-        else "Infinity"
-      } else {
-        // Normalized
-        "0x1." + mantissaToHexString(m) + "p" + (e - bias)
-      }
-    } else {
-      if (m != 0) {
-        // Subnormal
-        "0x0." + mantissaToHexString(m) + "p-126"
-      } else {
-        // Zero
-        "0x0.0p0"
-      }
-    }
-
-    if (bits < 0) "-" + posResult else posResult
-  }
-
-  @inline
   private def mantissaToHexString(m: Int): String = {
     @inline def padHex6(i: Int): String = {
       val s = Integer.toHexString(i)
