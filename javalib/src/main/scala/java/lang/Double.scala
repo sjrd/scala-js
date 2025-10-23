@@ -283,27 +283,20 @@ object Double {
   }
 
   def compare(a: scala.Double, b: scala.Double): scala.Int = {
-    // NaN must equal itself, and be greater than anything else
-    if (isNaN(a)) {
-      if (isNaN(b)) 0
-      else 1
-    } else if (isNaN(b)) {
-      -1
+    // Canonicalize NaN's so they are all equal
+    val abits = doubleToLongBits(a)
+    val bbits = doubleToLongBits(b)
+
+    if (abits == bbits) {
+      0
     } else {
-      if (a == b) {
-        // -0.0 must be smaller than 0.0
-        if (a == 0.0) {
-          val ainf = 1.0/a
-          if (ainf == 1.0/b) 0
-          else if (ainf < 0) -1
-          else 1
-        } else {
-          0
-        }
-      } else {
-        if (a < b) -1
-        else 1
-      }
+      // If the sign bit is 1, flip all the *other* bits
+      val abitsAjusted = abits ^ ((abits >> 63) & ~scala.Long.MinValue)
+      val bbitsAjusted = bbits ^ ((bbits >> 63) & ~scala.Long.MinValue)
+
+      // Finish with a Long comparison
+      if (abitsAjusted < bbitsAjusted) -1
+      else 1
     }
   }
 
