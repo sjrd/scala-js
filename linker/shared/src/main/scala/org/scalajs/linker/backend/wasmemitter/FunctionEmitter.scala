@@ -624,9 +624,42 @@ private class FunctionEmitter private (
   def genTreeToAny(tree: Tree): Unit =
     genTree(tree, if (tree.tpe.isNullable) AnyType else AnyNotNullType)
 
-  def genTree(tree: Tree, expectedType: Type): Unit = {
+  /** Main codegen: evaluate the given `tree` and leave its result on the stack.
+   *
+   *  The Wasm type of the value left on the stack corresponds to `expectedType`.
+   *  In other words, it is `transformResultType(expectedType)` or a Wasm
+   *  subtype thereof.
+   *
+   *  If `allowCast` is `false` (the default), then `tree.tpe <: expectedType`
+   *  must be true. `genTree` will then only generate a possible *upcasting*
+   *  adaptation (through `genAdapt`), but will not downcast. `genTree` does
+   *  not actually check this invariant; it assumes it holds. If it does not,
+   *  we may generate invalid Wasm code, which will only be caught during
+   *  validation of the Wasm module (at run-time).
+   *
+   *  If `allowCast` if `true`, then `tree.tpe` and `expectedType` need not be
+   *  related. `genTree` will cast the result to match `expectedType`. If
+   *  possible, it pushes the cast inside the expected result type of custom JS
+   *  helpers (look for `ensureCastableThroughJSWasmBoundary` for more details).
+   *  Otherwise, it generates a downcast with `genActualCast`. This produces
+   *  correct code for any pair of `(tree.tpe, expectedType)`; however, it does
+   *  not produce efficient code when `tree.tpe <: expectedType` is indeed true.
+   *  That does not happen in practice, because the optimizer does not produce
+   *  `Cast` nodes where the target type is a supertype of the tree's type.
+   */
+  def genTree(tree: Tree, expectedType: Type, allowCast: Boolean = false): Unit = {
+    /* Note that while `VoidType` is not a valid target type for a `Cast`
+     * transient, it *is* a valid value for the `castTo` parameter of
+     * `genJS*` methods. Therefore, we can always use the `expectedType` as
+     * argument for `castTo`.
+     */
+
+    def expectedTypeNoCast: Type =
+      if (allowCast) tree.tpe
+      else expectedType
+
     val generatedType: Type = tree match {
-      case t: Literal             => genLiteral(t, expectedType)
+      case t: Literal             => genLiteral(t, expectedTypeNoCast)
       case t: UnaryOp             => genUnaryOp(t)
       case t: BinaryOp            => genBinaryOp(t)
       case t: VarRef              => genVarRef(t)
@@ -639,41 +672,41 @@ private class FunctionEmitter private (
       case t: ApplyTypedClosure   => genApplyTypedClosure(t)
       case t: IsInstanceOf        => genIsInstanceOf(t)
       case t: AsInstanceOf        => genAsInstanceOf(t)
-      case t: Block               => genBlock(t, expectedType)
-      case t: Labeled             => unwinding.genLabeled(t, expectedType)
+      case t: Block               => genBlock(t, expectedTypeNoCast)
+      case t: Labeled             => unwinding.genLabeled(t, expectedTypeNoCast)
       case t: Return              => unwinding.genReturn(t)
       case t: Select              => genSelect(t)
       case t: SelectStatic        => genSelectStatic(t)
       case t: Assign              => genAssign(t)
       case t: VarDef              => genVarDef(t)
       case t: New                 => genNew(t)
-      case t: If                  => genIf(t, expectedType)
+      case t: If                  => genIf(t, expectedTypeNoCast)
       case t: While               => genWhile(t)
       case t: ForIn               => genForIn(t)
-      case t: TryCatch            => genTryCatch(t, expectedType)
-      case t: TryFinally          => unwinding.genTryFinally(t, expectedType)
-      case t: Match               => genMatch(t, expectedType)
+      case t: TryCatch            => genTryCatch(t, expectedTypeNoCast)
+      case t: TryFinally          => unwinding.genTryFinally(t, expectedTypeNoCast)
+      case t: Match               => genMatch(t, expectedTypeNoCast)
       case t: JSAwait             => genJSAwait(t)
       case t: Debugger            => VoidType // ignore
       case t: Skip                => VoidType
 
       // JavaScript expressions
       case t: JSNew                if !targetPureWasm => genJSNew(t)
-      case t: JSSelect             if !targetPureWasm => genJSSelect(t)
-      case t: JSFunctionApply      if !targetPureWasm => genJSFunctionApply(t)
-      case t: JSMethodApply        if !targetPureWasm => genJSMethodApply(t)
+      case t: JSSelect             if !targetPureWasm => genJSSelect(t, castTo = expectedType)
+      case t: JSFunctionApply      if !targetPureWasm => genJSFunctionApply(t, castTo = expectedType)
+      case t: JSMethodApply        if !targetPureWasm => genJSMethodApply(t, castTo = expectedType)
       case t: JSImportCall         if !targetPureWasm => genJSImportCall(t)
       case t: JSImportMeta         if !targetPureWasm => genJSImportMeta(t)
       case t: LoadJSConstructor    if !targetPureWasm => genLoadJSConstructor(t)
       case t: LoadJSModule         if !targetPureWasm => genLoadJSModule(t)
-      case t: SelectJSNativeMember if !targetPureWasm => genSelectJSNativeMember(t)
+      case t: SelectJSNativeMember if !targetPureWasm => genSelectJSNativeMember(t, castTo = expectedType)
       case t: JSDelete             if !targetPureWasm => genJSDelete(t)
-      case t: JSUnaryOp            if !targetPureWasm => genJSUnaryOp(t)
-      case t: JSBinaryOp           if !targetPureWasm => genJSBinaryOp(t)
+      case t: JSUnaryOp            if !targetPureWasm => genJSUnaryOp(t, castTo = expectedType)
+      case t: JSBinaryOp           if !targetPureWasm => genJSBinaryOp(t, castTo = expectedType)
       case t: JSArrayConstr        if !targetPureWasm => genJSArrayConstr(t)
       case t: JSObjectConstr       if !targetPureWasm => genJSObjectConstr(t)
-      case t: JSGlobalRef          if !targetPureWasm => genJSGlobalRef(t)
-      case t: JSTypeOfGlobalRef    if !targetPureWasm => genJSTypeOfGlobalRef(t)
+      case t: JSGlobalRef          if !targetPureWasm => genJSGlobalRef(t, castTo = expectedType)
+      case t: JSTypeOfGlobalRef    if !targetPureWasm => genJSTypeOfGlobalRef(t, castTo = expectedType)
       case t: Closure              => genClosure(t)
 
       // array
@@ -685,7 +718,7 @@ private class FunctionEmitter private (
       case t: CreateJSClass     if !targetPureWasm => genCreateJSClass(t)
       case t: JSPrivateSelect   if !targetPureWasm => genJSPrivateSelect(t)
       case t: JSSuperSelect     if !targetPureWasm => genJSSuperSelect(t)
-      case t: JSSuperMethodCall if !targetPureWasm => genJSSuperMethodCall(t)
+      case t: JSSuperMethodCall if !targetPureWasm => genJSSuperMethodCall(t, castTo = expectedType)
       case t: JSNewTarget       if !targetPureWasm => genJSNewTarget(t)
 
       // Records (only generated by the optimizer)
@@ -706,7 +739,12 @@ private class FunctionEmitter private (
         throw new AssertionError(s"Invalid tree: $tree at ${tree.pos}")
     }
 
-    genAdapt(generatedType, expectedType)
+    if (generatedType != expectedType) {
+      if (allowCast)
+        genActualCast(generatedType, expectedType)
+      else
+        genAdapt(generatedType, expectedType)
+    }
   }
 
   private def genAdapt(generatedType: Type, expectedType: Type): Unit = {
@@ -718,7 +756,7 @@ private class FunctionEmitter private (
       case (NothingType, _) =>
         ()
       case (_, VoidType) =>
-        fb += wa.Drop
+        genDrop(generatedType)
       case (primType: PrimTypeWithRef, _) =>
         // box
         primType match {
@@ -763,6 +801,18 @@ private class FunctionEmitter private (
       case _ =>
         ()
     }
+  }
+
+  /** Drop a value of the given type from the top of the stack. */
+  private def genDrop(tpe: Type): Unit = tpe match {
+    case VoidType =>
+      ()
+    case RecordType(fields) =>
+      for (field <- fields)
+        genDrop(field.tpe)
+    case _ =>
+      // All other types take exactly one slot on the stack
+      fb += wa.Drop
   }
 
   private def genAssign(tree: Assign): Type = {
@@ -2589,19 +2639,20 @@ private class FunctionEmitter private (
   }
 
   private def genCast(expr: Tree, targetTpe: Type, pos: Position): Type = {
-    val sourceTpe = expr.tpe
+    genTree(expr, expectedType = targetTpe, allowCast = true)
+    targetTpe
+  }
 
+  /** Gen a cast of the value of type `sourceTpe` on the stack to the type `targetTpe`. */
+  private def genActualCast(sourceTpe: Type, targetTpe: Type): Unit = {
     /* We cannot call `transformSingleType` for NothingType, so we have to
      * handle these cases separately.
      */
 
     if (sourceTpe == NothingType) {
-      genTree(expr, NothingType)
-      NothingType
+      ()
     } else if (targetTpe == NothingType) {
-      genTree(expr, VoidType)
       fb += wa.Unreachable
-      NothingType
     } else {
       /* At this point, neither sourceTpe nor targetTpe can be NothingType,
        * VoidType or RecordType, so we can use `transformSingleType`.
@@ -2618,7 +2669,7 @@ private class FunctionEmitter private (
            * rules, there is no pair `(sourceTpe, targetTpe)` for which the Wasm
            * types are equal but a valid cast would require a *conversion*.
            */
-          genTreeAuto(expr)
+          ()
 
         case (watpe.RefType(true, sourceHeapType), watpe.RefType(false, targetHeapType))
             if sourceHeapType == targetHeapType =>
@@ -2626,14 +2677,10 @@ private class FunctionEmitter private (
            * Cast is a common case for checkNotNull's inserted by the optimizer
            * when null pointers are unchecked.
            */
-          genTreeAuto(expr)
-          markPosition(pos)
           fb += wa.RefAsNonNull
 
         case _ =>
-          genTree(expr, AnyType)
-
-          markPosition(pos)
+          genAdapt(sourceTpe, AnyType)
 
           targetTpe match {
             case targetTpe: PrimType =>
@@ -2646,8 +2693,9 @@ private class FunctionEmitter private (
 
             case _ =>
               targetWasmType match {
-                case watpe.RefType(true, watpe.HeapType.Any) =>
-                  () // nothing to do
+                case watpe.RefType(targetNullable, watpe.HeapType.Any) =>
+                  if (!targetNullable)
+                    fb += wa.RefAsNonNull
                 case watpe.RefType(targetNullable, watpe.HeapType.Extern) =>
                   fb += wa.ExternConvertAny
                   if (!targetNullable)
@@ -2659,8 +2707,6 @@ private class FunctionEmitter private (
               }
           }
       }
-
-      targetTpe
     }
   }
 
@@ -3043,40 +3089,40 @@ private class FunctionEmitter private (
 
     implicit val pos = tree.pos
 
-    genThroughCustomJSHelper(ctor :: args) { allJSArgs =>
+    genThroughCustomJSHelper(ctor :: args, AnyType) { allJSArgs =>
       val jsCtor :: jsArgs = allJSArgs
       js.Return(js.New(jsCtor, jsArgs))
     }
   }
 
-  private def genJSSelect(tree: JSSelect): Type = {
+  private def genJSSelect(tree: JSSelect, castTo: Type): Type = {
     val JSSelect(qualifier, item) = tree
 
     implicit val pos = tree.pos
 
-    genThroughCustomJSHelper(List(qualifier, item)) { allJSArgs =>
+    genThroughCustomJSHelper(List(qualifier, item), castTo) { allJSArgs =>
       val List(jsQualifier, jsItem) = allJSArgs
       js.Return(js.BracketSelect.makeOptimized(jsQualifier, jsItem))
     }
   }
 
-  private def genJSFunctionApply(tree: JSFunctionApply): Type = {
+  private def genJSFunctionApply(tree: JSFunctionApply, castTo: Type): Type = {
     val JSFunctionApply(fun, args) = tree
 
     implicit val pos = tree.pos
 
-    genThroughCustomJSHelper(fun :: args) { allJSArgs =>
+    genThroughCustomJSHelper(fun :: args, castTo) { allJSArgs =>
       val jsFun :: jsArgs = allJSArgs
       js.Return(js.Apply.makeProtected(jsFun, jsArgs))
     }
   }
 
-  private def genJSMethodApply(tree: JSMethodApply): Type = {
+  private def genJSMethodApply(tree: JSMethodApply, castTo: Type): Type = {
     val JSMethodApply(receiver, method, args) = tree
 
     implicit val pos = tree.pos
 
-    genThroughCustomJSHelper(receiver :: method :: args) { allJSArgs =>
+    genThroughCustomJSHelper(receiver :: method :: args, castTo) { allJSArgs =>
       val jsReceiver :: jsMethod :: jsArgs = allJSArgs
       js.Return(js.Apply(js.BracketSelect.makeOptimized(jsReceiver, jsMethod), jsArgs))
     }
@@ -3093,7 +3139,7 @@ private class FunctionEmitter private (
      * - the output of Scala.js is given to a bundler that really wants to see
      *    constant strings in import(...) calls.
      */
-    genThroughCustomJSHelper(List(arg)) { allJSArgs =>
+    genThroughCustomJSHelper(List(arg), AnyType) { allJSArgs =>
       val List(jsArg) = allJSArgs
       js.Return(js.ImportCall(jsArg))
     }
@@ -3112,13 +3158,12 @@ private class FunctionEmitter private (
 
     ctx.getClassInfo(className).jsNativeLoadSpec match {
       case Some(loadSpec) =>
-        genLoadJSFromSpec(loadSpec)(tree.pos)
+        genLoadJSFromSpec(loadSpec, castTo = AnyType)(tree.pos)
       case None =>
         // This is a non-native JS class
         fb += wa.Call(genFunctionID.loadJSClass(className))
+        AnyType
     }
-
-    AnyType
   }
 
   private def genLoadJSModule(tree: LoadJSModule): Type = {
@@ -3128,17 +3173,16 @@ private class FunctionEmitter private (
 
     ctx.getClassInfo(className).jsNativeLoadSpec match {
       case Some(loadSpec) =>
-        genLoadJSFromSpec(loadSpec)(tree.pos)
+        genLoadJSFromSpec(loadSpec, castTo = AnyType)(tree.pos)
       case None =>
         // This is a non-native JS module
         fb += wa.Call(genFunctionID.loadModule(className))
         genForwardThrow()
+        AnyType
     }
-
-    AnyType
   }
 
-  private def genSelectJSNativeMember(tree: SelectJSNativeMember): Type = {
+  private def genSelectJSNativeMember(tree: SelectJSNativeMember, castTo: Type): Type = {
     val SelectJSNativeMember(className, MethodIdent(memberName)) = tree
 
     val info = ctx.getClassInfo(className)
@@ -3146,21 +3190,15 @@ private class FunctionEmitter private (
       throw new AssertionError(
           s"Found $tree for non-existing JS native member at ${tree.pos}")
     })
-    genLoadJSFromSpec(jsNativeLoadSpec)(tree.pos)
-    AnyType
+    genLoadJSFromSpec(jsNativeLoadSpec, castTo)(tree.pos)
   }
 
-  private def genLoadJSFromSpec(jsNativeLoadSpec: JSNativeLoadSpec)(
-      implicit pos: Position): Unit = {
+  private def genLoadJSFromSpec(jsNativeLoadSpec: JSNativeLoadSpec, castTo: Type)(
+      implicit pos: Position): Type = {
 
-    val builder = new CustomJSHelperBuilder()
-    val result = builder.genJSNativeLoadSpec(jsNativeLoadSpec)
-    val helperID = builder.build(AnyType) {
-      js.Return(result)
+    genThroughCustomJSHelperWithBuilder(castTo) { builder =>
+      js.Return(builder.genJSNativeLoadSpec(jsNativeLoadSpec))
     }
-
-    markPosition(pos)
-    fb += wa.Call(helperID)
   }
 
   private def genJSDelete(tree: JSDelete): Type = {
@@ -3173,12 +3211,12 @@ private class FunctionEmitter private (
     VoidType
   }
 
-  private def genJSUnaryOp(tree: JSUnaryOp): Type = {
+  private def genJSUnaryOp(tree: JSUnaryOp, castTo: Type): Type = {
     val JSUnaryOp(op, lhs) = tree
 
     implicit val pos = tree.pos
 
-    genThroughCustomJSHelper(List(lhs), tree.tpe) { allJSArgs =>
+    genThroughCustomJSHelper(List(lhs), castTo) { allJSArgs =>
       val List(jsLhs) = allJSArgs
 
       val protectedLhs = if (op == JSUnaryOp.typeof && lhs.isInstanceOf[JSGlobalRef]) {
@@ -3192,11 +3230,9 @@ private class FunctionEmitter private (
 
       js.Return(js.UnaryOp(op, protectedLhs))
     }
-
-    tree.tpe
   }
 
-  private def genJSBinaryOp(tree: JSBinaryOp): Type = {
+  private def genJSBinaryOp(tree: JSBinaryOp, castTo: Type): Type = {
     val JSBinaryOp(op, lhs, rhs) = tree
 
     op match {
@@ -3224,17 +3260,16 @@ private class FunctionEmitter private (
             fb += wa.LocalGet(lhsLocal)
           }
         }
+        AnyType
 
       case _ =>
         implicit val pos = tree.pos
 
-        genThroughCustomJSHelper(List(lhs, rhs), tree.tpe) { allJSArgs =>
+        genThroughCustomJSHelper(List(lhs, rhs), castTo) { allJSArgs =>
           val List(jsLhs, jsRhs) = allJSArgs
           js.Return(js.BinaryOp(op, jsLhs, jsRhs))
         }
     }
-
-    tree.tpe
   }
 
   private def genJSArrayConstr(tree: JSArrayConstr): Type = {
@@ -3279,39 +3314,31 @@ private class FunctionEmitter private (
     }
   }
 
-  private def genJSGlobalRef(tree: JSGlobalRef): Type = {
+  private def genJSGlobalRef(tree: JSGlobalRef, castTo: Type): Type = {
     val JSGlobalRef(name) = tree
 
     implicit val pos = tree.pos
-    markPosition(pos)
 
     if (name == JSGlobalRef.FileLevelThis) {
       // In ES modules global this is undefined, and Wasm backend only supports `ESModule`
+      markPosition(pos)
       fb += wa.GlobalGet(genGlobalID.undef)
+      UndefType
     } else {
-      val builder = new CustomJSHelperBuilder()
-      val helperID = builder.build(AnyType) {
+      genThroughCustomJSHelperWithBuilder(castTo) { builder =>
         js.Return(builder.genGlobalRef(name))
       }
-
-      fb += wa.Call(helperID)
     }
-    AnyType
   }
 
-  private def genJSTypeOfGlobalRef(tree: JSTypeOfGlobalRef): Type = {
+  private def genJSTypeOfGlobalRef(tree: JSTypeOfGlobalRef, castTo: Type): Type = {
     val JSTypeOfGlobalRef(JSGlobalRef(name)) = tree
 
     implicit val pos = tree.pos
 
-    val builder = new CustomJSHelperBuilder()
-    val helperID = builder.build(AnyType) {
+    genThroughCustomJSHelperWithBuilder(castTo) { builder =>
       js.Return(js.UnaryOp(JSUnaryOp.typeof, builder.genGlobalRef(name)))
     }
-
-    markPosition(pos)
-    fb += wa.Call(helperID)
-    AnyType
   }
 
   private def genNewArray(tree: NewArray): Type = {
@@ -3726,12 +3753,12 @@ private class FunctionEmitter private (
     AnyType
   }
 
-  private def genJSSuperMethodCall(tree: JSSuperMethodCall): Type = {
+  private def genJSSuperMethodCall(tree: JSSuperMethodCall, castTo: Type): Type = {
     val JSSuperMethodCall(superClass, receiver, method, args) = tree
 
     implicit val pos = tree.pos
 
-    genThroughCustomJSHelper(superClass :: receiver :: method :: args) { allJSArgs =>
+    genThroughCustomJSHelper(superClass :: receiver :: method :: args, castTo) { allJSArgs =>
       val jsSuperClass :: jsReceiver :: jsMethod :: jsArgs = allJSArgs
 
       // return superClass.prototype[method].call(receiver, ...args);
@@ -3791,8 +3818,7 @@ private class FunctionEmitter private (
             fb += wa.LocalSet(tempLocal)
         } else {
           // Discard this field
-          for (_ <- transformResultType(recordField.tpe))
-            fb += wa.Drop
+          genDrop(recordField.tpe)
         }
       }
 
@@ -3952,18 +3978,22 @@ private class FunctionEmitter private (
    *  @see [[CustomJSHelperBuilder]]
    */
   private def genThroughCustomJSHelper(args: List[TreeOrJSSpread],
-      resultType: Type = AnyType)(
+      resultType: Type)(
       makeJSHelperBody: List[js.Tree] => js.Tree)(
       implicit pos: Position): Type = {
 
+    val boundaryResultType = ensureCastableThroughJSWasmBoundary(resultType)
+
     val builder = new CustomJSHelperBuilderWithTreeSupport()
     val jsArgs = args.map(builder.addInput(_))
-    val helperID = builder.build(resultType) {
+    val helperID = builder.build(boundaryResultType) {
       makeJSHelperBody(jsArgs)
     }
 
     markPosition(pos)
     fb += wa.Call(helperID)
+    if (boundaryResultType != resultType)
+      genActualCast(boundaryResultType, resultType)
 
     resultType
   }
@@ -3971,6 +4001,32 @@ private class FunctionEmitter private (
   private def genStringEquals(): Unit = {
     if (targetPureWasm) fb += wa.Call(genFunctionID.wasmString.stringEquals)
     else fb += wa.Call(genFunctionID.stringBuiltins.equals)
+  }
+
+  /** Generates code with a custom JS helper with direct access to the builder. */
+  private def genThroughCustomJSHelperWithBuilder(resultType: Type)(
+      makeJSHelperBody: CustomJSHelperBuilder => js.Tree)(
+      implicit pos: Position): Type = {
+
+    val boundaryResultType = ensureCastableThroughJSWasmBoundary(resultType)
+
+    val builder = new CustomJSHelperBuilder()
+    val helperID = builder.build(boundaryResultType) {
+      makeJSHelperBody(builder)
+    }
+
+    markPosition(pos)
+    fb += wa.Call(helperID)
+    if (boundaryResultType != resultType)
+      genActualCast(boundaryResultType, resultType)
+
+    resultType
+  }
+
+  /** If `resultType` is castable through the JS-Wasm boundary, itself; otherwise, `AnyType`. */
+  private def ensureCastableThroughJSWasmBoundary(resultType: Type): Type = resultType match {
+    case UndefType | StringType | CharType | LongType | NothingType => AnyType
+    case _                                                          => resultType
   }
 
   private final class CustomJSHelperBuilderWithTreeSupport()(implicit pos: Position)
