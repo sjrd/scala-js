@@ -125,9 +125,6 @@ class FloatTest {
   }
 
   @Test def parseStringMethods(): Unit = {
-    assumeFalse("Parse floating point doesn't link in pure Wasm",
-        executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(expected: Float, s: String): Unit = {
       assertEquals(s, expected: Any, JFloat.parseFloat(s))
       assertEquals(s, expected: Any, JFloat.valueOf(s).floatValue())
@@ -387,13 +384,25 @@ class FloatTest {
     test(-4.8238549e15f, "-0x1.123454fffffffffffffffffffffffffffffffp52")
     test(-4.8238549e15f, "-0x1.1234550000000000000000000000000000000p52")
     test(-4.8238555e15f, "-0x1.1234550000000000000000000000000000001p52")
-    } {}
+
+    // Exactly halfway between 1 and the next float32.
+    test(1, "1.000000059604644775390625")
+    test(1, "1.000000059604644775390624")
+    test(1.0000001f, "1.000000059604644775390626")
+    test(1.0000001f, "1.00000005960464477539062500000000000000000000000000000000000000000000000000000000000000000000000000000000000000001")
+
+    // subnormal
+    test(1E-38f, "1E-38")
+    test(1E-39f, "1E-39")
+    test(1E-40f, "1E-40")
+    test(1E-43f, "1E-43")
+    test(1E-44f, "1E-44")
+    test(1.4E-45f, "1.4E-45") // smallest subnnormal
+    test(1.4E-45f, "2e-45")
+    test(3E-45f, "3e-45")
   }
 
   @Test def parseFloatInvalidThrows(): Unit = {
-    assumeFalse("Parse floating point doesn't link in pure Wasm",
-        executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String): Unit =
       assertThrows(classOf[NumberFormatException], JFloat.parseFloat(s))
 
@@ -407,7 +416,6 @@ class FloatTest {
 
     test("NaNf")
     test("Infinityf")
-    } {}
   }
 
   @Test def compareTo(): Unit = {

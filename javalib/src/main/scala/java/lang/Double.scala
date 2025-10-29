@@ -13,6 +13,7 @@
 package java.lang
 
 import java.lang.constant.{Constable, ConstantDesc}
+import java.util.regex.RegExpImpl
 
 import scala.scalajs.js
 import scala.scalajs.LinkingInfo
@@ -86,19 +87,28 @@ object Double {
 
   @inline def valueOf(s: String): Double = valueOf(parseDouble(s))
 
-  private[this] lazy val doubleStrPat = new js.RegExp(
-      "^"                   +
-      "[\\x00-\\x20]*("     + // optional whitespace
-      "[+-]?"               + // optional sign
-      "(?:NaN|Infinity|"    + // special cases
-       "(?:\\d+\\.?\\d*|"   + // literal w/  leading digit
-        "\\.\\d+)"          + // literal w/o leading digit
-       "(?:[eE][+-]?\\d+)?" + // optional exponent
-      ")[fFdD]?"            + // optional float / double specifier (ignored)
-      ")[\\x00-\\x20]*"     + // optional whitespace
+  private[this] lazy val doubleStrPat = RegExpImpl.impl.compile(
+      "^" +
+      "[\\x00-\\x20]*" +  // optional whitespace
+      "(" +               // 1: entire input
+        "([+-]?)" +       // 2: optional sign
+        "(?:" +
+          "(NaN)|" +      // 3: NaN
+          "(Infinity)|" + // 4: Infinity
+          "(?:" +
+            "(" +         // 5: decimal notation
+              "(?:(\\d+)(?:\\.(\\d*))?|" + // 6-7: w/ digit before .
+                "\\.(\\d+))" +             // 8: w/o digit before .
+              "(?:[eE]([+-]?\\d+))?" +     // 9: optional exponent with sign
+            ")" +
+          ")" +
+          "[fFdD]?" +     // optional float / double specifier (ignored)
+        ")" +
+      ")" +
+      "[\\x00-\\x20]*" +  // optional whitespace
       "$")
 
-  private[this] lazy val doubleStrHexPat = new js.RegExp(
+  private[this] lazy val doubleStrHexPat = RegExpImpl.impl.compile(
       "^"                   +
       "[\\x00-\\x20]*"      + // optional whitespace
       "([+-]?)"             + // optional sign
@@ -111,26 +121,62 @@ object Double {
       "$")
 
   def parseDouble(s: String): scala.Double = {
-    val groups = doubleStrPat.exec(s)
-    if (groups != null)
-      js.Dynamic.global.parseFloat(undefOrForceGet[String](groups(1))).asInstanceOf[scala.Double]
-    else
+    import RegExpImpl.impl
+    val groups = impl.exec(doubleStrPat, s)
+    if (impl.matches(groups)) {
+      linkTimeIf(LinkingInfo.targetPureWasm) {
+        parseDoubleWasm(s, groups)
+      } {
+        js.Dynamic.global.parseFloat(impl.get(groups, 1)).asInstanceOf[scala.Double]
+      }
+    } else {
       parseDoubleSlowPath(s)
+    }
+  }
+
+  private def parseDoubleWasm(s: String, groups: RegExpImpl.impl.Repr): scala.Double = {
+    import java.math.BigInteger
+    import RegExpImpl.impl
+    import dectoflt.Bellerophon.bellerophonDouble
+
+    val absResult = if (impl.exists(groups, 3)) {
+      scala.Double.NaN
+    } else if (impl.exists(groups, 4)) {
+      scala.Double.PositiveInfinity
+    } else {
+      // Decimal notation
+      val integralPartStr = impl.getOrElse(groups, 6, "")
+      val fractionalPartStr =
+        impl.getOrElse(groups, 7, "") + impl.getOrElse(groups, 8, "")
+      val exponentStr = impl.getOrElse(groups, 9, "0")
+
+      val f = new BigInteger(integralPartStr + fractionalPartStr)
+      val e = Integer.parseInt(exponentStr) - fractionalPartStr.length()
+      bellerophonDouble(f, e)
+    }
+    val signStr = impl.get(groups, 2)
+    if (signStr == "-")
+      -absResult
+    else
+      absResult
   }
 
   // Slow path of `parseDouble` for hexadecimal notation and failure
   private def parseDoubleSlowPath(s: String): scala.Double = {
+    import RegExpImpl.impl
+
     def fail(): Nothing =
       throw new NumberFormatException(s"""For input string: "$s"""")
 
-    val groups = doubleStrHexPat.exec(s)
-    if (groups == null)
+    val groups = impl.exec(doubleStrHexPat, s)
+    if (!impl.matches(groups)) {
       fail()
+    }
 
-    val signStr = undefOrForceGet(groups(1))
-    val integralPartStr = undefOrForceGet(groups(2))
-    val fractionalPartStr = undefOrForceGet(groups(3))
-    val binaryExpStr = undefOrForceGet(groups(4))
+    val signStr = impl.get(groups, 1)
+    val integralPartStr = impl.get(groups, 2)
+    val fractionalPartStr = impl.get(groups, 3)
+    val binaryExpStr = impl.get(groups, 4)
 
     if (integralPartStr == "" && fractionalPartStr == "")
       fail()
@@ -240,11 +286,29 @@ object Double {
     @inline def nativeParseInt(s: String, radix: Int): scala.Double =
       js.Dynamic.global.parseInt(s, radix).asInstanceOf[scala.Double]
 
-    val mantissa = nativeParseInt(truncatedMantissaStr, 16)
+    val mantissa = linkTimeIf(LinkingInfo.targetPureWasm) {
+      val mantissaLong = Long.parseUnsignedLong(truncatedMantissaStr, 16)
+      // convert unsigned long to double
+      (mantissaLong >>> 32).toDouble * (1L << 32) + (mantissaLong & 0xffffffffL).toDouble
+    } {
+      nativeParseInt(truncatedMantissaStr, 16)
+    }
     // Assert: mantissa != 0.0 && mantissa != scala.Double.PositiveInfinity
 
-    val binaryExpDouble = nativeParseInt(binaryExpStr, 10)
-    val binaryExp = binaryExpDouble.toInt // caps to [MinValue, MaxValue]
+    val binaryExp = linkTimeIf(LinkingInfo.targetPureWasm) {
+      if (binaryExpStr.length() > 11) {
+        if (binaryExpStr.charAt(0) == '-') Int.MinValue
+        else Int.MaxValue
+      } else {
+        val binaryExpLong = Long.parseLong(binaryExpStr)
+        if (binaryExpLong > Int.MaxValue.toLong) Int.MaxValue
+        else if (binaryExpLong < Int.MinValue.toLong) Int.MinValue
+        else binaryExpLong.toInt
+      }
+    }  {
+      val binaryExpDouble = nativeParseInt(binaryExpStr, 10)
+      binaryExpDouble.toInt // caps to [MinValue, MaxValue]
+    }
 
     Math.scalb(mantissa, binaryExp + fullCorrection)
 

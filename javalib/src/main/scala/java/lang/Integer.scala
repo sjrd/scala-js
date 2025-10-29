@@ -566,7 +566,14 @@ object Integer {
     }
   }
 
-  @inline def toUnsignedString(i: scala.Int): String = toUnsignedString(i, 10)
+  @inline def toUnsignedString(i: scala.Int): String = {
+    // TODO: pure wasm toUnsignedString(i, radix)
+    LinkingInfo.linkTimeIf(LinkingInfo.targetPureWasm) {
+      java.lang.Long.toString(Integer.toUnsignedLong(i))
+    } {
+      toUnsignedString(i, 10)
+    }
+  }
 
   @inline def hashCode(value: Int): Int = value.hashCode
 
