@@ -23,13 +23,15 @@ final class WasmFeatures private (
     /* We define `val`s separately below so that we can attach Scaladoc to them
      * (putting Scaladoc comments on constructor param `val`s has no effect).
      */
-    _useJSPI: Boolean
+    _useJSPI: Boolean,
+    _useCustomDescriptors: Boolean
 ) {
   import WasmFeatures._
 
   private def this() = {
     this(
-      _useJSPI = false
+      _useJSPI = false,
+      _useCustomDescriptors = false
     )
   }
 
@@ -46,9 +48,21 @@ final class WasmFeatures private (
   def withUseJSPI(useJSPI: Boolean): WasmFeatures =
     copy(useJSPI = useJSPI)
 
+  /** EXPERIMENTAL: Emit custom descriptors and JS propotypes for `@JSExport`.
+   *
+   *  Default: `false`
+   *
+   *  @see [[https://github.com/WebAssembly/useCustom-descriptors/blob/main/proposals/useCustom-descriptors/Overview.md]]
+   */
+  val useCustomDescriptors = _useCustomDescriptors
+
+  def withUseCustomDescriptors(useCustomDescriptors: Boolean): WasmFeatures =
+    copy(useCustomDescriptors = useCustomDescriptors)
+
   override def equals(that: Any): Boolean = that match {
     case that: WasmFeatures =>
-      this.useJSPI == that.useJSPI
+      this.useJSPI == that.useJSPI &&
+      this.useCustomDescriptors == that.useCustomDescriptors
     case _ =>
       false
   }
@@ -56,21 +70,25 @@ final class WasmFeatures private (
   override def hashCode(): Int = {
     import scala.util.hashing.MurmurHash3._
     var acc = HashSeed
-    acc = mixLast(acc, useJSPI.##)
-    finalizeHash(acc, 1)
+    acc = mix(acc, useJSPI.##)
+    acc = mixLast(acc, useCustomDescriptors.##)
+    finalizeHash(acc, 2)
   }
 
   override def toString(): String = {
     s"""WasmFeatures(
-       |  useJSPI = $useJSPI
+       |  useJSPI = $useJSPI,
+       |  useCustomDescriptors = $useCustomDescriptors,
        |)""".stripMargin
   }
 
   private def copy(
-      useJSPI: Boolean = this.useJSPI
+      useJSPI: Boolean = this.useJSPI,
+      useCustomDescriptors: Boolean = this.useCustomDescriptors
   ): WasmFeatures = {
     new WasmFeatures(
-      _useJSPI = useJSPI
+      _useJSPI = useJSPI,
+      _useCustomDescriptors = useCustomDescriptors
     )
   }
 }
@@ -82,6 +100,7 @@ object WasmFeatures {
   /** Default configuration of Wasm features.
    *
    *  - `useJSPI`: false
+   *  - `useCustomDescriptors`: false
    */
   val Defaults: WasmFeatures = new WasmFeatures()
 
@@ -90,6 +109,7 @@ object WasmFeatures {
     override def fingerprint(wasmFeatures: WasmFeatures): String = {
       new FingerprintBuilder("WasmFeatures")
         .addField("useJSPI", wasmFeatures.useJSPI)
+        .addField("useCustomDescriptors", wasmFeatures.useCustomDescriptors)
         .build()
     }
   }
