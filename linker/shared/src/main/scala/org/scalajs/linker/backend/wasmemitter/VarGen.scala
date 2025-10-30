@@ -37,6 +37,9 @@ object VarGen {
         forVTable(ClassRef(className))
     }
 
+    // for arrays of primitives and Object[] only
+    final case class forArrayVTable(baseTypeRef: NonArrayTypeRef) extends GlobalID
+
     final case class forStaticField(fieldName: FieldName) extends GlobalID
 
     final case class forStringLiteral(str: String) extends GlobalID
@@ -162,7 +165,7 @@ object VarGen {
     case object typeDataName extends FunctionID
     case object createClassOf extends FunctionID
     case object getClassOf extends FunctionID
-    case object arrayTypeData extends FunctionID
+    case object specificArrayTypeData extends FunctionID
     case object valueDescription extends FunctionID
     case object classCastException extends FunctionID
     case object asSpecificRefArray extends FunctionID
@@ -301,12 +304,16 @@ object VarGen {
 
       /** The typeData/vtable of an array of this type, a nullable `typeData`, lazily initialized.
        *
-       *  This field is initialized by the `arrayTypeData` helper.
+       *  This field is initialized by the `specificArrayTypeData` helper.
        *
        *  For example, once initialized,
        *
        *  - in the `typeData` of class `Foo`, it contains the `typeData` of `Array[Foo]`,
        *  - in the `typeData` of `Array[Int]`, it contains the `typeData` of `Array[Array[Int]]`.
+       *
+       *  This field always remains uninitialized for primitive types and for
+       *  `jl.Object`, because `specificArrayTypeData` cannot be called with
+       *  any of those as base.
        */
       case object arrayOf extends FieldID
 
