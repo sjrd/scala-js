@@ -220,7 +220,7 @@ export async function load(wasmFileURL, exportSetters, privateJSFieldGetters,
     ${if (coreSpec.wasmFeatures.customDescriptors) raw""""$JSPrototypeFactoryModule": protoFactory,""" else ""}
   };
   const options = {
-    builtins: ["js-string"],
+    builtins: ["js-string", "js-prototypes"],
     importedStringConstants: "$UTF8StringConstantsModule",
   };
   const resolvedURL = new URL(wasmFileURL, import.meta.url);

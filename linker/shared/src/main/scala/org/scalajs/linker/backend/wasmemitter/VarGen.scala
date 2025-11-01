@@ -223,6 +223,12 @@ object VarGen {
       case object substring extends JSHelperFunctionID
       case object equals extends JSHelperFunctionID
     }
+
+    // JS prototypes builtins (from custom descriptors)
+
+    object jsPrototypes {
+      case object configureAll extends JSHelperFunctionID
+    }
   }
 
   object genFieldID {
@@ -456,8 +462,9 @@ object VarGen {
     case object f64Array extends TypeID
     case object anyArray extends TypeID
 
-    // for the array of cached string constants
+    // other simple arrays
     case object externrefArray extends TypeID
+    case object funcrefArray extends TypeID
 
     def underlyingOf(arrayTypeRef: ArrayTypeRef): TypeID = {
       if (arrayTypeRef.dimensions > 1) {
