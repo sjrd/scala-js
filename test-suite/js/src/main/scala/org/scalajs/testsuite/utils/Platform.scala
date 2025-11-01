@@ -101,6 +101,18 @@ object Platform {
   def isESModule: Boolean = BuildInfo.isESModule
   def isCommonJSModule: Boolean = BuildInfo.isCommonJSModule
 
+  def hasWasmCustomDescriptors: Boolean = BuildInfo.hasWasmCustomDescriptors
+
+  /** Does Wasm have custom descriptors, and they actuall support JS prototypes handling?
+   *
+   *  TODO Eventually this should just be `hasWasmCustomDescriptors`. However,
+   *  as of this writing, the latest Node.js (25.1.0) supports the Wasm core
+   *  aspects of custom descriptors, but not the JS interop parts. So we
+   *  exclude Node.js for now.
+   */
+  def hasWasmCustomDescriptorsWithJSInterop: Boolean =
+    hasWasmCustomDescriptors && !executingInNodeJS
+
   /** Runs the specified piece of code in the global context.
    *
    *  This only works on Node.js. It needs functionality from the `vm` module.

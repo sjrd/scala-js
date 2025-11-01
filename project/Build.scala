@@ -2353,6 +2353,7 @@ object Build {
           "esVersion" -> linkerConfig.esFeatures.esVersion.edition,
           "useECMAScript2015Semantics" -> linkerConfig.esFeatures.useECMAScript2015Semantics,
           "isWebAssembly" -> linkerConfig.experimentalUseWebAssembly,
+          "hasWasmCustomDescriptors" -> linkerConfig.wasmFeatures.customDescriptors,
         )
       },
 

@@ -14,14 +14,16 @@ package org.scalajs.linker.backend.wasmemitter
 
 import java.nio.charset.StandardCharsets
 
+import org.scalajs.linker.standard.CoreSpec
+
 import EmbeddedConstants._
 
 /** Contents of the `__loader.js` file that we emit in every output. */
 object LoaderContent {
-  val bytesContent: Array[Byte] =
-    stringContent.getBytes(StandardCharsets.UTF_8)
+  def makeBytesContent(coreSpec: CoreSpec): Array[Byte] =
+    makeStringContent(coreSpec).getBytes(StandardCharsets.UTF_8)
 
-  private def stringContent: String = {
+  private def makeStringContent(coreSpec: CoreSpec): String = {
     raw"""
 // This implementation follows no particular specification, but is the same as the JS backend.
 // It happens to coincide with java.lang.Long.hashCode() for common values.
@@ -186,6 +188,20 @@ const stringConstantsPolyfills = new Proxy({}, {
   },
 });
 
+${
+if (coreSpec.wasmFeatures.customDescriptors) {
+raw"""
+const protoFactory = new Proxy({}, {
+  get(target, prop, receiver) {
+    return {};
+  }
+});
+"""
+} else {
+""
+}
+}
+
 export async function load(wasmFileURL, exportSetters, privateJSFieldGetters,
     privateJSFieldSetters, customJSHelpers, wtf16Strings) {
   const myScalaJSHelpers = {
@@ -201,6 +217,7 @@ export async function load(wasmFileURL, exportSetters, privateJSFieldGetters,
     "$WTF16StringConstantsModule": wtf16Strings,
     "$JSStringBuiltinsModule": stringBuiltinPolyfills,
     "$UTF8StringConstantsModule": stringConstantsPolyfills,
+    ${if (coreSpec.wasmFeatures.customDescriptors) raw""""$JSPrototypeFactoryModule": protoFactory,""" else ""}
   };
   const options = {
     builtins: ["js-string"],
