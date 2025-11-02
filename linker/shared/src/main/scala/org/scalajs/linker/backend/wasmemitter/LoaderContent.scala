@@ -163,6 +163,8 @@ const scalaJSHelpers = {
   // Non-native JS class support
   jsSuperSelect: superSelect,
   jsSuperSelectSet: superSelectSet,
+
+  ${if (coreSpec.wasmFeatures.useCustomDescriptors) "jsErrorProto: Error.prototype," else ""}
 }
 
 ${
@@ -195,7 +197,10 @@ export async function load(wasmFileURL, exportSetters, privateJSFieldGetters,
     ${if (useCustomDescriptors) raw""""$JSPrototypeFactoryModule": protoFactory,""" else ""}
   };
   const options = {
-    builtins: ["js-string"],
+    builtins: [
+      "js-string",
+      ${if (coreSpec.wasmFeatures.useCustomDescriptors) raw""""js-prototypes",""" else ""}
+    ],
     importedStringConstants: "$UTF8StringConstantsModule",
   };
   const resolvedURL = new URL(wasmFileURL, import.meta.url);
