@@ -3139,6 +3139,13 @@ private[optimizer] abstract class OptimizerCore(
             expand(targs)
         }
 
+      case MathMultiplyHigh =>
+        contTree(Transient(WasmLongMulHi(signed = true,
+            finishTransformExpr(targs.head), finishTransformExpr(targs.tail.head))))
+      case MathUnsignedMultiplyHigh =>
+        contTree(Transient(WasmLongMulHi(signed = false,
+            finishTransformExpr(targs.head), finishTransformExpr(targs.tail.head))))
+
       // scala.collection.mutable.ArrayBuilder
 
       case GenericArrayBuilderResult =>
@@ -6931,8 +6938,10 @@ private[optimizer] object OptimizerCore {
     final val MathMaxFloat = MathMinDouble + 1
     final val MathMaxDouble = MathMaxFloat + 1
     final val MathMultiplyFull = MathMaxDouble + 1
+    final val MathMultiplyHigh = MathMultiplyFull + 1
+    final val MathUnsignedMultiplyHigh = MathMultiplyHigh + 1
 
-    final val ArrayBuilderZeroOf = MathMultiplyFull + 1
+    final val ArrayBuilderZeroOf = MathUnsignedMultiplyHigh + 1
     final val GenericArrayBuilderResult = ArrayBuilderZeroOf + 1
 
     final val ClassGetName = GenericArrayBuilderResult + 1
@@ -7077,7 +7086,9 @@ private[optimizer] object OptimizerCore {
             m("min", List(F, F), F) -> MathMinFloat,
             m("min", List(D, D), D) -> MathMinDouble,
             m("max", List(F, F), F) -> MathMaxFloat,
-            m("max", List(D, D), D) -> MathMaxDouble
+            m("max", List(D, D), D) -> MathMaxDouble,
+            m("multiplyHigh", List(J, J), J) -> MathMultiplyHigh,
+            m("unsignedMultiplyHigh", List(J, J), J) -> MathUnsignedMultiplyHigh
         )
     )
     // scalastyle:on line.size.limit

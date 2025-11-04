@@ -355,6 +355,11 @@ object Instructions {
   case object I32TruncSatF64S extends SimpleInstr("i32.trunc_sat_f64_s", 0xFC02)
   case object I64TruncSatF64S extends SimpleInstr("i64.trunc_sat_f64_s", 0xFC06)
 
+  // Wide arithmetic proposal
+
+  case object I64MulWideS extends SimpleInstr("i64.mul_wide_s", 0xFC15)
+  case object I64MulWideU extends SimpleInstr("i64.mul_wide_u", 0xFC16)
+
   // --- End of the instruction list ------------------------------------------
 
   // Catch clauses for TryTable

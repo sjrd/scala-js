@@ -3573,6 +3573,21 @@ private class FunctionEmitter private (
         fb += value.wasmInstr
         value.tpe
 
+      case value @ WasmTransients.WasmLongMulHi(signed, lhs, rhs) =>
+        genTreeAuto(lhs)
+        genTreeAuto(rhs)
+        markPosition(tree)
+        if (signed)
+          fb += wa.I64MulWideS
+        else
+          fb += wa.I64MulWideU
+        // now we have [lo, hi] on top of the stack; we must drop lo and keep hi
+        val tempLocal = addSyntheticLocal(watpe.Int64)
+        fb += wa.LocalSet(tempLocal)
+        fb += wa.Drop
+        fb += wa.LocalGet(tempLocal)
+        value.tpe
+
       case value @ WasmTransients.WasmStringFromCodePoint(codePoint) =>
         genTree(codePoint, IntType)
         markPosition(tree)

@@ -21,6 +21,8 @@ object HelloWorld {
       sayHelloFromTypedJQuery()
     } else {
       println("Hello world!")
+      println(Math.multiplyHigh(54L, -45L))
+      //println(Math.unsignedMultiplyHigh(54L, -45L))
     }
   }
 

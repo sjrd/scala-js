@@ -193,6 +193,28 @@ object WasmTransients {
     }
   }
 
+  /** Wasm intrinsic for `jl.Math.unsignedMultiplyHigh` and `jl.Math.multiplyHigh`. */
+  final case class WasmLongMulHi(signed: Boolean, lhs: Tree, rhs: Tree)
+      extends Transient.Value {
+
+    val tpe: Type = LongType
+
+    def traverse(traverser: Traverser): Unit = {
+      traverser.traverse(lhs)
+      traverser.traverse(rhs)
+    }
+
+    def transform(transformer: Transformer)(implicit pos: Position): Tree = {
+      Transient(WasmLongMulHi(signed, transformer.transform(lhs),
+          transformer.transform(rhs)))
+    }
+
+    def printIR(out: IRTreePrinter): Unit = {
+      out.print(if (signed) "$multiplyHigh" else "$unsignedMultiplyHigh")
+      out.printArgs(List(lhs, rhs))
+    }
+  }
+
   /** Wasm intrinsic for `jl.Character.toString(int)`.
    *
    *  Typing rules: `codePoint` must be an `int`. The result is a `string`.
