@@ -2321,17 +2321,19 @@ private class FunctionEmitter private (
               fb += wa.Call(genFunctionID.longToString)
             }
           case FloatType =>
+            fb += wa.F64PromoteF32
             if (targetPureWasm) {
-              fb += wa.Drop
-              fb ++= ctx.stringPool.getConstantStringInstr("0")
+              fb += wa.Call(genFunctionID.forMethod(MemberNamespace.PublicStatic,
+                  SpecialNames.RyuDoubleClass, SpecialNames.doubleToStringMethodName))
+              fb += wa.RefAsNonNull
             } else {
-              fb += wa.F64PromoteF32
               fb += wa.Call(genFunctionID.doubleToString)
             }
           case DoubleType =>
             if (targetPureWasm) {
-              fb += wa.Drop
-              fb ++= ctx.stringPool.getConstantStringInstr("0")
+              fb += wa.Call(genFunctionID.forMethod(MemberNamespace.PublicStatic,
+                  SpecialNames.RyuDoubleClass, SpecialNames.doubleToStringMethodName))
+              fb += wa.RefAsNonNull
             } else {
               fb += wa.Call(genFunctionID.doubleToString)
             }
