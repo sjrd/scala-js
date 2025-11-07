@@ -350,10 +350,14 @@ private[optimizer] abstract class OptimizerCore(
           true
       }
 
+      def notANonNullInstance =
+        if (exprType.isNullable && testType.isNullable) TypeTestResult.NotAnInstanceUnlessNull
+        else TypeTestResult.NotAnInstance
+
       if (canRuleOutBasedOnExactness)
-        TypeTestResult.NotAnInstance
+        notANonNullInstance
       else if (testTypeKnownToBeFinal && !isSubtype(testType.toNonNullable, exprType))
-        TypeTestResult.NotAnInstance
+        notANonNullInstance
       else
         TypeTestResult.Unknown
     }
@@ -652,6 +656,8 @@ private[optimizer] abstract class OptimizerCore(
                 Block(finishTransformStat(texpr), BooleanLiteral(false))
               case TypeTestResult.Unknown =>
                 IsInstanceOf(finishTransformExpr(texpr), testType)
+              case TypeTestResult.NotAnInstanceUnlessNull =>
+                throw new AssertionError(s"Unreachable; texpr.tpe was ${texpr.tpe} at $pos")
             }
             TailCalls.done(result)
           }
@@ -3662,6 +3668,8 @@ private[optimizer] abstract class OptimizerCore(
                   MethodIdent(AnyArgConstructorName), tlhs :: Nil)(cont)
             case TypeTestResult.Unknown | TypeTestResult.SubtypeOrNull =>
               cont(folded)
+            case TypeTestResult.NotAnInstanceUnlessNull =>
+              throw new AssertionError(s"Unreachable; tlhs.tpe was ${tlhs.tpe} at $pos")
           }
 
         case UnaryOp.UnwrapFromThrowable =>
@@ -3673,6 +3681,8 @@ private[optimizer] abstract class OptimizerCore(
               cont(checkNotNull(tlhs))
             case TypeTestResult.Unknown =>
               cont(folded)
+            case TypeTestResult.NotAnInstanceUnlessNull =>
+              throw new AssertionError(s"Unreachable; tlhs.tpe was ${tlhs.tpe} at $pos")
           }
 
         case _ =>
@@ -5537,6 +5547,8 @@ private[optimizer] abstract class OptimizerCore(
         case TypeTestResult.NotAnInstance =>
           // The AsInstanceOf will always fail, so we can cast its result to NothingType
           makeCast(default, NothingType).toPreTransform
+        case TypeTestResult.NotAnInstanceUnlessNull =>
+          Block(default, Null()).toPreTransform
       }
     }
   }
@@ -5582,6 +5594,9 @@ private[optimizer] abstract class OptimizerCore(
       case TypeTestResult.NotAnInstance =>
         // The cast always fails, which is UB by construction
         Block(finishTransformStat(arg), Transient(Cast(Null(), NothingType))).toPreTransform
+
+      case TypeTestResult.NotAnInstanceUnlessNull =>
+        Block(finishTransformStat(arg), Null()).toPreTransform
     }
   }
 
@@ -6089,6 +6104,12 @@ private[optimizer] abstract class OptimizerCore(
 
         case _ if !lhs.isNullable && !rhs.isNullable =>
           upperBound.toNonNullable
+
+        case (NullType, rhs: ClassType) => rhs.toNullable
+        case (NullType, rhs: ArrayType) => rhs.toNullable
+        case (lhs: ClassType, NullType) => lhs.toNullable
+        case (lhs: ArrayType, NullType) => lhs.toNullable
+
         case _ =>
           upperBound
       }
@@ -6299,6 +6320,7 @@ private[optimizer] object OptimizerCore {
     case object Subtype extends TypeTestResult
     case object SubtypeOrNull extends TypeTestResult
     case object NotAnInstance extends TypeTestResult
+    case object NotAnInstanceUnlessNull extends TypeTestResult
     case object Unknown extends TypeTestResult
   }
 
