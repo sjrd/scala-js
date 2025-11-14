@@ -688,16 +688,10 @@ class DoubleTest {
   }
 
   @Test def max(): Unit = {
-    assumeFalse("Doesn't link in pure Wasm, Math.max", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
-      assertEquals(7d, JDouble.max(5d, 7d), 0d)
-    } {}
+    assertEquals(7d, JDouble.max(5d, 7d), 0d)
   }
 
   @Test def min(): Unit = {
-    assumeFalse("Doesn't link in pure Wasm, Math.min", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
-      assertEquals(5d, JDouble.min(5d, 7d), 0d)
-    } {}
+    assertEquals(5d, JDouble.min(5d, 7d), 0d)
   }
 }

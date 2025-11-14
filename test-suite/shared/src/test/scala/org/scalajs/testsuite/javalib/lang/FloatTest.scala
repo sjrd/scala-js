@@ -641,16 +641,10 @@ class FloatTest {
   }
 
   @Test def max(): Unit = {
-    assumeFalse("Doesn't link in pure Wasm, Math.max", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
-      assertEquals(7f, JFloat.max(5f, 7f), 0f)
-    } {}
+    assertEquals(7f, JFloat.max(5f, 7f), 0f)
   }
 
   @Test def min(): Unit = {
-    assumeFalse("Doesn't link in pure Wasm, Math.min", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
-      assertEquals(5f, JFloat.min(5f, 7f), 0f)
-    } {}
+    assertEquals(5f, JFloat.min(5f, 7f), 0f)
   }
 }
