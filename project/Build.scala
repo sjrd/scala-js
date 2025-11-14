@@ -2312,7 +2312,6 @@ object Build {
                 !contains(f, "/javalib/math/") &&
                 // javalib/lang
                 !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
-                !endsWith(f, "/lang/MathTest.scala") &&
                 !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
 
                 // TODO: iteratorRemoveDoubleCornerCase (double to String)
@@ -2330,7 +2329,7 @@ object Build {
                 !endsWith(f, "/IntConsumerTest.scala") && // Long#StringRadixInfos
                 !endsWith(f, "/DateTest.scala") && // js.Date
                 !endsWith(f, "/PropertiesTest.scala") && // Date.toString
-                !endsWith(f, "/ThreadLocalRandomTest.scala") && // Math.min/max
+                !endsWith(f, "/ThreadLocalRandomTest.scala") && // Random -> Math.floor
                 !endsWith(f, "/CollectionsTest.scala") && // Math$.floor(double) from Random.<init>
                 !endsWith(f, "/SplittableRandomTest.scala") && // Math$.floor(double) from Random.<init>
 

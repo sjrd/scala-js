@@ -25,6 +25,8 @@ import org.scalajs.testsuite.utils.AssertExtensions.{assertExactEquals => assert
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
 import org.scalajs.testsuite.utils.Platform._
 
+import scala.scalajs.LinkingInfo
+
 class MathTest {
 
   @Test def absInt(): Unit = {
@@ -106,6 +108,8 @@ class MathTest {
   }
 
   @Test def cbrt(): Unit = {
+    assumeFalse(executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertSameDouble(-0.0, Math.cbrt(-0.0))
     assertSameDouble(0.0, Math.cbrt(0.0))
     assertEquals(3.0, Math.cbrt(27.0), 0.0)
@@ -116,9 +120,12 @@ class MathTest {
     assertTrue(Math.cbrt(Double.NaN).isNaN)
     assertSameDouble(Double.PositiveInfinity, Math.cbrt(Double.PositiveInfinity))
     assertSameDouble(Double.NegativeInfinity, Math.cbrt(Double.NegativeInfinity))
+    } {}
   }
 
   @Test def log1p(): Unit = {
+    assumeFalse(executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertTrue(Math.log1p(-2.0).isNaN)
     assertTrue(Math.log1p(Double.NaN).isNaN)
     assertSameDouble(0.0, Math.log1p(0.0))
@@ -127,9 +134,12 @@ class MathTest {
     assertSameDouble(Double.PositiveInfinity, Math.log1p(Double.PositiveInfinity))
     assertTrue(Math.log1p(Double.NegativeInfinity).isNaN)
     assertSameDouble(Double.NegativeInfinity, Math.log1p(-1))
+    } {}
   }
 
   @Test def log10(): Unit = {
+    assumeFalse(executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertTrue(Math.log10(-230.0).isNaN)
     assertTrue(Math.log10(Double.NaN).isNaN)
     assertSameDouble(Double.NegativeInfinity, Math.log10(0.0))
@@ -137,6 +147,7 @@ class MathTest {
     assertTrue(Math.log10(Double.NaN).isNaN)
     assertSameDouble(Double.PositiveInfinity, Math.log10(Double.PositiveInfinity))
     assertTrue(Math.log10(Double.NegativeInfinity).isNaN)
+    } {}
   }
 
   @Test def signumForDouble(): Unit = {
@@ -360,6 +371,8 @@ class MathTest {
   }
 
   @Test def hypot(): Unit = {
+    assumeFalse(executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals(0.0, Math.hypot(0.0, 0.0), 0.01)
     assertEquals(5.0, Math.hypot(3.0, 4.0), 0.01)
     assertTrue(Math.hypot(3.0, Double.NaN).isNaN)
@@ -371,9 +384,12 @@ class MathTest {
     assertSameDouble(0.0, Math.hypot(-0.0, -0.0))
     assertSameDouble(0.0, Math.hypot(0.0, -0.0))
     assertSameDouble(0.0, Math.hypot(-0.0, 0.0))
+    } {}
   }
 
   @Test def expm1(): Unit = {
+    assumeFalse(executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertTrue(1 / Math.expm1(-0.0) < 0)
     assertTrue(1 / Math.expm1(0.0) > 0)
     assertSameDouble(-0.0, Math.expm1(-0.0))
@@ -385,9 +401,12 @@ class MathTest {
     assertEquals(-1.0, Math.expm1(Double.NegativeInfinity), 0.01)
     assertEquals(4.9E-324, Math.expm1(4.9E-324), 0.01)
     assertTrue(Math.expm1(Double.NaN).isNaN)
+    } {}
   }
 
   @Test def sinh(): Unit = {
+    assumeFalse(executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals(Double.NegativeInfinity, Math.sinh(-1234.56), 0.0)
     assertEquals(Double.PositiveInfinity, Math.sinh(1234.56), 0.0)
     assertSameDouble(0.0, Math.sinh(0.0))
@@ -395,9 +414,12 @@ class MathTest {
     assertEquals(Double.PositiveInfinity, Math.sinh(Double.PositiveInfinity), 0.0)
     assertEquals(Double.NegativeInfinity, Math.sinh(Double.NegativeInfinity), 0.0)
     assertTrue(Math.sinh(Double.NaN).isNaN)
+    } {}
   }
 
   @Test def cosh(): Unit = {
+    assumeFalse(executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals(Double.PositiveInfinity, Math.cosh(-1234.56), 0.0)
     assertEquals(Double.PositiveInfinity, Math.cosh(1234.56), 0.0)
     assertEquals(1.0, Math.cosh(-0.0), 0.01)
@@ -405,9 +427,12 @@ class MathTest {
     assertEquals(Double.PositiveInfinity, Math.cosh(Double.PositiveInfinity), 0.0)
     assertEquals(Double.PositiveInfinity, Math.cosh(Double.NegativeInfinity), 0.0)
     assertTrue(Math.cosh(Double.NaN).isNaN)
+    } {}
   }
 
   @Test def tanh(): Unit = {
+    assumeFalse(executingInPureWebAssembly)
+    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals(-1.0, Math.tanh(-1234.56), 0.01)
     assertEquals(-1.0, Math.tanh(-120.56), 0.01)
     assertEquals(1.0, Math.tanh(1234.56), 0.01)
@@ -416,6 +441,7 @@ class MathTest {
     assertEquals(1.0, Math.tanh(Double.PositiveInfinity), 0.01)
     assertEquals(-1.0, Math.tanh(Double.NegativeInfinity), 0.01)
     assertTrue(Math.tanh(Double.NaN).isNaN)
+    } {}
   }
 
   @Test def rintForDouble(): Unit = {
