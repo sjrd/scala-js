@@ -2312,7 +2312,6 @@ object Build {
                 !contains(f, "/javalib/math/") &&
                 // javalib/lang
                 !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
-                !endsWith(f, "/lang/MathTest.scala") &&
                 !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
 
                 // TODO: iteratorRemoveDoubleCornerCase (double to String)
