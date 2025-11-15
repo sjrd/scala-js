@@ -128,11 +128,7 @@ class DoubleTest {
 
     // minAndMax
     test("1.7976931348623157e+308", JDouble.longBitsToDouble(0x7fefffffffffffffL))
-    // TODO: (align the output between Ryu and JS)
-    assertEquals(
-      if (executingInPureWebAssembly) "4.9e-324" else "5e-324",
-      JDouble.longBitsToDouble(1).toString
-    )
+    test("5e-324", JDouble.longBitsToDouble(1))
 
     // roundingModeEven
     test("-21098088986959630", -2.109808898695963E16)

@@ -205,9 +205,7 @@ object RyuDouble {
     var (za, zb) = (za0, zb0)
 
     val output = if (za || zb) {
-      while (cq / 10 > aq / 10 &&
-          // Double.toString semantics requires printing at least two digits.
-          !(cq < 100 && scientificNotation)) {
+      while (cq / 10 > aq / 10) {
         za &= aq % 10 == 0
         zb &= lastRemovedDigit == 0
         lastRemovedDigit = (bq % 10).toInt
@@ -218,9 +216,7 @@ object RyuDouble {
       }
 
       if (za && even) {
-        while (aq % 10 == 0 &&
-            // Double.toString semantics requires printing at least two digits.
-            !(cq < 100 && scientificNotation)) {
+        while (aq % 10 == 0) {
           zb &= lastRemovedDigit == 0
           lastRemovedDigit = (bq % 10).toInt
           aq /= 10
@@ -235,9 +231,7 @@ object RyuDouble {
       }
       bq +  (if ((bq == aq && !(za && even)) || (lastRemovedDigit >= 5)) 1 else 0)
     } else {
-      while (cq / 10 > aq / 10
-          // Double.toString semantics requires printing at least two digits.
-          && !(cq < 100 && scientificNotation)) {
+      while (cq / 10 > aq / 10) {
         lastRemovedDigit = (bq % 10).toInt
         aq /= 10
         bq /= 10
@@ -263,10 +257,10 @@ object RyuDouble {
     }
 
     if (scientificNotation) {
-      // Print in the format x.xxxxxE-yy or xE-yy for single digit.
-      if (olength == 2 && output % 10 == 0) {
+      // Print in the format x.xxxxxe-yy or xe-yy for single digit.
+      if (olength == 1) {
         // print just "x" without decimal point (e.g., "1e+21" not "1.0e+21")
-        result(index) = ('0' + output / 10).toChar
+        result(index) = ('0' + output).toChar
         index += 1
       } else {
         // Multiple digits: print "x.xxxxx" with decimal point
