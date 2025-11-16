@@ -20,8 +20,6 @@ import org.hamcrest.CoreMatchers._
 
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
 
-import org.scalajs.testsuite.utils.Platform.executingInPureWebAssembly
-
 import scala.util.{Failure, Success, Try}
 
 class JUnitAssertionsTest {
@@ -335,8 +333,6 @@ class JUnitAssertionsTest {
 
   @Test
   def testAssertThat(): Unit = {
-    assumeFalse("TODO: <42> is a java.lang.Byte in pure Wasm, but it should Int", executingInPureWebAssembly)
-
     testIfAsserts(assertThat("42", instanceOf[String](classOf[String])))
     testIfAsserts(assertThat("42", instanceOf[String](classOf[Int])), ShallNotPass)
 

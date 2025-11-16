@@ -22,9 +22,7 @@ import scala.util.Try
 
 import org.scalajs.testsuite.utils.AssertExtensions.assertExactEquals
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
-import org.scalajs.testsuite.utils.Platform.{executingInJVM, executingInPureWebAssembly}
-
-import scala.scalajs.LinkingInfo
+import org.scalajs.testsuite.utils.Platform.executingInJVM
 
 class DoubleTest {
 

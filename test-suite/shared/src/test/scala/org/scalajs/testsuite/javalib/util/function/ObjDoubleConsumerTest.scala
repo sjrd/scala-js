@@ -22,7 +22,6 @@ import org.scalajs.testsuite.utils.Platform._
 
 class ObjDoubleConsumerTest {
   @Test def accept(): Unit = {
-    assumeFalse("float/double to string", executingInPureWebAssembly)
     // side-effects
     var current: String = ""
 

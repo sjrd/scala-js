@@ -207,12 +207,7 @@ class LongTest {
   }
 
   @Test def stringToLong(): Unit = {
-    assumeFalse("TODO: toString doesn't link because of StringRadixInfos in pure Wasm",
-        executingInPureWebAssembly)
-
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
-      assertEquals(45678901234567890L, "45678901234567890".toLong)
-    } {}
+    assertEquals(45678901234567890L, "45678901234567890".toLong)
   }
 
   @Test def asInstanceOf(): Unit = {

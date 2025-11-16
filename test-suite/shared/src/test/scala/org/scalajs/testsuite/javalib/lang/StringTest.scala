@@ -405,32 +405,23 @@ class StringTest {
   }
 
   @Test def matches(): Unit = {
-    assumeFalse("regex doesn't link in pure Wasm", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertTrue("Scala.js".matches(".*js"))
     assertFalse("Scala.js".matches(".*JS"))
-    } {}
   }
 
   @Test def split(): Unit = {
-    assumeFalse("regex doesn't link in pure Wasm", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertArrayEquals(Array[AnyRef]("Sc", "l", ".js"), erased("Scala.js".split("a")))
     assertArrayEquals(Array[AnyRef]("a", "s", "d", "f"), erased("asdf".split("")))
     assertArrayEquals(Array[AnyRef]("a", "s", "d", "f", ""), erased("asdf".split("", -1)))
-    } {}
   }
 
   @Test def splitWithCharAsArgument(): Unit = {
-    assumeFalse("regex doesn't link in pure Wasm", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertArrayEquals(Array[AnyRef]("Scala","js"), erased("Scala.js".split('.')))
     for (i <- 0 to 32) {
       val c = i.toChar
       assertArrayEquals(Array[AnyRef]("blah", "blah", "blah", "blah"),
           erased(s"blah${c}blah${c}blah${c}blah".split(c)))
     }
-    } {}
   }
 
   @Test def startsWithPrefixToffset_Issue1603(): Unit = {

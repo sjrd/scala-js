@@ -19,7 +19,7 @@ import org.junit.Assert._
 import org.junit.Assume._
 
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
-import org.scalajs.testsuite.utils.Platform.{executingInJVM, executingInPureWebAssembly}
+import org.scalajs.testsuite.utils.Platform.executingInJVM
 
 import WrappedStringCharSequence.charSequence
 
@@ -136,7 +136,6 @@ class StringBuilderTest {
   }
 
   @Test def appendPrimitive(): Unit = {
-    assumeFalse("float/double to string", executingInPureWebAssembly)
     assertEquals("true", newBuilder.append(true).toString)
     assertEquals("a", newBuilder.append('a').toString)
     assertEquals("100000", newBuilder.append(100000).toString)
@@ -331,7 +330,6 @@ class StringBuilderTest {
   }
 
   @Test def insertPrimitive(): Unit = {
-    assumeFalse("float/double to string", executingInPureWebAssembly)
     assertEquals("atruebcd", initBuilder("abcd").insert(1, true).toString)
     assertEquals("axbcd", initBuilder("abcd").insert(1, 'x').toString)
     assertEquals("a100000bcd", initBuilder("abcd").insert(1, 100000).toString)

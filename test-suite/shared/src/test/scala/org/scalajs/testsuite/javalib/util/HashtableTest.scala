@@ -20,10 +20,6 @@ import java.{util => ju}
 
 import Utils._
 
-import org.scalajs.testsuite.utils.Platform.executingInPureWebAssembly
-
-import scala.scalajs.LinkingInfo
-
 class HashtableTest {
 
   @Test def size(): Unit = {
@@ -185,8 +181,6 @@ class HashtableTest {
   }
 
   @Test def toStringTest(): Unit = {
-    assumeFalse("String.matches", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     val ht = new ju.Hashtable[Int, Int]
     assertEquals("{}", ht.toString)
     ht.put(1, 4)
@@ -195,7 +189,6 @@ class HashtableTest {
     assertTrue(ht.toString.matches("\\{\\d=\\d, \\d=\\d\\}"))
     ht.put(3, 5)
     assertTrue(ht.toString.matches("\\{\\d=\\d, \\d=\\d, \\d=\\d\\}"))
-    } {}
   }
 
   @Test def keySet(): Unit = {
