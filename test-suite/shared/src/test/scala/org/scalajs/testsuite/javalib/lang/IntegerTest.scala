@@ -686,8 +686,7 @@ class IntegerTest {
   }
 
   @Test def toStringRadix(): Unit = {
-    assumeFalse("Doesn't link in pure Wasm, https://github.com/scala-js/scala-js/pull/5194 will fix",
-        executingInPureWebAssembly)
+    assumeFalse("Integer$$toStringBase", executingInPureWebAssembly)
 
     /* Spec ported from
      * https://github.com/gwtproject/gwt/blob/master/user/test/com/google/gwt/emultest/java/lang/IntegerTest.java
@@ -810,8 +809,7 @@ class IntegerTest {
   }
 
   @Test def toUnsignedString(): Unit = {
-    assumeFalse("Doesn't link in pure Wasm, https://github.com/scala-js/scala-js/pull/5194 will fix",
-        executingInPureWebAssembly)
+    assumeFalse("Integer$$toStringBase", executingInPureWebAssembly)
 
     LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals("0", Integer.toUnsignedString(0))
@@ -824,8 +822,7 @@ class IntegerTest {
   }
 
   @Test def toUnsignedStringRadix(): Unit = {
-    assumeFalse("Doesn't link in pure Wasm, https://github.com/scala-js/scala-js/pull/5194 will fix",
-        executingInPureWebAssembly)
+    assumeFalse("Integer$$toStringBase", executingInPureWebAssembly)
 
     LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals("17777777777", Integer.toUnsignedString(2147483647, 8))

@@ -201,8 +201,6 @@ class ReflectiveCallTest {
     // See https://github.com/scala/bug/issues/10469
     assumeFalse("Reflective call prim.+(String) broken on the JVM",
         Platform.executingInJVM)
-    assumeFalse("TODO: Float to String isn't yet implemented in pure Wasm",
-        Platform.executingInPureWebAssembly)
 
     def concat(x: Any { def +(y: String): String }, y: String): String = x + y
 

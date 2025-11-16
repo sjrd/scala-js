@@ -16,8 +16,6 @@ import org.junit.Test
 import org.junit.Assert._
 import org.junit.Assume._
 
-import org.scalajs.testsuite.utils.Platform.executingInPureWebAssembly
-
 class ThrowablesTest {
 
   @Test def allJavaLangErrorsAndExceptions(): Unit = {
@@ -236,7 +234,6 @@ class ThrowablesTest {
   }
 
   @Test def assertionErrorsPeculiarConstructors(): Unit = {
-    assumeFalse("float to String", executingInPureWebAssembly)
     def assertMessageNoCause(expectedMessage: String, e: AssertionError): Unit = {
       assertEquals(expectedMessage, e.getMessage)
       assertNull(e.getCause)

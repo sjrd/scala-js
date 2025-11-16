@@ -2284,8 +2284,8 @@ object Build {
         }
       },
 
-      sources in Test := {
-        val config = (scalaJSLinkerConfig in Test).value
+      Test / sources := {
+        val config = (Test / scalaJSLinkerConfig).value
         val targetPureWasm = config.wasmFeatures.targetPureWasm
 
         def endsWith(f: File, suffix: String): Boolean =
@@ -2294,7 +2294,7 @@ object Build {
         def contains(f: File, substr: String): Boolean =
           f.getPath().replace('\\', '/').contains(substr)
 
-        val originalSources = (sources in Test).value
+        val originalSources = (Test / sources).value
         if (!targetPureWasm) originalSources
         else {
           originalSources
@@ -2308,24 +2308,27 @@ object Build {
                 !endsWith(f, "/scalalib/RangesTest.scala") && // BigDecimal
                 !endsWith(f, "/scalalib/SymbolTest.scala") && // Symbol#JSUniquenessCache
 
-                // javalib
-                !contains(f, "/javalib/math/") &&
+                // javalib/math
+                // BigDecimal.smallRound -> Math.log10
+                !endsWith(f, "/javalib/math/BigDecimalArithmeticTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalCompareTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalConstructorsTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalConvertTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalScaleOperationsTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalToStringTest.scala") &&
+
+                !endsWith(f, "/javalib/math/BigIntegerConstructorsTest.scala") && // testConstructorRandom
+                !endsWith(f, "/javalib/math/BigIntegerToStringTest.scala") && // Math.log
+
                 // javalib/lang
                 !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
                 !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
 
-                // TODO: iteratorRemoveDoubleCornerCase (double to String)
-                // !endsWith(f, "/PriorityQueueTest.scala") &&
-
                 // javalib/util
-                !endsWith(f, "/Base64Test.scala") && // String.replaceAll in Base64Test
                 !endsWith(f, "/FormatterTest.scala") &&
-                !endsWith(f, "/ToDoubleFunctionTest.scala") && // parseDouble
-                !endsWith(f, "/ToLongFunctionTest.scala") && // Long.parseUnsignedLongInternal, StringRadixInfos
-                !endsWith(f, "/ToLongBiFunctionTest.scala") && // Long.parseUnsignedLongInternal, StringRadixInfos
-                !endsWith(f, "/ToDoubleBiFunctionTest.scala") && // parse Double
                 !endsWith(f, "/RandomTest.scala") && // Math.sqrt
-                !endsWith(f, "/ArraysTest.scala") && // float/double to String
+                !endsWith(f, "/ArraysTest.scala") && // Arrays.deepEquals
                 !endsWith(f, "/IntConsumerTest.scala") && // Long#StringRadixInfos
                 !endsWith(f, "/DateTest.scala") && // js.Date
                 !endsWith(f, "/PropertiesTest.scala") && // Date.toString
@@ -2346,12 +2349,7 @@ object Build {
                 !endsWith(f, "/net/URITest.scala") // URI.normalize
               ) ||
               contains(f, "/js/src/test/scala/org/scalajs/testsuite/") && (
-                // compiler
-                endsWith(f, "/ModuleInitializersTest.scala") ||
-                endsWith(f, "/EqJSTest.scala") ||
-                // library
-                // endsWith(f, "/LinkTimeIfTest.scala") || Math.pow
-                endsWith(f, "/ReflectTest.scala")
+                endsWith(f, "/ModuleInitializersTest.scala")
               )
             )
         }

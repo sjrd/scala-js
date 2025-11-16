@@ -135,8 +135,6 @@ class LongTest {
   }
 
   @Test def parseString(): Unit = {
-    assumeFalse("Long#parseUnsignedLongInternal", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String, v: Long): Unit = {
       assertEquals(v, JLong.parseLong(s))
       assertEquals(v, JLong.valueOf(s).longValue())
@@ -159,24 +157,18 @@ class LongTest {
         9497394973L)
     test("\u19d0" * 50 + "\u19d9\u0f24\u0c6f\u1c47\ua623\u19d9\u0f24\u0c6f\u1c47\ua623",
         9497394973L)
-    } {}
   }
 
   @Test def parseStringInvalidThrows(): Unit = {
-    assumeFalse("Long#parseUnsignedLongInternal", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String): Unit =
       assertThrows(classOf[NumberFormatException], JLong.parseLong(s))
 
     test("abc")
     test("asdf")
     test("")
-    } {}
   }
 
   @Test def parseStringBase16(): Unit = {
-    assumeFalse("Long#parseUnsignedLongInternal", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String, v: Long): Unit = {
       assertEquals(v, JLong.parseLong(s, 16))
       assertEquals(v, JLong.valueOf(s, 16).longValue())
@@ -196,7 +188,6 @@ class LongTest {
 
     test("\uff22\uff26\uff23\u19d9\u0f24\u0c6f\u1c47\ua623", 3217639795L)
     test("\uff42\uff46\uff43\u19d9\u0f24\u0c6f\u1c47\ua6233", 51482236723L)
-    } {}
   }
 
   @Test def parseStringBase2To36(): Unit = {
@@ -224,20 +215,15 @@ class LongTest {
   }
 
   @Test def parseStringsBaseLessThanTwoOrBaseLargerThan36Throws(): Unit = {
-    assumeFalse("Long#parseUnsignedLongInternal", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String, radix: Int): Unit = {
       assertThrows(classOf[NumberFormatException], JLong.parseLong(s, radix))
       assertThrows(classOf[NumberFormatException], JLong.valueOf(s, radix).longValue())
     }
 
     List[Int](-10, -5, 0, 1, 37, 38, 50, 100).foreach(test("5", _))
-    } {}
   }
 
   @Test def testDecodeBase8(): Unit = {
-    assumeFalse("Long#parseUnsignedLongInternal", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String, v: Long): Unit = {
       assertEquals(v, JLong.decode(s))
     }
@@ -245,12 +231,9 @@ class LongTest {
     test("00", 0L)
     test("012345670", 2739128L)
     test("-012", -10L)
-    } {}
   }
 
   @Test def decodeStringInvalidThrows(): Unit = {
-    assumeFalse("Long#parseUnsignedLongInternal", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String): Unit =
       assertThrows(classOf[NumberFormatException], JLong.decode(s))
 
@@ -275,7 +258,6 @@ class LongTest {
     test("-0x80000000000000001")
     test("01000000000000000000000")
     test("-01000000000000000000001")
-    } {}
   }
 
   @Test def testToString(): Unit = {
@@ -514,8 +496,6 @@ class LongTest {
   }
 
   @Test def parseUnsignedLong(): Unit = {
-    assumeFalse("Long#parseUnsignedLongInternal", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String, v: Long, radix: Int = 10): Unit = {
       assertEquals(v, JLong.parseUnsignedLong(s, radix))
       if (radix == 10)
@@ -701,12 +681,9 @@ class LongTest {
     test("ox", 897L, 36)
     test("gm0bq", 27900710L, 36)
     test("3w5e0eru6osu5", -1746501839363L, 36)
-    } {}
   }
 
   @Test def parseUnsignedLongFailureCases(): Unit = {
-    assumeFalse("Long#parseUnsignedLongInternal", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(s: String, radix: Int = 10): Unit =
       assertThrows(classOf[NumberFormatException], JLong.parseUnsignedLong(s, radix))
 
@@ -731,7 +708,6 @@ class LongTest {
     test("3w5e11264sgsg", 36)
     test("18446744073709551616654831357465413214984684321486984")
     test("3w5e11264sgsgvmqoijs34qsdf1ssfmlkjesl", 36)
-    } {}
   }
 
   @Test def hashCodeTest(): Unit = {
@@ -948,7 +924,7 @@ class LongTest {
   }
 
   @Test def toUnsignedString(): Unit = {
-    assumeFalse("Utils.toUInt", executingInPureWebAssembly)
+    assumeFalse("Math.floor", executingInPureWebAssembly)
     LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(x: Long, s: String, radix: Int = 10): Unit = {
       assertEquals(s, JLong.toUnsignedString(x, radix))
