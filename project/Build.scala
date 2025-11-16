@@ -2308,8 +2308,19 @@ object Build {
                 !endsWith(f, "/scalalib/RangesTest.scala") && // BigDecimal
                 !endsWith(f, "/scalalib/SymbolTest.scala") && // Symbol#JSUniquenessCache
 
-                // javalib
-                !contains(f, "/javalib/math/") &&
+                // javalib/math
+                // BigDecimal.smallRound -> Math.log10
+                !endsWith(f, "/javalib/math/BigDecimalArithmeticTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalCompareTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalConstructorsTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalConvertTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalScaleOperationsTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalTest.scala") &&
+                !endsWith(f, "/javalib/math/BigDecimalToStringTest.scala") &&
+
+                !endsWith(f, "/javalib/math/BigIntegerConstructorsTest.scala") && // testConstructorRandom
+                !endsWith(f, "/javalib/math/BigIntegerToStringTest.scala") && // Math.log
+
                 // javalib/lang
                 !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
                 !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
