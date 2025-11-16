@@ -2349,7 +2349,12 @@ object Build {
                 !endsWith(f, "/net/URITest.scala") // URI.normalize
               ) ||
               contains(f, "/js/src/test/scala/org/scalajs/testsuite/") && (
-                endsWith(f, "/ModuleInitializersTest.scala")
+                // compiler
+                endsWith(f, "/ModuleInitializersTest.scala") ||
+                endsWith(f, "/EqJSTest.scala") ||
+                // library
+                // endsWith(f, "/LinkTimeIfTest.scala") || Math.pow
+                endsWith(f, "/ReflectTest.scala")
               )
             )
         }
