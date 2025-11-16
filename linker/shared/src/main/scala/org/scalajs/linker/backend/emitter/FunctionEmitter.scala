@@ -1067,6 +1067,16 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
             arg
           } else {
             implicit val pos = arg.pos
+
+            def extractInSyntheticVar(): Tree = {
+              val temp = newSyntheticVar()
+              val computeTemp = pushLhsInto(
+                  Lhs.VarDef(temp, arg.tpe, mutable = false), arg,
+                  Set.empty)
+              computeTemp +=: extractedStatements
+              Transient(JSVarRef(temp, mutable = false)(arg.tpe))
+            }
+
             arg match {
               case Block(stats :+ expr) =>
                 val (jsStats, newEnv) = transformBlockStats(stats)
@@ -1082,6 +1092,9 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                   }
                 }
                 result
+
+              case _ if isRTLongType(arg.tpe) =>
+                extractInSyntheticVar()
 
               case arg @ UnaryOp(op, lhs)
                   if canUnaryOpBeExpression(arg) && (UnaryOp.isPureOp(op) || noExtractYet) =>
@@ -1172,12 +1185,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                 If(rec(cond), thenp, elsep)(arg.tpe)
 
               case _ =>
-                val temp = newSyntheticVar()
-                val computeTemp = pushLhsInto(
-                    Lhs.VarDef(temp, arg.tpe, mutable = false), arg,
-                    Set.empty)
-                computeTemp +=: extractedStatements
-                Transient(JSVarRef(temp, mutable = false)(arg.tpe))
+                extractInSyntheticVar()
             }
           }
         }
@@ -1334,6 +1342,13 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case Transient(JSLongArraySelect(_, _)) =>
           allowUnpure
 
+        case Transient(PackLong(lo, hi)) =>
+          test(lo) && test(hi)
+
+        // Other trees of type RTLong cannot be expressions, because we cannot split them
+        case _ if isRTLongType(tree.tpe) =>
+          false
+
         case tree @ UnaryOp(op, lhs) if canUnaryOpBeExpression(tree) =>
           if (op == UnaryOp.CheckNotNull)
             testNPE(lhs)
@@ -1370,14 +1385,12 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
         // Expressions preserving pureness (modulo NPE)
         case Block(trees)            => trees forall test
-        case If(cond, thenp, elsep)  => !isRTLongType(tree.tpe) && test(cond) && test(thenp) && test(elsep)
+        case If(cond, thenp, elsep)  => test(cond) && test(thenp) && test(elsep)
         case BinaryOp(_, lhs, rhs)   => test(lhs) && test(rhs)
         case RecordSelect(record, _) => test(record)
         case IsInstanceOf(expr, _)   => test(expr)
 
         // Transients preserving pureness (modulo NPE)
-        case Transient(PackLong(lo, hi)) =>
-          test(lo) && test(hi)
         case Transient(ExtractLongHi(longValue)) =>
           test(longValue)
         case Transient(Cast(expr, _)) =>
@@ -1389,9 +1402,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
         // Expressions preserving side-effect freedom (modulo NPE)
         case Select(qualifier, _) =>
-          allowUnpure && testNPE(qualifier) && {
-            !isRTLongType(tree.tpe) || isDuplicatable(qualifier)
-          }
+          allowUnpure && testNPE(qualifier)
         case SelectStatic(_) =>
           allowUnpure
         case ArrayValue(tpe, elems) =>
@@ -1529,6 +1540,62 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
      */
     def isPureExpression(tree: Tree)(implicit env: Env): Boolean =
       isExpressionInternal(tree, allowUnpure = false, allowSideEffects = false)
+
+    /** Test whether the given tree is an expression, or an RTLong computation
+     *  whose arguments are real expressions.
+     *
+     *  These can be directly assigned to an `Lhs`, but cannot otherwise be
+     *  used as expressions.
+     */
+    def isExpressionOrLongOpOfExpressions(tree: Tree)(implicit env: Env): Boolean = {
+      if (!isRTLongType(tree.tpe)) {
+        isExpression(tree)
+      } else {
+        // Unfortunately, there is significant duplication wrt. isExpressionInternal
+
+        def test(arg: Tree): Boolean = isExpression(arg)
+        def testAll(args: List[Tree]): Boolean = args.forall(test(_))
+
+        tree match {
+          case LongLiteral(_)                     => true
+          case VarRef(_)                          => true
+          case Transient(JSVarRef(_, mutable))    => true
+          case Transient(JSLongArraySelect(_, _)) => true
+
+          case Transient(PackLong(lo, hi)) =>
+            test(lo) && test(hi)
+          case Transient(Cast(expr, _)) =>
+            test(expr)
+
+          case tree @ UnaryOp(_, lhs) =>
+            canUnaryOpBeExpression(tree) && test(lhs)
+          case BinaryOp(_, lhs, rhs) =>
+            test(lhs) && test(rhs)
+
+          case Select(qualifier, _) =>
+            test(qualifier) && isDuplicatable(qualifier)
+          case SelectStatic(_) =>
+            true
+
+          case Apply(_, receiver, method, args) =>
+            test(receiver) && testAll(args)
+          case ApplyStatically(_, receiver, className, method, args) =>
+            test(receiver) && testAll(args)
+          case ApplyStatic(_, className, method, args) =>
+            testAll(args)
+          case ApplyDynamicImport(_, _, _, args) =>
+            testAll(args)
+          case ApplyTypedClosure(_, fun, args) =>
+            test(fun) && testAll(args)
+
+          case AsInstanceOf(expr, _) =>
+            test(expr)
+
+          case _ =>
+            false
+        }
+      }
+    }
 
     def doVarDef(ident: js.Ident, tpe: Type, mutable: Boolean, rhs: Tree)(
         implicit env: Env): js.Tree = {
@@ -1727,7 +1794,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
         // Base case, rhs is already a regular JS expression
 
-        case _ if isExpression(rhs) =>
+        case _ if isExpressionOrLongOpOfExpressions(rhs) =>
           lhs match {
             case Lhs.Discard =>
               if (isSideEffectFreeExpression(rhs)) js.Skip()
