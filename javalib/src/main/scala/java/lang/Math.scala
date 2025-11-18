@@ -126,7 +126,12 @@ object Math {
     }
 
   // Wasm intrinsics
-  @inline def ceil(a: scala.Double): scala.Double = js.Math.ceil(a)
+  @inline def ceil(a: scala.Double): scala.Double =
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      StrictMath.ceil(a)
+    } {
+      js.Math.ceil(a)
+    }
   @inline def floor(a: scala.Double): scala.Double =
     linkTimeIf(LinkingInfo.targetPureWasm) {
       StrictMath.floor(a)
