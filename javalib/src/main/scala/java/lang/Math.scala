@@ -10,6 +10,18 @@
  * additional information regarding copyright ownership.
  */
 
+/* `floor` is ported from fdlibm. The original license copied below:
+ *
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ */
+
 package java
 package lang
 
@@ -128,16 +140,54 @@ object Math {
   // Wasm intrinsics
   @inline def ceil(a: scala.Double): scala.Double =
     linkTimeIf(LinkingInfo.targetPureWasm) {
-      StrictMath.ceil(a)
+      -floor(-a)
     } {
       js.Math.ceil(a)
     }
-  @inline def floor(a: scala.Double): scala.Double =
+  @inline def floor(a: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
-      StrictMath.floor(a)
+      floorWasm(a)
     } {
       js.Math.floor(a)
     }
+  }
+
+  // Ported from https://www.netlib.org/fdlibm/s_floor.c
+  @inline private def floorWasm(a: scala.Double): scala.Double = {
+    var bits = Double.doubleToRawLongBits(a)
+    val exponent = (((bits >>> 52).toInt) & 0x7ff) - 1023
+    if (exponent < 0) { // |a| < 1
+      /* Note: In the original C implementation, code block below was surrounded by
+       * "if (huge + x > 0.0)" (huge = 1.0e300),
+       * which was used to raise the IEEE 754 inexact flag.
+       * In Java, there is no standard way to access these flags,
+       * so this check has no practical effect and was removed.
+       */
+      if (bits >= 0) {
+        0.0
+      } else if ((bits & 0x7fffffffffffffffL) != 0L) {
+        -1.0
+      } else { // -0.0
+        a
+      }
+    } else if (exponent > 51) { // Very large numbers or special values
+      a
+    } else { // 0 <= exponent <= 51
+      val fractionalMask = 0x000fffffffffffffL >>> exponent
+      if ((bits & fractionalMask) == 0L) { // a is integral
+        a
+      } else {
+        val adjustedBits = if (bits < 0) {
+          // increment the integer part (and then clear the fractional part)
+          // 0x0010000000000000L is the bit right after the integer part
+          bits + (0x0010000000000000L >>> exponent)
+        } else {
+          bits
+        }
+        Double.longBitsToDouble(adjustedBits & ~fractionalMask)
+      }
+    }
+  }
 
   // Wasm intrinsic
   def rint(a: scala.Double): scala.Double = {
