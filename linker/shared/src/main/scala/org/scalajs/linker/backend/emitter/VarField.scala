@@ -152,12 +152,6 @@ private[emitter] object VarField {
   /** The TypeData class. */
   final val TypeData = mk("$TypeData")
 
-  /** Hi word of a long result. */
-  final val resHi = mk("$resHi")
-
-  /** Setter for resHi (for ES Modules). */
-  final val setResHi = mk("$setResHi")
-
   /** DataView for floating point bit manipulation. */
   final val fpBitsDataView = mk("$fpBitsDataView")
 
@@ -267,6 +261,8 @@ private[emitter] object VarField {
   final val throwArrayStoreException = mk("$throwArrayStoreException")
 
   final val throwNegativeArraySizeException = mk("$throwNegativeArraySizeException")
+
+  final val aJCheckGet = mk("$aJCheckGet")
 
   // JS helpers
 

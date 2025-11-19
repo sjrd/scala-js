@@ -2072,8 +2072,8 @@ object Build {
               Some(ExpectedSizes(
                   fastLink = 426000 to 427000,
                   fullLink = 284000 to 285000,
-                  fastLinkGz = 60000 to 61000,
-                  fullLinkGz = 44000 to 45000,
+                  fastLinkGz = 61000 to 62000,
+                  fullLinkGz = 43000 to 44000,
               ))
             }
 
@@ -2087,9 +2087,9 @@ object Build {
               ))
             } else {
               Some(ExpectedSizes(
-                  fastLink = 302000 to 303000,
-                  fullLink = 262000 to 263000,
-                  fastLinkGz = 47000 to 48000,
+                  fastLink = 304000 to 305000,
+                  fullLink = 261000 to 262000,
+                  fastLinkGz = 48000 to 49000,
                   fullLinkGz = 43000 to 44000,
               ))
             }
@@ -2557,9 +2557,6 @@ object Build {
       testSuiteExCommonSettings(isJSTest = true),
       name := "Scala.js test suite ex",
       Compile / publishArtifact := false,
-
-      // FIXME Closure breaks the new Longs in this project
-      Test/fullLinkJS/scalaJSLinkerConfig ~= { _.withClosureCompiler(false) },
   ).withScalaJSCompiler.withScalaJSJUnitPlugin.dependsOnLibrary.dependsOn(
       javalibExtDummies, jUnitRuntime, testBridge % "test", testSuite
   )
@@ -2753,9 +2750,6 @@ object Build {
       NoIDEExport.noIDEExportSettings,
 
       testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-s"),
-
-      // FIXME Closure breaks the new Longs in this project
-      Test/fullLinkJS/scalaJSLinkerConfig ~= { _.withClosureCompiler(false) },
   ).zippedSettings(partest)(partest =>
       Compile / unmanagedSources ++= {
         val scalaV = scalaVersion.value
