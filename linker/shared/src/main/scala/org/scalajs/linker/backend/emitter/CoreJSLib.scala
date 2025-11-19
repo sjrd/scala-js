@@ -133,7 +133,6 @@ private[emitter] object CoreJSLib {
     private def buildPreObjectDefinitions(): List[Tree] = {
       defineFileLevelThis() :::
       defineJSBuiltinsSnapshotsAndPolyfills() :::
-      defineResHi() :::
       defineCharClass() :::
       defineLongClass() :::
       defineRuntimeFunctions() :::
@@ -518,18 +517,6 @@ private[emitter] object CoreJSLib {
       }
     }
 
-    private def defineResHi(): List[Tree] = {
-      condDefs(!allowBigIntsForLongs)(
-        extractWithGlobals(globallyMutableVarDef(VarField.resHi, VarField.setResHi, CoreVar, {
-          if (esVersion >= ESVersion.ES2015) {
-            New(globalRef("Int32Array"), List(int(1)))
-          } else {
-            ArrayConstr(List(int(0)))
-          }
-        }))
-      )
-    }
-
     private def defineCharClass(): List[Tree] = {
       val ctor = {
         val c = varRef("c")
@@ -710,7 +697,15 @@ private[emitter] object CoreJSLib {
         Return(If(instance DOT classData DOT cpn.isArrayClass,
             genApply(instance, cloneMethodName, Nil),
             genCallHelper(VarField.objectClone, instance)))
-      }
+      } :::
+
+      condDefs(arrayIndexOutOfBounds != CheckedBehavior.Unchecked && !useBigIntForLongs)(
+        defineFunction2(VarField.aJCheckGet) { (u, i) =>
+          If((i >>> 0) >= (u.length >>> 0), {
+            genCallHelper(VarField.throwArrayIndexOutOfBoundsException, (i >>> 1) | 0)
+          })
+        }
+      )
     )
 
     private def defineObjectGetClassFunctions(): List[Tree] = {
@@ -1503,24 +1498,7 @@ private[emitter] object CoreJSLib {
           defineUnbox(VarField.uB, BoxedByteClass, _ | 0) :::
           defineUnbox(VarField.uS, BoxedShortClass, _ | 0) :::
           defineUnbox(VarField.uI, BoxedIntegerClass, _ | 0) :::
-
-          defineUnbox(VarField.uJ, BoxedLongClass, { v =>
-            if (useBigIntForLongs) {
-              If(v === Null(), genLongZero(), v)
-            } else {
-              If(v === Null(), {
-                Block(
-                  genResHi() := 0,
-                  0
-                )
-              }, {
-                Block(
-                  genResHi() := v DOT cpn.hi,
-                  v DOT cpn.lo
-                )
-              })
-            }
-          }) :::
+          defineUnbox(VarField.uJ, BoxedLongClass, v => If(v === Null(), genBoxedZeroOf(LongType), v)) :::
 
           /* Since the type test ensures that v is either null or a float, we can
            * use + instead of fround.
@@ -1537,21 +1515,7 @@ private[emitter] object CoreJSLib {
             Return(If(v === Null(), 0, v DOT cpn.c))
           } :::
           defineFunction1(VarField.uJ) { v =>
-            if (useBigIntForLongs) {
-              Return(If(v === Null(), genLongZero(), v))
-            } else {
-              If(v === Null(), {
-                Block(
-                  genResHi() := 0,
-                  Return(0)
-                )
-              }, {
-                Block(
-                  genResHi() := v DOT cpn.hi,
-                  Return(v DOT cpn.lo)
-                )
-              })
-            }
+            Return(If(v === Null(), genBoxedZeroOf(LongType), v))
           }
         )
       }
@@ -1598,14 +1562,6 @@ private[emitter] object CoreJSLib {
 
           if (componentTypeRef == LongRef && !useBigIntForLongs) {
             List(
-                MethodDef(static = false, getName, paramList(i), None, {
-                  Block(
-                      boundsCheck,
-                      i := (i << 1),
-                      genResHi() := BracketSelect(This().u, (i + 1) | 0),
-                      Return(BracketSelect(This().u, i))
-                  )
-                }),
                 MethodDef(static = false, setName, paramList(i, v, w), None, {
                   Block(
                       boundsCheck,
