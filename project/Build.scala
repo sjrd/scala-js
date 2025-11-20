@@ -2332,14 +2332,6 @@ object Build {
                 !endsWith(f, "/IntConsumerTest.scala") && // Long#StringRadixInfos
                 !endsWith(f, "/DateTest.scala") && // js.Date
                 !endsWith(f, "/PropertiesTest.scala") && // Date.toString
-                !endsWith(f, "/ThreadLocalRandomTest.scala") && // Random -> Math.floor
-                !endsWith(f, "/CollectionsTest.scala") && // Math$.floor(double) from Random.<init>
-                !endsWith(f, "/SplittableRandomTest.scala") && // Math$.floor(double) from Random.<init>
-
-                !endsWith(f, "/CollectionsOnListsTest.scala") && // Random -> Math.floor
-                 // depends on CollectionsOnListsTest
-                !endsWith(f, "/CollectionsOnSynchronizedListTest.scala") &&
-                !endsWith(f, "/CollectionsOnCheckedListTest.scala") &&
 
                 // javalib/io
                 !endsWith(f, "/io/PrintWriterTest.scala") && // Formatter

@@ -19,8 +19,6 @@ import org.junit.Assume._
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
 import org.scalajs.testsuite.utils.Platform._
 
-import scala.scalajs.LinkingInfo
-
 class CharacterTest {
 
   @Test def hashCodeChar(): Unit = {
@@ -204,10 +202,6 @@ class CharacterTest {
   }
 
   @Test def isISOControl(): Unit = {
-    assumeFalse("Doesn't link in pure Wasm without Optimizer, Math.floor in Random.randomInt.",
-        executingInPureWebAssembly)
-
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     val isoControlChars = (('\u0000' to '\u001F') ++
         ('\u007F' to '\u009F')).map(_.toInt).toSet
     isoControlChars foreach { c =>
@@ -218,7 +212,6 @@ class CharacterTest {
     ((-1000 to 1000) ++ randomInts).filterNot(isoControlChars) foreach { c =>
       assertEquals(false, Character.isISOControl(c))
     }
-    } {}
   }
 
   @Test def digit(): Unit = {

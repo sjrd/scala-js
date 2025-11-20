@@ -924,7 +924,7 @@ class LongTest {
   }
 
   @Test def toUnsignedString(): Unit = {
-    assumeFalse("Math.floor", executingInPureWebAssembly)
+    assumeFalse("Long$.toUnsignedString(long)", executingInPureWebAssembly)
     LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     def test(x: Long, s: String, radix: Int = 10): Unit = {
       assertEquals(s, JLong.toUnsignedString(x, radix))
