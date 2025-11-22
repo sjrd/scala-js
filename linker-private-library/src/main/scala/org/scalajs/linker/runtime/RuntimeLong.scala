@@ -547,7 +547,7 @@ object RuntimeLong {
     // initial approximation of the quotient and remainder
     val approxNum = unsignedToDoubleApprox(lo, hi)
     var approxQuot = scala.scalajs.js.Math.floor(approxNum * divisorInv)
-    var approxRem = lo - divisor * unsignedSafeDoubleLo(approxQuot)
+    var approxRem = lo - divisor * unsignedSafeDoubleLoNonZero(approxQuot)
 
     // correct the approximations
     if (approxRem < 0) {
@@ -657,56 +657,23 @@ object RuntimeLong {
     fromDoubleImpl(value)
 
   private def fromDoubleImpl(value: Double): Long = {
-    /* When value is NaN, the conditions of the 3 `if`s are false, and we end
-     * up returning (NaN | 0, (NaN / TwoPow32) | 0), which is correctly (0, 0).
-     */
-
-    if (value < -TwoPow63) {
-      Long.MinValue
-    } else if (value >= TwoPow63) {
-      Long.MaxValue
+    val SignBit = Long.MinValue
+    val bits = java.lang.Double.doubleToRawLongBits(value)
+    val e = ((bits >>> 52).toInt & 0x7ff) - 1023 // 1023 is the bias
+    if (inlineUnsignedInt_<(e, 63)) {
+      // fast path; value is a normal in range
+      val m = SignBit | (bits << 11) // normalized mantissa, aligned to the left
+      val absR = m >>> (63 - e)
+      negIfSign(absR.toInt, (absR >>> 32).toInt, (bits >> 63).toInt)
+    } else if (e < 0 || value != value) {
+      // underflow to zero, or NaN input
+      0L
     } else {
-      val rawLo = rawToInt(value)
-      val rawHi = rawToInt(value / TwoPow32)
-
-      /* Magic!
-       *
-       * When value < 0, this should *reasonably* be:
-       *   val absValue = -value
-       *   val absLo = rawToInt(absValue)
-       *   val absHi = rawToInt(absValue / TwoPow32)
-       *   val lo = -absLo
-       *   hiReturn = if (absLo != 0) ~absHi else -absHi
-       *   return lo
-       *
-       * Using the fact that rawToInt(-x) == -rawToInt(x), we can rewrite
-       * absLo and absHi without absValue as:
-       *   val absLo = -rawToInt(value)
-       *             = -rawLo
-       *   val absHi = -rawToInt(value / TwoPow32)
-       *             = -rawHi
-       *
-       * Now, we can replace absLo in the definition of lo and get:
-       *   val lo = -(-rawLo)
-       *          = rawLo
-       *
-       * The `hiReturn` definition can be rewritten as
-       *   hiReturn = if (lo != 0) -absHi - 1 else -absHi
-       *            = if (rawLo != 0) -(-rawHi) - 1 else -(-rawHi)
-       *            = if (rawLo != 0) rawHi - 1 else rawHi
-       *
-       * Now that we do not need absValue, absLo nor absHi anymore, we end
-       * end up with:
-       *   hiReturn = if (rawLo != 0) rawHi - 1 else rawHi
-       *   return rawLo
-       *
-       * When value >= 0, the definitions are simply
-       *   hiReturn = rawToInt(value / TwoPow32) = rawHi
-       *   lo = rawToInt(value) = rawLo
-       *
-       * Combining the negative and positive cases, we get:
+      /* The value is not in range (including infinities): saturate.
+       * if (bits >= 0) Long.MaxValue else Long.MinValue
+       *                                   (Long.MaxValue + 1L)
        */
-      pack(rawLo, if (value < 0 && rawLo != 0) rawHi - 1 else rawHi)
+      Long.MaxValue + (bits >>> 63)
     }
   }
 
@@ -1264,16 +1231,24 @@ object RuntimeLong {
     signedToDoubleApprox(lo, hi)
 
   /** Converts an unsigned safe double into its Long representation. */
-  @inline def fromUnsignedSafeDouble(x: Double): Long =
-    pack(unsignedSafeDoubleLo(x), unsignedSafeDoubleHi(x))
+  @inline def fromUnsignedSafeDouble(x: Double): Long = {
+    val bias = 1023
+    val bits = java.lang.Double.doubleToRawLongBits(x)
+    val e = ((bits >>> 52).toInt & 0x7ff)
+    if (e < bias)
+      0L
+    else
+      ((1L << 52) | (bits & ((1L << 52) - 1L))) >>> (52 - (e - bias))
+  }
 
-  /** Computes the lo part of a long from an unsigned safe double. */
-  @inline def unsignedSafeDoubleLo(x: Double): Int =
-    rawToInt(x)
-
-  /** Computes the hi part of a long from an unsigned safe double. */
-  @inline def unsignedSafeDoubleHi(x: Double): Int =
-    rawToInt(x / TwoPow32)
+  /** Computes the lo part of a long from an unsigned safe double,
+   *  if we know that the result won't be 0.
+   */
+  @inline def unsignedSafeDoubleLoNonZero(x: Double): Int = {
+    val bias = 1023
+    val bits = java.lang.Double.doubleToRawLongBits(x)
+    (((1L << 52) | (bits & ((1L << 52) - 1L))) >>> (52 - (((bits >>> 52).toInt & 0x7ff) - bias))).toInt
+  }
 
   /** Approximates an unsigned (lo, hi) with a Double. */
   @inline def unsignedToDoubleApprox(lo: Int, hi: Int): Double =
@@ -1443,6 +1418,14 @@ object RuntimeLong {
      * used, and we get the final algorithm.
      */
     val sign = hi >> 31
+    val xlo = lo ^ sign
+    val rlo = xlo - sign
+    val rhi = (hi ^ sign) + ((xlo & ~rlo) >>> 31)
+    pack(rlo, rhi)
+  }
+
+  @inline
+  private def negIfSign(lo: Int, hi: Int, sign: Int): Long = {
     val xlo = lo ^ sign
     val rlo = xlo - sign
     val rhi = (hi ^ sign) + ((xlo & ~rlo) >>> 31)
