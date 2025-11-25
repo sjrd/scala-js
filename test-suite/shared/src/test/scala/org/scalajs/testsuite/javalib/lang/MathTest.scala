@@ -178,8 +178,6 @@ class MathTest {
   }
 
   @Test def log1p(): Unit = {
-    assumeFalse(executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertTrue(Math.log1p(-2.0).isNaN)
     assertTrue(Math.log1p(Double.NaN).isNaN)
     assertSameDouble(0.0, Math.log1p(0.0))
@@ -188,12 +186,9 @@ class MathTest {
     assertSameDouble(Double.PositiveInfinity, Math.log1p(Double.PositiveInfinity))
     assertTrue(Math.log1p(Double.NegativeInfinity).isNaN)
     assertSameDouble(Double.NegativeInfinity, Math.log1p(-1))
-    } {}
   }
 
   @Test def log10(): Unit = {
-    assumeFalse(executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertTrue(Math.log10(-230.0).isNaN)
     assertTrue(Math.log10(Double.NaN).isNaN)
     assertSameDouble(Double.NegativeInfinity, Math.log10(0.0))
@@ -201,7 +196,6 @@ class MathTest {
     assertTrue(Math.log10(Double.NaN).isNaN)
     assertSameDouble(Double.PositiveInfinity, Math.log10(Double.PositiveInfinity))
     assertTrue(Math.log10(Double.NegativeInfinity).isNaN)
-    } {}
   }
 
   @Test def signumForDouble(): Unit = {

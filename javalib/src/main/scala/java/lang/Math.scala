@@ -234,20 +234,35 @@ object Math {
   @inline def pow(a: scala.Double, b: scala.Double): scala.Double = js.Math.pow(a, b)
 
   @inline def exp(a: scala.Double): scala.Double = js.Math.exp(a)
-  @inline def log(a: scala.Double): scala.Double = js.Math.log(a)
+  @inline def log(a: scala.Double): scala.Double = {
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      StrictMath.log(a)
+    } {
+      js.Math.log(a)
+    }
+  }
+
 
   @inline def log10(a: scala.Double): scala.Double = {
-    if (assumingES6 || !Utils.isUndefined(g.Math.log10))
-      js.Math.log10(a)
-    else
-      log(a) / 2.302585092994046
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      StrictMath.log10(a)
+    } {
+      if (assumingES6 || !Utils.isUndefined(g.Math.log10))
+        js.Math.log10(a)
+      else
+        log(a) / 2.302585092994046
+    }
   }
 
   @inline def log1p(a: scala.Double): scala.Double = {
-    if (assumingES6 || !Utils.isUndefined(g.Math.log1p))
-      js.Math.log1p(a)
-    else if (a == 0.0) a
-    else log(a + 1)
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      StrictMath.log1p(a)
+    } {
+      if (assumingES6 || !Utils.isUndefined(g.Math.log1p))
+        js.Math.log1p(a)
+      else if (a == 0.0) a
+      else log(a + 1)
+    }
   }
 
   @inline def sin(a: scala.Double): scala.Double = js.Math.sin(a)
