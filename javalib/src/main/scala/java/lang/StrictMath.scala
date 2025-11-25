@@ -27,6 +27,8 @@ import java.lang.{Double => JDouble}
 
 object StrictMath {
 
+  private final val SignBit = scala.Long.MinValue
+
   // Port from https://www.netlib.org/fdlibm/e_log.c
   def log(x: scala.Double): scala.Double = {
     val Ln2High = 6.93147180369123816490e-01
@@ -44,23 +46,24 @@ object StrictMath {
     val high0 = (bits0 >>> 32).toInt
     val low = bits0.toInt
 
-    val (scaledX, high, k0) = if (high0 < 0x00100000) {
-      if (((high0 & 0x7fffffff) | low) == 0) {
-        return -Two54 / 0.0  // log(+-0)=-inf
+    val (scaledX, k0) = if (high0 < 0x100000) {
+      if ((bits0 & ~SignBit) == 0L) {
+        return scala.Double.NegativeInfinity // log(+-0)=-inf
       }
       if (high0 < 0) {
-        return (x - x) / 0.0  // log(-#) = NaN
+        return scala.Double.NaN // log(-#) = NaN
       }
-      val scaledX = x * Two54
-      val scaledHigh = (JDouble.doubleToRawLongBits(scaledX) >>> 32).toInt
-      (scaledX, scaledHigh, -54)
+      (x * Two54, -54)
     } else {
-      (x, high0, 0)
+      if (high0 >= 0x7ff00000) { // x is inf or NaN
+        return x + x
+      }
+      (x, 0)
     }
-    if (high >= 0x7ff00000) { // x is inf or NaN
-      return x + x
-    }
-    val highMantissa = high & 0x000fffff // top 20 bits of mantissa
+
+    val bits = JDouble.doubleToRawLongBits(scaledX)
+    val high = (bits >>> 32).toInt
+    val highMantissa = high & 0xfffff // top 20 bits of mantissa
 
     /* Find k and f such that `x = 2^k * (1+f)`,
      * where `sqrt(2)/2 < 1+f < sqrt(2)`.
@@ -72,21 +75,20 @@ object StrictMath {
      * If mantissa is larger than √2, i is 0x100000, otherwise it's 0.
      */
     val i = (highMantissa + 0x95f64) & 0x100000
-    val bits = JDouble.doubleToRawLongBits(scaledX)
     /* `(highMantissa | (i ^ 0x3ff00000)).toLong << 32)` sets the exponent to
      * 0 if the original mantissa (1+f) was smaller than √2, otherwise -1.
-     * newMantissa =
+     * newX =
      *   2^0 * (1+f)    (when (1+f) < √2)
      *   2^(-1) * (1+f) (when (1+f) >= √2)
      *
-     * Now, x = 2^newExponent * newMantissa
+     * Now, x = 2^k * newX
      */
-    val newMantissa =
-        JDouble.longBitsToDouble(((highMantissa | (i ^ 0x3ff00000)).toLong << 32) | (bits & 0x00000000ffffffffL))
-    val newExponent = k0 + ((high >> 20) - 1023) + (i >> 20)
-    val f = newMantissa - 1.0
+    val newX =
+      makeDouble((highMantissa | (i ^ 0x3ff00000)), bits)
+    val k = k0 + ((high >> 20) - 1023) + (i >> 20)
+    val f = newX - 1.0
 
-    /* Fast path: newMantissa is very close to 1.0 (`|newMantissa - 1.0| < 2^(-20)`).
+    /* Fast path: newX is very close to 1.0 (`|newX - 1.0| < 2^(-20)`).
      * For example:
      * | x (f=x−1)    | high     | 2+high   | masked | < 3   |
      * |--------------+----------+----------+--------+-------|
@@ -96,14 +98,14 @@ object StrictMath {
      * | 1.0−2^20     | 3FEFFFFE | 3FF00000 |   0    | true  |
      * | 1.0−1.5×2^20 | 3FEFFFFD | 3FEFFFFF | FFFFF  | false |
      */
-    if ((0x000fffff & (2 + highMantissa)) < 3) {
+    if ((0xfffff & (2 + highMantissa)) < 3) {
       if (f == 0.0) {
-        if (newExponent == 0) {
+        if (k == 0) {
           0.0
         } else {
-          // ln(x) =  ln(2^newExponent) + ln(newMantissa) (where newMantissa =~ 1.0)
-          //       =~ newExponent * ln2 + 0.0
-          val dk = newExponent.toDouble
+          // ln(x) =  ln(2^k) + ln(newX) (where newX =~ 1.0)
+          //       =~ k * ln2 + 0.0
+          val dk = k.toDouble
           dk * Ln2High + dk * Ln2Low
         }
       } else {
@@ -116,10 +118,10 @@ object StrictMath {
          * which is far below the precision of a double 2^(-53).
          */
         val r = f * f * (0.5 - 0.33333333333333333 * f)
-        if (newExponent == 0) {
+        if (k == 0) {
           return f - r
         } else {
-          val dk = newExponent.toDouble
+          val dk = k.toDouble
           /* Adding large and small values can lead to a loss of precision;
            * adjust the order of calculations accordingly.
            * log(x) = k*ln(2) + log(1+f) = k*ln2 + (f - R)
@@ -191,18 +193,18 @@ object StrictMath {
        *     = f - (hfsq - s*(hfsq+R))  (better accuracy)
        * Note that 2s = f - s*f = f - hfsq + s*hfsq, where hfsq = f*f/2.
        */
-      val dk = newExponent.toDouble
+      val dk = k.toDouble
       // f is somewhere between approximately 0.38 and 0.42 (f is large).
       // Use log(1+f) = f - (hfsq - s*(hfsq+R)) for better accuracy.
-      if ((highMantissa - 0x6147a | 0x6b851 - highMantissa) > 0) {
+      if (((highMantissa - 0x6147a) | (0x6b851 - highMantissa)) > 0) {
         val hfsq = 0.5 * f * f
-        if (newExponent == 0) {
+        if (k == 0) {
           f - (hfsq - s * (hfsq + approx))
         } else {
           dk * Ln2High - ((hfsq - (s * (hfsq + approx) + dk * Ln2Low)) - f)
         }
       } else {
-        if (newExponent == 0) {
+        if (k == 0) {
           f - s * (f - approx)
         } else {
           dk * Ln2High - ((s * (f - approx) - dk * Ln2Low) - f)
@@ -222,38 +224,34 @@ object StrictMath {
     val high0 = (bits >>> 32).toInt
     val low = bits.toInt
 
-    val (scaledX, high, k0) = if (high0 < 0x00100000) { // x < 2**-1022 (subnormal)
-      if (((high0 & 0x7fffffff) | low) == 0) {
-        return -Two54 / 0.0 // log(+-0)=-inf
+    val (scaledX, k0) = if (high0 < 0x100000) { // x < 2**-1022 (subnormal)
+      if ((bits & ~SignBit) == 0L) {
+        return scala.Double.NegativeInfinity // log(+-0)=-inf
       }
       if (high0 < 0) {
-        return (x - x) / 0.0 // log(-#) = NaN
+        return scala.Double.NaN // log(-#) = NaN
       }
-      val scaledX = x * Two54 // subnormal number, scale up x
-      val scaledHigh = (JDouble.doubleToRawLongBits(scaledX) >>> 32).toInt
-      (scaledX, scaledHigh, -54)
+      (x * Two54, -54)
     } else {
-      (x, high0, 0)
+      if (high0 >= 0x7ff00000) {
+        return x + x // Inf or NaN
+      }
+      (x, 0)
     }
-    if (high >= 0x7ff00000) return x + x // Inf or NaN
+    val high = (JDouble.doubleToRawLongBits(scaledX) >>> 32).toInt
 
-    /* Normalize x = 2^newExponent * newMantissa
-     * log10(x) = log10(2^newExponent * newMantissa)
-     *          = newExponent * log10(2) + log10(newMantissa)
-     *          = newExponent * log10(2) + ln(newMantissa) / ln(10)
-     * where newMantissa ∈ [0.5, 2.0).
+    /* Normalize x = 2^k * newX
+     * log10(x) = log10(2^k * newX)
+     *          = k * log10(2) + log10(newX)
+     *          = k * log10(2) + ln(newX) / ln(10)
+     * where newX ∈ [0.5, 2.0).
      */
     val exponent = k0 + (high >> 20) - 1023
     val i = ((exponent & 0x80000000) >>> 31) // if (exponent>=0) 0 else 1
-    val newExponent = (exponent + i).toDouble
-    val newMantissaBits = // exponent will be 0 if i=0, otherwise -1
-      ((((0x3ff - i) << 20) | (high & 0x000fffff)).toLong << 32) |
-          (JDouble.doubleToRawLongBits(scaledX) & 0x00000000ffffffffL)
-    val newMantissa = JDouble.longBitsToDouble(newMantissaBits)
-
-    newExponent * Log10Of2Lo +
-        newExponent * Log10Of2Hi +
-        Ivln10 * log(newMantissa)
+    val k = (exponent + i).toDouble
+    val newX = // exponent will be 0 if i=0, otherwise -1
+      makeDouble(((0x3ff - i) << 20) | (high & 0xfffff), JDouble.doubleToRawLongBits(scaledX))
+    k * Log10Of2Lo + k * Log10Of2Hi + Ivln10 * log(newX)
   }
 
   // Port from https://www.netlib.org/fdlibm/s_log1p.c
@@ -276,9 +274,9 @@ object StrictMath {
     val needReduction = if (high < 0x3fda827a) { // x < 0.41422
       if (absHigh >= 0x3ff00000) { // x <= -1.0
         if (x == -1.0) {
-          return -Two54 / 0.0 // log1p(-1) = log(0) = -inf
+          return scala.Double.NegativeInfinity // log1p(-1) = log(0) = -inf
         } else {
-          return (x - x) / (x - x) // log1p(x<-1) = NaN
+          return scala.Double.NaN // log1p(x<-1) = NaN
         }
       }
       if (absHigh < 0x3e200000) { // |x| < 2^-29
@@ -289,7 +287,7 @@ object StrictMath {
           return x - x * x * 0.5
         }
       }
-      if (high > 0 || high <= 0xbfd2bec3.toInt) {
+      if (high > 0 || high <= 0xbfd2bec3) {
         /* -0.2929 < x < 0.41422
          * sqrt(2)/2 < 1+x < sqrt(2), no argument reduction needed.
          */
@@ -298,9 +296,11 @@ object StrictMath {
         true
       }
     } else {
+      if (high >= 0x7ff00000) {
+        return x + x // x is inf or NaN
+      }
       true // x >= 0.41422, need argument reduction
     }
-    if (high >= 0x7ff00000) return x + x // x is inf or NaN
 
     /* 1. Argument Reduction: find k and f such that
      * 1+x = 2^k * (1+f), where  sqrt(2)/2 < 1+f < sqrt(2).
@@ -321,62 +321,61 @@ object StrictMath {
      * and add back the correction term c/u.
      * (Note: when x > 2^53, one can simply return log(x))
      *
-     * Then, normalize to 1+x = 2^newExponent * (1+f)
+     * Then, normalize to 1+x = 2^k * (1+f)
      * where f is close to 0, suitable for polynomial approximation.
      * We adjust the exponent field to bring the value into [sqrt(2)/2, sqrt(2)).
      */
-    val (correction, newExponent, f, newHighMantissa) =
+    val (correction, k, f, newHighMantissa) = {
       if (needReduction) {
-        val (exponent0, u, corr, highMantissa) =
+        val (exponent0, u, corr, highMantissa) = {
           if (high < 0x43400000) { // x < 2^53
             val u = 1.0 + x
             val uBits = JDouble.doubleToRawLongBits(u)
             val uHigh = (uBits >>> 32).toInt
             val exp = (uHigh >> 20) - 1023
             val corr = if (exp > 0) 1.0 - (u - x) else x - (u - 1.0)
-            (exp, uBits, corr / u, uHigh & 0x000fffff)
+            (exp, uBits, corr / u, uHigh & 0xfffff)
           } else {
             /* For x >= 2^53, 1+x = x in floating point (the +1 is below precision).
              * So log(1+x) = log(x), and we just use x directly with no correction needed.
              */
             val xBits = JDouble.doubleToRawLongBits(x)
             val xHigh = (xBits >>> 32).toInt
-            ((xHigh >> 20) - 1023, xBits, 0.0, xHigh & 0x000fffff)
+            ((xHigh >> 20) - 1023, xBits, 0.0, xHigh & 0xfffff)
           }
+        }
 
         if (highMantissa < 0x6a09e) { // mantissa < √2
           // Set exponent to 0, so normalized value is in [1.0, sqrt(2)).
-          val newBits = ((highMantissa | 0x3ff00000).toLong << 32) | (u & 0x00000000ffffffffL)
-          (corr, exponent0, JDouble.longBitsToDouble(newBits) - 1.0, highMantissa)
+          (corr, exponent0, makeDouble(highMantissa | 0x3ff00000, u) - 1.0, highMantissa)
         } else { // mantissa >= √2
-          // set exponent to -1 (2^-1 = 0.5) and increment final exponent.
-          val newBits = ((highMantissa | 0x3fe00000).toLong << 32) | (u & 0x00000000ffffffffL)
-          (corr, exponent0 + 1, JDouble.longBitsToDouble(newBits) - 1.0, (0x00100000 - highMantissa) >> 2)
+          (corr, exponent0 + 1, makeDouble(highMantissa | 0x3fe00000, u) - 1.0, (0x100000 - highMantissa) >> 2)
         }
       } else {
         (0.0, 0, x, 1)
       }
+    }
 
     val hfsq = 0.5 * f * f
     // Fast path: when |f| < 2^-20, use simpler approximation.
     if (newHighMantissa == 0) { // |f| < 2^-20
       if (f == 0.0) {
-        if (newExponent == 0) {
+        if (k == 0) {
           return 0.0
         } else {
-          // log(1+x) = log(2^newExponent * (1+f)) = newExponent*ln(2) when f = 0
-          val c = correction + newExponent * Ln2Low
-          return newExponent * Ln2High + c
+          // log(1+x) = log(2^k * (1+f)) = k*ln(2) when f = 0
+          val c = correction + k * Ln2Low
+          return k * Ln2High + c
         }
       }
       /* Third-order Taylor expansion: log(1+f) ≈ f - f^2/2 + f^3/3
        * Rewritten as: f - (f^2/2)*(1 - 2f/3) for better accuracy.
        */
       val approx = hfsq * (1.0 - 0.66666666666666666 * f)
-      if (newExponent == 0) {
+      if (k == 0) {
         return f - approx
       } else {
-        return newExponent * Ln2High - ((approx - (newExponent * Ln2Low + correction)) - f)
+        return k * Ln2High - ((approx - (k * Ln2Low + correction)) - f)
       }
     }
 
@@ -393,10 +392,13 @@ object StrictMath {
     /* 3. Final result: log(1+x) = k*ln(2) + log(1+f)
      * where log(1+f) = f - (hfsq - s*(hfsq+R))
      */
-    if (newExponent == 0) {
+    if (k == 0) {
       f - (hfsq - s * (hfsq + approx))
     } else {
-      newExponent * Ln2High - ((hfsq - (s * (hfsq + approx) + (newExponent * Ln2Low + correction))) - f)
+      k * Ln2High - ((hfsq - (s * (hfsq + approx) + (k * Ln2Low + correction))) - f)
     }
   }
+
+  @inline private def makeDouble(high: Int, low: scala.Long): scala.Double =
+    JDouble.longBitsToDouble((high.toLong << 32) | (low & 0xffffffffL))
 }
