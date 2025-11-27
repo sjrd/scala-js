@@ -1301,6 +1301,15 @@ private[optimizer] abstract class OptimizerCore(
      */
 
     preTransQual match {
+      case PreTransNew(_, _, paramLocalDefs, fieldBodies)
+          if fieldBodies.contains(field.name) =>
+        pretransformFieldBody(fieldBodies(field.name), paramLocalDefs)(cont)
+
+      case PreTransLocalDef(LocalDef(_, _,
+          ReplaceWithVarRefWithNew(_, paramLocalDefs, fieldBodies)))
+          if fieldBodies.contains(field.name) =>
+        pretransformFieldBody(fieldBodies(field.name), paramLocalDefs)(cont)
+
       case PreTransLocalDef(LocalDef(_, _,
           InlineClassBeingConstructedReplacement(_, fieldLocalDefs, cancelFun))) =>
         val fieldLocalDef = fieldLocalDefs(field.name)
@@ -1363,7 +1372,7 @@ private[optimizer] abstract class OptimizerCore(
         }
 
         preTransQual.tpe.base match {
-          // Try to inline an inlineable field body
+          // Try to inline an inlineable field body by type
           case ClassType(qualClassName, _) if !isLhsOfAssign =>
             if (myself.exists(m => m.enclosingClassName == qualClassName && m.methodName.isConstructor)) {
               /* Within the constructor of a class, we cannot trust the
@@ -1372,13 +1381,12 @@ private[optimizer] abstract class OptimizerCore(
                */
               default
             } else {
-              inlineableFieldBodies(qualClassName).fieldBodies.get(field.name) match {
+              inlineableFieldBodies(qualClassName).byType.get(field.name) match {
                 case None =>
                   default
                 case Some(fieldBody) =>
                   val qualSideEffects = checkNotNullStatement(preTransQual)
-                  val fieldBodyTree = fieldBodyToTree(fieldBody)
-                  pretransformExpr(fieldBodyTree) { preTransFieldBody =>
+                  pretransformFieldBody(fieldBody, Vector.empty) { preTransFieldBody =>
                     cont(PreTransBlock(qualSideEffects, preTransFieldBody))
                   }
               }
@@ -1393,20 +1401,28 @@ private[optimizer] abstract class OptimizerCore(
     }
   }
 
-  private def fieldBodyToTree(fieldBody: InlineableFieldBodies.FieldBody): Tree = {
+  private def pretransformFieldBody(fieldBody: InlineableFieldBodies.FieldBody,
+      paramLocalDefs: Vector[LocalDef])(cont: PreTransCont)(
+      implicit scope: Scope): TailRec[Tree] = {
+
     import InlineableFieldBodies.FieldBody
+
+    def loadModule(fieldBody: FieldBody.LoadModule): LoadModule =
+      LoadModule(fieldBody.moduleClassName)(fieldBody.pos)
 
     implicit val pos = fieldBody.pos
 
     fieldBody match {
       case FieldBody.Literal(literal, _) =>
-        literal
-      case FieldBody.LoadModule(moduleClassName, _) =>
-        LoadModule(moduleClassName)
+        cont(literal.toPreTransform)
+      case fieldBody: FieldBody.LoadModule =>
+        pretransformExpr(loadModule(fieldBody))(cont)
       case FieldBody.ModuleSelect(qualifier, fieldName, tpe, _) =>
-        Select(fieldBodyToTree(qualifier), FieldIdent(fieldName))(tpe)
+        pretransformExpr(Select(loadModule(qualifier), FieldIdent(fieldName))(tpe))(cont)
       case FieldBody.ModuleGetter(qualifier, methodName, tpe, _) =>
-        Apply(ApplyFlags.empty, fieldBodyToTree(qualifier), MethodIdent(methodName), Nil)(tpe)
+        pretransformExpr(Apply(ApplyFlags.empty, loadModule(qualifier), MethodIdent(methodName), Nil)(tpe))(cont)
+      case FieldBody.ParamRef(paramIndex, _) =>
+        cont(paramLocalDefs(paramIndex).toPreTransform)
     }
   }
 
@@ -1491,18 +1507,27 @@ private[optimizer] abstract class OptimizerCore(
       cont: PreTransCont)(
       implicit scope: Scope, pos: Position): TailRec[Tree] = {
 
+    def nonInlineable(): TailRec[Tree] = {
+      inlineableFieldBodies(className).byConstructor.get(ctor.name) match {
+        case None =>
+          cont(PreTransTree(New(className, ctor, targs.map(finishTransformExpr))))
+        case Some(fieldBodies) =>
+          withNewTempLocalDefs(targs) { (paramLocalDefs, cont1) =>
+            cont1(PreTransNew(className, ctor, paramLocalDefs.toVector, fieldBodies))
+          } (cont)
+      }
+    }
+
     tryNewInlineableClass(className) match {
       case Some(structure) =>
         tryOrRollback { cancelFun =>
           inlineClassConstructor(allocationSite, className, structure,
               ctor, targs, cancelFun)(cont)
         } { () =>
-          cont(PreTransTree(
-              New(className, ctor, targs.map(finishTransformExpr))))
+          nonInlineable()
         }
       case None =>
-        cont(PreTransTree(
-            New(className, ctor, targs.map(finishTransformExpr))))
+        nonInlineable()
     }
   }
 
@@ -1519,7 +1544,7 @@ private[optimizer] abstract class OptimizerCore(
             PreTransTree(finishTransformBindings(bindingsAndStats, tree), tpe)
         }
 
-      case _:PreTransUnaryOp | _:PreTransBinaryOp =>
+      case _:PreTransUnaryOp | _:PreTransBinaryOp | _:PreTransNew =>
         PreTransTree(finishTransformExpr(preTrans), preTrans.tpe)
 
       case PreTransLocalDef(localDef) =>
@@ -1558,7 +1583,7 @@ private[optimizer] abstract class OptimizerCore(
       case PreTransBlock(_, result) =>
         resolveRecordStructure(result)
 
-      case _:PreTransUnaryOp | _:PreTransBinaryOp =>
+      case _:PreTransUnaryOp | _:PreTransBinaryOp | _:PreTransNew =>
         None
 
       case PreTransLocalDef(localDef @ LocalDef(tpe, _, replacement)) =>
@@ -1614,6 +1639,8 @@ private[optimizer] abstract class OptimizerCore(
         UnaryOp(op, finishTransformExpr(lhs))
       case PreTransBinaryOp(op, lhs, rhs) =>
         BinaryOp(op, finishTransformExpr(lhs), finishTransformExpr(rhs))
+      case PreTransNew(className, ctor, paramLocalDefs, _) =>
+        New(className, ctor, paramLocalDefs.map(_.newReplacement).toList)
       case PreTransLocalDef(localDef) =>
         localDef.newReplacement
 
@@ -1709,6 +1736,12 @@ private[optimizer] abstract class OptimizerCore(
           finishNoSideEffects
       }
 
+    case PreTransNew(_, _, _, _) =>
+      /* We only create PreTransNew for classes with elidable constructors.
+       * Since the arguments are local defs, by construction there is no side effect.
+       */
+      Skip()(stat.pos)
+
     case PreTransLocalDef(_) =>
       Skip()(stat.pos)
     case PreTransRecordTree(tree, _, _) =>
@@ -1735,6 +1768,8 @@ private[optimizer] abstract class OptimizerCore(
 
         val (name, used) = (replacement: @unchecked) match {
           case ReplaceWithVarRef(name, used) =>
+            (name, used)
+          case ReplaceWithVarRefWithNew(ReplaceWithVarRef(name, used), _, _) =>
             (name, used)
           case ReplaceWithRecordVarRef(name, _, used, _) =>
             (name, used)
@@ -6017,7 +6052,14 @@ private[optimizer] abstract class OptimizerCore(
             (ReplaceWithRecordVarRef(newName, structure, used, cancelFun), value.tpe)
 
           case None =>
-            (ReplaceWithVarRef(newName, used), tpe)
+            val varRef = ReplaceWithVarRef(newName, used)
+            val replacement = value match {
+              case PreTransNew(_, _, paramLocalDefs, fieldBodies) =>
+                ReplaceWithVarRefWithNew(varRef, paramLocalDefs, fieldBodies)
+              case _ =>
+                varRef
+            }
+            (replacement, tpe)
         }
 
         val localDef = LocalDef(refinedType, mutable, replacement)
@@ -6271,27 +6313,33 @@ private[optimizer] object OptimizerCore {
   }
 
   final class InlineableFieldBodies(
-    val fieldBodies: Map[FieldName, InlineableFieldBodies.FieldBody]
+    val byType: InlineableFieldBodies.FieldBodyMap,
+    val byConstructor: Map[MethodName, InlineableFieldBodies.FieldBodyMap]
   ) {
-    def isEmpty: Boolean = fieldBodies.isEmpty
+    def isEmpty: Boolean = byType.isEmpty && byConstructor.isEmpty
 
     override def equals(that: Any): Boolean = that match {
       case that: InlineableFieldBodies =>
-        this.fieldBodies == that.fieldBodies
+        this.byType == that.byType && this.byConstructor == that.byConstructor
       case _ =>
         false
     }
 
-    override def hashCode(): Int = fieldBodies.##
+    override def hashCode(): Int = byType.## ^ byConstructor.##
 
     override def toString(): String = {
-      fieldBodies
-        .map(f => s"${f._1.nameString}: ${f._2}")
-        .mkString("InlineableFieldBodies(", ", ", ")")
+      val b = new java.lang.StringBuilder("InlineableFieldBodies(\n")
+      b.append(byType.map(f => s"${f._1.nameString}: ${f._2}").mkString("  byType: ", ", ", "\n"))
+      for ((ctor, fieldBodies) <- byConstructor)
+        b.append(fieldBodies.map(f => s"${f._1.nameString}: ${f._2}").mkString(s"  ${ctor.nameString}: ", ", ", "\n"))
+      b.append("\n)")
+      b.toString()
     }
   }
 
   object InlineableFieldBodies {
+    type FieldBodyMap = Map[FieldName, FieldBody]
+
     /** The body of field that we can inline.
      *
      *  This hierarchy mirrors the small subset of `Tree`s that we need to
@@ -6325,9 +6373,12 @@ private[optimizer] object OptimizerCore {
           fieldName: FieldName, tpe: Type, pos: Position) extends FieldBody
       final case class ModuleGetter(qualifier: LoadModule,
           methodName: MethodName, tpe: Type, pos: Position) extends FieldBody
+
+      /** Reference to a parameter to the original constructor call. */
+      final case class ParamRef(paramIndex: Int, pos: Position) extends FieldBody
     }
 
-    val Empty: InlineableFieldBodies = new InlineableFieldBodies(Map.empty)
+    val Empty: InlineableFieldBodies = new InlineableFieldBodies(Map.empty, Map.empty)
   }
 
   private final val MaxRollbacksPerMethod = 256
@@ -6418,6 +6469,10 @@ private[optimizer] object OptimizerCore {
         used.value = used.value.inc
         VarRef(name)(tpe.base)
 
+      case ReplaceWithVarRefWithNew(ReplaceWithVarRef(name, used), _, _) =>
+        used.value = used.value.inc
+        VarRef(name)(tpe.base)
+
       /* Allocate an instance of RuntimeLong on the fly.
        * See the comment in finishTransformExpr about why it is desirable and
        * safe to do so.
@@ -6481,6 +6536,8 @@ private[optimizer] object OptimizerCore {
       (this eq that) || (replacement match {
         case ReplaceWithOtherLocalDef(localDef) =>
           localDef.contains(that)
+        case ReplaceWithVarRefWithNew(_, paramLocalDefs, _) =>
+          paramLocalDefs.exists(_.contains(that))
         case TentativeClosureReplacement(_, _, _, _, _, captureLocalDefs, _, _) =>
           captureLocalDefs.exists(_.contains(that))
         case InlineClassBeingConstructedReplacement(_, fieldLocalDefs, _) =>
@@ -6519,6 +6576,12 @@ private[optimizer] object OptimizerCore {
 
   private final case class ReplaceWithVarRef(name: LocalName,
       used: SimpleState[IsUsed]) extends LocalDefReplacement
+
+  private final case class ReplaceWithVarRefWithNew(
+      varRefReplacement: ReplaceWithVarRef,
+      paramLocalDefs: Vector[LocalDef],
+      fieldBodies: InlineableFieldBodies.FieldBodyMap)
+      extends LocalDefReplacement
 
   private final case class ReplaceWithRecordVarRef(name: LocalName,
       structure: InlineableClassStructure,
@@ -6677,6 +6740,8 @@ private[optimizer] object OptimizerCore {
         lhs.contains(localDef)
       case PreTransBinaryOp(_, lhs, rhs) =>
         lhs.contains(localDef) || rhs.contains(localDef)
+      case PreTransNew(_, _, paramLocalDefs, _) =>
+        paramLocalDefs.exists(_.contains(localDef))
       case PreTransLocalDef(thisLocalDef) =>
         thisLocalDef.contains(localDef)
       case _: PreTransGenTree =>
@@ -6694,12 +6759,14 @@ private[optimizer] object OptimizerCore {
 
     assert(
         localDef.replacement.isInstanceOf[ReplaceWithVarRef] ||
+        localDef.replacement.isInstanceOf[ReplaceWithVarRefWithNew] ||
         localDef.replacement.isInstanceOf[ReplaceWithRecordVarRef],
         "Cannot create a PreTransBinding with non-var-ref replacement " +
         localDef.replacement)
 
     def isAlreadyUsed: Boolean = (localDef.replacement: @unchecked) match {
       case ReplaceWithVarRef(_, used)             => used.value.isUsed
+      case ReplaceWithVarRefWithNew(varRef, _, _) => varRef.used.value.isUsed
       case ReplaceWithRecordVarRef(_, _, used, _) => used.value.isUsed
     }
   }
@@ -6815,6 +6882,15 @@ private[optimizer] object OptimizerCore {
       extends PreTransResult {
 
     val tpe: RefinedType = RefinedType(BinaryOp.resultTypeOf(op))
+  }
+
+  /** A `PreTransform` for a `New`. */
+  private final case class PreTransNew(className: ClassName, ctor: MethodIdent,
+      paramLocalDefs: Vector[LocalDef], fieldBodies: InlineableFieldBodies.FieldBodyMap)(
+      implicit val pos: Position)
+      extends PreTransResult {
+
+    val tpe: RefinedType = RefinedType(ClassType(className, nullable = false), isExact = true)
   }
 
   /** A virtual reference to a `LocalDef`. */

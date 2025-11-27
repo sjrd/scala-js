@@ -769,30 +769,43 @@ final class IncOptimizer private[optimizer] (config: CommonPhaseConfig, collOps:
         linkedClass: LinkedClass): OptimizerCore.InlineableFieldBodies = {
       import OptimizerCore.InlineableFieldBodies
 
-      if (linkedClass.kind != ClassKind.ModuleClass) {
+      val constructors = myInterface.staticLike(MemberNamespace.Constructor).methods
+      if (constructors.isEmpty) {
         InlineableFieldBodies.Empty
       } else {
-        myInterface.staticLike(MemberNamespace.Constructor).methods.get(NoArgConstructorName) match {
-          case None =>
+        val initFieldBodies = (for {
+          fieldDef <- computeAllInstanceFieldDefs()
+          if !fieldDef.flags.isMutable
+        } yield {
+          // the zero value is always a Literal because the ftpe is not a RecordType
+          val zeroValue = zeroOf(fieldDef.ftpe)(NoPosition).asInstanceOf[Literal]
+          fieldDef.name.name -> FieldBody.Literal(zeroValue)
+        }).toMap
+
+        if (initFieldBodies.isEmpty) {
+          // fast path
+          InlineableFieldBodies.Empty
+        } else {
+          val byConstructor = constructors.toList.map { case (ctor, impl) =>
+            val paramBodies = List.tabulate(ctor.paramTypeRefs.size) { paramIndex =>
+              Some(FieldBody.ParamRef(paramIndex, linkedClass.pos))
+            }
+            ctor -> interpretConstructor(impl, initFieldBodies, paramBodies)
+          }.filter(_._2.nonEmpty).toMap
+
+          if (byConstructor.isEmpty) {
             InlineableFieldBodies.Empty
+          } else {
+            val byType: InlineableFieldBodies.FieldBodyMap =
+              if (linkedClass.kind == ClassKind.ModuleClass) byConstructor(NoArgConstructorName)
+              else Map.empty
 
-          case Some(ctor) =>
-            val initFieldBodies = for {
-              fieldDef <- computeAllInstanceFieldDefs()
-              if !fieldDef.flags.isMutable
-            } yield {
-              // the zero value is always a Literal because the ftpe is not a RecordType
-              val zeroValue = zeroOf(fieldDef.ftpe)(NoPosition).asInstanceOf[Literal]
-              fieldDef.name.name -> FieldBody.Literal(zeroValue)
-            }
-
-            if (initFieldBodies.isEmpty) {
-              // fast path
-              InlineableFieldBodies.Empty
-            } else {
-              val finalFieldBodies = interpretConstructor(ctor, initFieldBodies.toMap, Nil)
-              new InlineableFieldBodies(finalFieldBodies)
-            }
+            val r = new InlineableFieldBodies(byType, byConstructor)
+            System.err.println("----------------------")
+            System.err.println(linkedClass.className.nameString)
+            System.err.println(r)
+            r
+          }
         }
       }
     }
