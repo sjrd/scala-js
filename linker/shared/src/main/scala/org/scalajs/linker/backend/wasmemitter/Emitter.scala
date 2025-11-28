@@ -95,6 +95,7 @@ final class Emitter(config: Emitter.Config) {
     coreLib.genPreClasses()
     sortedClasses.foreach(classEmitter.genClassDef(_))
     topLevelExports.foreach(classEmitter.genTopLevelExport(_))
+    classEmitter.genArrayClasses()
     coreLib.genPostClasses()
 
     genStartFunction(sortedClasses, moduleInitializers, topLevelExports)

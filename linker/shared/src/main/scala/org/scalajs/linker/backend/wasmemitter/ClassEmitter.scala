@@ -217,10 +217,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val className = clazz.className
     val classInfo = ctx.getClassInfo(className)
 
-    val nameStr = RuntimeClassNameMapperImpl.map(
-      coreSpec.semantics.runtimeClassNameMapper,
-      className.nameString
-    )
+    val nameStr = runtimeClassNameOf(className)
     val nameValue =
       if (targetPureWasm)
         ctx.stringPool.getConstantStringDataInstr(nameStr) :+
@@ -330,7 +327,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
         wa.RefNull(watpe.HeapType(genTypeID.typeData)),
         // the classOf instance - initially `null`; filled in by the `createClassOf` helper
         wa.RefNull(watpe.HeapType(genTypeID.ClassStruct)),
-        // arrayOf, the typeData of an array of this type - initially `null`; filled in by the `arrayTypeData` helper
+        // arrayOf, the typeData of an array of this type - initially `null`; filled in by `specificArrayTypeData`
         wa.RefNull(watpe.HeapType(genTypeID.ObjectVTable)),
         // clonefFunction - will be invoked from `clone()` method invokaion on the class
         cloneFunction,
@@ -341,6 +338,13 @@ class ClassEmitter(coreSpec: CoreSpec) {
       // Generated instructions create an array of reflective proxy structs, where each struct
       // contains the ID of the reflective proxy and a reference to the actual method implementation.
       reflectiveProxiesInstrs
+    )
+  }
+
+  private def runtimeClassNameOf(className: ClassName): String = {
+    RuntimeClassNameMapperImpl.map(
+      coreSpec.semantics.runtimeClassNameMapper,
+      className.nameString
     )
   }
 
@@ -471,6 +475,138 @@ class ClassEmitter(coreSpec: CoreSpec) {
       }
 
       genModuleAccessor(clazz)
+    }
+  }
+
+  /** Generates the array classes.
+   *
+   *  - struct types for instances (with a unique `ObjectArray` for all
+   *    reference array types),
+   *  - vtable globals for the primitive array types and `jl.Object[]`.
+   *
+   *  The vtables for other reference types (so-called specific array types)
+   *  are dynamically created at run-time by the `specificArrayTypeData`
+   *  helper.
+   *
+   *  There are no vtable *types* for array classes. They share the vtable type
+   *  of `jl.Object`.
+   */
+  def genArrayClasses()(implicit ctx: WasmContext): Unit = {
+    // The vtable type is always the same as j.l.Object
+    val vtableTypeID = genTypeID.ObjectVTable
+    val vtableField = watpe.StructField(
+      genFieldID.objStruct.vtable,
+      OriginalName(genFieldID.objStruct.vtable.toString()),
+      watpe.RefType(vtableTypeID),
+      isMutable = false
+    )
+
+    val idHashCodeFieldOpt = if (targetPureWasm) {
+      Some(watpe.StructField(
+        genFieldID.objStruct.idHashCode,
+        OriginalName(genFieldID.objStruct.idHashCode.toString()),
+        watpe.Int32,
+        isMutable = true
+      ))
+    } else {
+      None
+    }
+
+    /* Array classes extend Cloneable, Serializable and Object.
+     * Filter out the ones that do not have run-time type info at all, as
+     * we do for other classes.
+     */
+    val strictAncestorsTypeData: List[wa.Instr] = {
+      val elems = for {
+        ancestor <- List(ObjectClass, CloneableClass, SerializableClass)
+        if ctx.getClassInfoOption(ancestor).exists(_.hasRuntimeTypeInfo)
+      } yield {
+        wa.GlobalGet(genGlobalID.forVTable(ancestor))
+      }
+      elems :+ wa.ArrayNewFixed(genTypeID.typeDataArray, elems.size)
+    }
+
+    // itable and vtable slots
+    val objectClassInfo = ctx.getClassInfo(ObjectClass)
+    val itableSlots = ClassEmitter.genItableSlots(objectClassInfo, List(SerializableClass, CloneableClass))
+    val vtableSlots = objectClassInfo.tableEntries.map { methodName =>
+      ctx.refFuncWithDeclaration(objectClassInfo.resolvedMethodInfos(methodName).tableEntryID)
+    }
+    val itableAndVTableSlots = itableSlots ::: vtableSlots
+
+    for (baseTypeRef <- CoreWasmLib.arrayBaseRefs) {
+      val arrayTypeRef = ArrayTypeRef(baseTypeRef, 1)
+      val structTypeID = genTypeID.forArrayClass(arrayTypeRef)
+      val underlyingArrayTypeID = genTypeID.underlyingOf(arrayTypeRef)
+
+      // Struct type for the class
+
+      val underlyingArrayField = watpe.StructField(
+        genFieldID.objStruct.arrayUnderlying,
+        OriginalName(genFieldID.objStruct.arrayUnderlying.toString()),
+        watpe.RefType(underlyingArrayTypeID),
+        isMutable = false
+      )
+
+      val fields = idHashCodeFieldOpt match {
+        case Some(idHashCodeField) =>
+          List(vtableField, idHashCodeField, underlyingArrayField)
+        case None =>
+          List(vtableField, underlyingArrayField)
+      }
+      ctx.mainRecType.addSubType(
+        watpe.SubType(
+          structTypeID,
+          OriginalName(structTypeID.toString()),
+          isFinal = true,
+          superType = Some(genTypeID.ObjectStruct),
+          watpe.StructType(fields)
+        )
+      )
+
+      // vtable global
+
+      val vtableGlobalID = genGlobalID.forArrayVTable(baseTypeRef)
+
+      val nameStr = baseTypeRef match {
+        case baseTypeRef: PrimRef => "[" + baseTypeRef.charCode.toString()
+        case ClassRef(className)  => "[L" + runtimeClassNameOf(className) + ";"
+      }
+      val nameValue =
+        if (targetPureWasm)
+          ctx.stringPool.getConstantStringDataInstr(nameStr) :+
+              wa.RefNull(watpe.HeapType(genTypeID.wasmString))
+        else ctx.stringPool.getConstantStringDataInstr(nameStr)
+
+      val vtableInit: List[wa.Instr] = nameValue ::: List( // name
+        wa.I32Const(KindArray), // kind = KindArray
+        wa.I32Const(0) // specialInstanceTypes = 0
+      ) ::: (
+        strictAncestorsTypeData // strictAncestors
+      ) ::: List(
+        wa.GlobalGet(genGlobalID.forVTable(baseTypeRef)), // componentType
+        wa.RefNull(watpe.HeapType.None), // classOf
+        wa.RefNull(watpe.HeapType.None), // arrayOf
+        wa.RefFunc(genFunctionID.cloneArray(baseTypeRef)), // clone
+        wa.RefNull(watpe.HeapType.NoFunc), // isJSClassInstance
+
+        // reflectiveProxies, empty since all methods of array classes exist in jl.Object
+        wa.ArrayNewFixed(genTypeID.reflectiveProxies, 0)
+      ) ::: (
+        itableAndVTableSlots
+      ) ::: List(
+        wa.StructNew(genTypeID.ObjectVTable)
+      )
+
+      ctx.addGlobal(
+        wamod.Global(
+          vtableGlobalID,
+          makeDebugName(ns.ArrayTypeData, baseTypeRef),
+          isMutable = false,
+          watpe.RefType(vtableTypeID),
+          wa.Expr(vtableInit)
+        )
+      )
     }
   }
 
@@ -1544,6 +1680,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
   private def makeDebugName(namespace: UTF8String, className: ClassName): OriginalName =
     OriginalName(namespace ++ className.encoded)
 
+  private def makeDebugName(namespace: UTF8String, typeRef: NonArrayTypeRef): OriginalName = {
+    val encoded = typeRef match {
+      case typeRef: PrimRef    => UTF8String(typeRef.charCode.toString())
+      case ClassRef(className) => className.encoded
+    }
+    OriginalName(namespace ++ encoded)
+  }
+
   private def makeDebugName(namespace: UTF8String, fieldName: FieldName): OriginalName = {
     OriginalName(
       namespace ++ fieldName.className.encoded ++ dotUTF8String ++ fieldName.simpleName.encoded
@@ -1587,6 +1731,7 @@ object ClassEmitter {
     val JSClassAccessor = UTF8String("a.")
     val JSClassValueCache = UTF8String("b.")
     val TypeData = UTF8String("d.")
+    val ArrayTypeData = UTF8String("ad.")
     val IsInstance = UTF8String("is.")
     val AsInstance = UTF8String("as.")
 
