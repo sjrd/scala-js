@@ -1340,8 +1340,14 @@ object Build {
 
         val privateLibProducts = (linkerPrivateLibrary / Compile / products).value
 
-        // Copy all *.sjsir files to resourceDir.
-        val mappings = (privateLibProducts ** "*.sjsir").pair(Path.flat(resourceDir))
+        /* Copy all *.sjsir files to resourceDir. We store them with a different
+         * extension "sjsirp", with "p" for "private". If we use the standard
+         * "sjsir" extension, when linking a Scala.js application that depends
+         * on the linker, we see those sjsir files as part of the regular
+         * classpath being linked.
+         */
+        val mappings = (privateLibProducts ** "*.sjsir")
+          .pair(file => Some(new File(resourceDir, file.getName + "p")))
         Sync.sync(s.cacheStoreFactory.make("linker-library"))(mappings)
 
         mappings.unzip._2
