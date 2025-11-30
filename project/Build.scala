@@ -1341,8 +1341,7 @@ object Build {
         val privateLibProducts = (linkerPrivateLibrary / Compile / products).value
 
         // Copy all *.sjsir files to resourceDir.
-        val mappings = (privateLibProducts ** "*.sjsir")
-          .pair(file => Some(new File(resourceDir, file.getName + "p"))) // "p" for "private"
+        val mappings = (privateLibProducts ** "*.sjsir").pair(Path.flat(resourceDir))
         Sync.sync(s.cacheStoreFactory.make("linker-library"))(mappings)
 
         mappings.unzip._2

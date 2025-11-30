@@ -34,7 +34,7 @@ object RuntimeLong {
 
   @inline
   def pack(lo: Int, hi: Int): Long =
-    0L // replaced by a magic Transient(PackLong(lo, hi)) when loading the IR of this class
+    0L // replaced by a magic Transient(PackLong(lo, hi)) during desugaring
 
   // Comparisons
 

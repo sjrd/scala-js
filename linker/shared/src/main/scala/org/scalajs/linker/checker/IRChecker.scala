@@ -778,11 +778,7 @@ private final class IRChecker(linkTimeProperties: LinkTimeProperties,
             typecheckExpect(value, env, ctpe)
         }
 
-      /* Since PackLong is introduced at load time into the IR of RuntimeLong,
-       * we have to unconditionally allow it. We trust users not to use it on
-       * their own.
-       */
-      case Transient(Transients.PackLong(lo, hi)) =>
+      case Transient(Transients.PackLong(lo, hi)) if featureSet.supports(FeatureSet.PackLongTransient) =>
         typecheckExpect(lo, env, IntType)
         typecheckExpect(hi, env, IntType)
 
