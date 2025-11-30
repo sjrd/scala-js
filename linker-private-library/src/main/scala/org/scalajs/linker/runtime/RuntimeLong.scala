@@ -456,11 +456,7 @@ object RuntimeLong {
     fpBitsDataView.getFloat64(0, littleEndian = true)
   }
 
-  @inline
-  def toString(lo: Int, hi: Int): String =
-    toStringImpl(lo, hi)
-
-  private def toStringImpl(lo: Int, hi: Int): String = {
+  def toString(lo: Int, hi: Int): String = {
     if (isInt32(lo, hi)) {
       lo.toString()
     } else if (isSignedSafeDouble(hi)) {
@@ -652,11 +648,7 @@ object RuntimeLong {
   def fromUnsignedInt(value: Int): Long =
     pack(value, 0)
 
-  @inline
-  def fromDouble(value: Double): Long =
-    fromDoubleImpl(value)
-
-  private def fromDoubleImpl(value: Double): Long = {
+  def fromDouble(value: Double): Long = {
     /* When value is NaN, the conditions of the 3 `if`s are false, and we end
      * up returning (NaN | 0, (NaN / TwoPow32) | 0), which is correctly (0, 0).
      */
@@ -779,12 +771,7 @@ object RuntimeLong {
     pack(lo, hi)
   }
 
-  @inline
-  def divide(alo: Int, ahi: Int, blo: Int, bhi: Int): Long =
-    divideImpl(alo, ahi, blo, bhi)
-
-  @noinline
-  def divideImpl(alo: Int, ahi: Int, blo: Int, bhi: Int): Long = {
+  def divide(alo: Int, ahi: Int, blo: Int, bhi: Int): Long = {
     val aAbs = abs(alo, ahi)
     val bAbs = abs(blo, bhi)
 
@@ -801,20 +788,15 @@ object RuntimeLong {
       -absR // calls back into sub()
   }
 
-  @inline
+  @inline // inline the static forwarder ...
   def divideUnsigned(alo: Int, ahi: Int, blo: Int, bhi: Int): Long =
     divideUnsignedImpl(alo, ahi, blo, bhi)
 
-  @noinline
+  @noinline // ... but don't inline all of unsignedDivModHelper at call site
   def divideUnsignedImpl(alo: Int, ahi: Int, blo: Int, bhi: Int): Long =
     unsignedDivModHelper(alo, ahi, blo, bhi, askQuotient = true)
 
-  @inline
-  def remainder(alo: Int, ahi: Int, blo: Int, bhi: Int): Long =
-    remainderImpl(alo, ahi, blo, bhi)
-
-  @noinline
-  def remainderImpl(alo: Int, ahi: Int, blo: Int, bhi: Int): Long = {
+  def remainder(alo: Int, ahi: Int, blo: Int, bhi: Int): Long = {
     val aAbs = abs(alo, ahi)
     val bAbs = abs(blo, bhi)
 
@@ -831,11 +813,11 @@ object RuntimeLong {
       absR
   }
 
-  @inline
+  @inline // inline the static forwarder ...
   def remainderUnsigned(alo: Int, ahi: Int, blo: Int, bhi: Int): Long =
     remainderUnsignedImpl(alo, ahi, blo, bhi)
 
-  @noinline
+  @noinline // ... but don't inline all of unsignedDivModHelper at call site
   def remainderUnsignedImpl(alo: Int, ahi: Int, blo: Int, bhi: Int): Long =
     unsignedDivModHelper(alo, ahi, blo, bhi, askQuotient = false)
 
