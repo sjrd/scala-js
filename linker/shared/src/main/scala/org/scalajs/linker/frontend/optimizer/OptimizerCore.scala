@@ -2307,17 +2307,8 @@ private[optimizer] abstract class OptimizerCore(
       className
     case AnyType | AnyNotNullType | _:ArrayType =>
       ObjectClass
-
-    case UndefType   => BoxedUnitClass
-    case BooleanType => BoxedBooleanClass
-    case CharType    => BoxedCharacterClass
-    case ByteType    => BoxedByteClass
-    case ShortType   => BoxedShortClass
-    case IntType     => BoxedIntegerClass
-    case LongType    => BoxedLongClass
-    case FloatType   => BoxedFloatClass
-    case DoubleType  => BoxedDoubleClass
-    case StringType  => BoxedStringClass
+    case tpe: PrimType =>
+      PrimTypeToBoxedClass(tpe)
   }
 
   private def pretransformStaticApply(tree: ApplyStatically, isStat: Boolean,

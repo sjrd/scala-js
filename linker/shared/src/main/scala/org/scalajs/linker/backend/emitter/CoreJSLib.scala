@@ -700,6 +700,7 @@ private[emitter] object CoreJSLib {
       } :::
 
       condDefs(arrayIndexOutOfBounds != CheckedBehavior.Unchecked && !useBigIntForLongs)(
+        // u is the underlying array; i is the *already scaled* index (better for call sites)
         defineFunction2(VarField.aJCheckGet) { (u, i) =>
           If((i >>> 0) >= (u.length >>> 0), {
             genCallHelper(VarField.throwArrayIndexOutOfBoundsException, (i >>> 1) | 0)
@@ -1906,13 +1907,15 @@ private[emitter] object CoreJSLib {
                       val result = varRef("result")
                       val u = varRef("u")
                       val i = varRef("i")
+                      val srcElem = varRef("srcElem")
                       Block(
                         const(len, array.length | 0),
                         const(result, New(arrayClass, len :: Nil)),
                         const(u, result.u),
                         For(let(i, 0), i < len, i := (i + 1) | 0, Block(
-                          BracketSelect(u, i << 1) := BracketSelect(array, i) DOT cpn.lo,
-                          BracketSelect(u, ((i << 1) + 1) | 0) := BracketSelect(array, i) DOT cpn.hi
+                          const(srcElem, BracketSelect(array, i)),
+                          BracketSelect(u, i << 1) := srcElem DOT cpn.lo,
+                          BracketSelect(u, ((i << 1) + 1) | 0) := srcElem DOT cpn.hi
                         )),
                         Return(result)
                       )

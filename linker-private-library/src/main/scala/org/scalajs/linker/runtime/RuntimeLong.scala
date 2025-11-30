@@ -1331,10 +1331,12 @@ object RuntimeLong {
   def inlineUnsignedInt_>=(a: Int, b: Int): Boolean =
     (a ^ 0x80000000) >= (b ^ 0x80000000)
 
+  // used in the division algorithm; calls back into the expanded ltu function
   @inline
   def ltu(a: Long, b: Long): Boolean =
     (a ^ 0x8000000000000000L) < (b ^ 0x8000000000000000L)
 
+  // used in the division algorithm; calls back into the expanded geu function
   @inline
   def geu(a: Long, b: Long): Boolean =
     (a ^ 0x8000000000000000L) >= (b ^ 0x8000000000000000L)

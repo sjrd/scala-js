@@ -213,23 +213,19 @@ private[emitter] final class SJSGen(
       case ByteType    => IntLiteral(0)
       case ShortType   => IntLiteral(0)
       case IntType     => IntLiteral(0)
-      case LongType    => genLongZero()
       case FloatType   => DoubleLiteral(0.0)
       case DoubleType  => DoubleLiteral(0.0)
       case StringType  => StringLiteral("")
       case UndefType   => Undefined()
       case NullType    => Null()
 
+      case LongType =>
+        assert(useBigIntForLongs, s"cannot generate a zero value for primitive long at $pos")
+        BigIntLiteral(0L)
+
       case VoidType | NothingType =>
         throw new IllegalArgumentException(s"cannot generate a zero for $tpe")
     }
-  }
-
-  def genLongZero()(
-      implicit moduleContext: ModuleContext, globalKnowledge: GlobalKnowledge,
-      pos: Position): Tree = {
-    assert(useBigIntForLongs, s"cannot generate a zero value for primitive long at $pos")
-    BigIntLiteral(0L)
   }
 
   def genBoxedZeroOf(tpe: Type)(

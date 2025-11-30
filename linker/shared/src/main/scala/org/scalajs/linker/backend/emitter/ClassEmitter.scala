@@ -361,7 +361,11 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     )
   }
 
-  /** Generates the creation of fields for a Scala class. */
+  /** Generates the creation of fields for a Scala class.
+   *
+   *  The result is a list of statements to insert in the constructor function
+   *  for the class.
+   */
   private def genFieldDefsOfScalaClass(fields: List[AnyFieldDef])(
       implicit moduleContext: ModuleContext,
       globalKnowledge: GlobalKnowledge): List[js.Tree] = {
@@ -385,7 +389,11 @@ private[emitter] final class ClassEmitter(sjsGen: SJSGen) {
     }
   }
 
-  /** Generates the creation of the static fields for a Scala class. */
+  /** Generates the creation of the static fields for a Scala class.
+   *
+   *  The result is a list of top-level statements. They should not be
+   *  `js.Block`s.
+   */
   def genCreateStaticFieldsOfScalaClass(className: ClassName)(
       implicit moduleContext: ModuleContext,
       globalKnowledge: GlobalKnowledge): WithGlobals[List[js.Tree]] = {

@@ -1092,6 +1092,28 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                 }
                 result
 
+              /* Handle arguments of type `long` first.
+               *
+               * When we have an argument of type `long`, we will almost always
+               * have to split it at the end of the day. Longs that
+               * a) are splittable at the top-level, and
+               * b) are non-pure or have subtrees that could be non-expression
+               *    (which could have caused keepAsIs to be false),
+               * are rare. Conversely, if we reach here for a long, it is
+               * almost certainly not splittable at the top-level.
+               *
+               * It is easier to deal with all of them once and for all at this
+               * point. Otherwise, we would need exceptions for longs in many
+               * different kinds of trees below, which complicates the logic.
+               *
+               * We may unnest a little bit too much because of that strategy.
+               * That's a trade-off we take.
+               *
+               * If it turns out we didn't need to split it after all, we'll
+               * reuse the `JSBoxedRTLongVarRef` as is, without unboxing+boxing
+               * it. Again, that can cause more unnesting than necessary, but
+               * it won't cause more boxing than necessary.
+               */
               case _ if isRTLongType(arg.tpe) =>
                 if (isRTLongBoxingAvoidable(arg)) {
                   // Do not unnecessarily box things that can be split
@@ -1615,6 +1637,9 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
     def isRTLongBoxingAvoidable(tree: Tree)(implicit env: Env): Boolean = {
       tree match {
         case _:Labeled | _:If | _:TryCatch | _:TryFinally | _:Match | _:ArraySelect =>
+          /* Trees resulting in JS statements we can push the LHS into.
+           * See the comment on `JSLongArraySelect` why `ArraySelect` is here.
+           */
           true
         case _ =>
           isSplittableLongAtTopLevel(tree)
@@ -3568,6 +3593,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           (js.VarRef(identLongLo(jsIdent)), js.VarRef(identLongHi(jsIdent)))
 
         case Select(qualifier, field) =>
+          assert(isDuplicatable(qualifier),
+              s"trying to make a long selection ${tree.show} from a non-duplicatable qualifier at $pos")
           genSelectLong(transformExprNoChar(checkNotNull(qualifier)), field)
 
         case SelectStatic(item) =>
@@ -3930,6 +3957,9 @@ private object FunctionEmitter {
    *  index have already been extracted in immutable JS vars.
    *
    *  The scaled index may be a `js.IntLiteral` as well.
+   *
+   *  Note that the notion of duplicatable is not helpful here, because the
+   *  arguments are JS trees, not IR trees.
    */
   private final case class JSLongArraySelect(jsArray: js.VarRef, scaledIndex: js.Tree)
       extends Transient.Value {
