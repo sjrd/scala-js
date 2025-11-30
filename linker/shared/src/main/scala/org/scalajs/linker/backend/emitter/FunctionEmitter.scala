@@ -1336,7 +1336,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
      *  A side-effect free expression can be elided if its result is not used.
      */
     private def isExpressionInternal(tree: Tree, allowUnpure: Boolean,
-        allowSideEffects: Boolean)(implicit env: Env): Boolean = {
+        allowSideEffects: Boolean, allowUnsplittableLongs: Boolean)(
+        implicit env: Env): Boolean = {
 
       require(!allowSideEffects || allowUnpure)
 
@@ -1353,7 +1354,14 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         npeOK && test(tree)
       }
 
-      def test(tree: Tree): Boolean = tree match {
+      def testAll(trees: List[Tree]): Boolean =
+        trees.forall(test(_))
+
+      /* allowUnsplittableLongs is only ever relevant at the top-level.
+       * In every recursive call of `test`, it must be reset to `false`, hence
+       * the default parameter value.
+       */
+      def test(tree: Tree, allowUnsplittableLongs: Boolean = false): Boolean = tree match {
         // Atomic expressions
         case _: Literal                   => true
         case _: JSNewTarget               => true
@@ -1369,16 +1377,18 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case Transient(JSLongArraySelect(_, _)) =>
           allowUnpure
 
-        // Other expressions that can be split if they are RTLongs
+        // Other expressions that can be split if they are longs
         case Transient(PackLong(lo, hi)) =>
           test(lo) && test(hi)
         case Select(qualifier, _) =>
-          allowUnpure && testNPE(qualifier) && (!isRTLongType(tree.tpe) || isDuplicatable(qualifier))
+          allowUnpure && testNPE(qualifier) && {
+            allowUnsplittableLongs || !isRTLongType(tree.tpe) || isDuplicatable(qualifier)
+          }
         case SelectStatic(_) =>
           allowUnpure
 
-        // Other trees of type RTLong cannot be expressions, because we cannot split them
-        case _ if isRTLongType(tree.tpe) =>
+        // Other trees of type long cannot be split
+        case _ if !allowUnsplittableLongs && isRTLongType(tree.tpe) =>
           false
 
         case tree @ UnaryOp(op, lhs) if canUnaryOpBeExpression(tree) =>
@@ -1416,8 +1426,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           allowSideEffects && test(lhs) && test(rhs)
 
         // Expressions preserving pureness (modulo NPE)
-        case Block(trees)            => trees forall test
-        case If(cond, thenp, elsep)  => test(cond) && test(thenp) && test(elsep)
+        case Block(trees)            => testAll(trees)
+        case If(cond, thenp, elsep)  => test(cond) && test(thenp) && test(elsep) && !isRTLongType(tree.tpe)
         case BinaryOp(_, lhs, rhs)   => test(lhs) && test(rhs)
         case RecordSelect(record, _) => test(record)
         case IsInstanceOf(expr, _)   => test(expr)
@@ -1434,7 +1444,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
         // Expressions preserving side-effect freedom (modulo NPE)
         case ArrayValue(tpe, elems) =>
-          allowUnpure && (elems forall test)
+          allowUnpure && testAll(elems)
         case JSArrayConstr(items) =>
           allowUnpure && (items.forall(testJSArg))
         case tree @ JSObjectConstr(items) =>
@@ -1444,7 +1454,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
             test(item._1) && test(item._2)
           }
         case Closure(flags, captureParams, params, restParam, resultType, body, captureValues) =>
-          allowUnpure && captureValues.forall(test(_))
+          allowUnpure && testAll(captureValues)
 
         // Transients preserving side-effect freedom (modulo NPE)
         case Transient(NativeArrayWrapper(elemClass, nativeArray)) =>
@@ -1454,19 +1464,19 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
         // Scala expressions that can always have side-effects
         case New(className, constr, args) =>
-          allowSideEffects && (args forall test)
+          allowSideEffects && testAll(args)
         case LoadModule(className) => // unfortunately
           allowSideEffects
         case Apply(_, receiver, method, args) =>
-          allowSideEffects && test(receiver) && (args forall test)
+          allowSideEffects && test(receiver) && testAll(args)
         case ApplyStatically(_, receiver, className, method, args) =>
-          allowSideEffects && test(receiver) && (args forall test)
+          allowSideEffects && test(receiver) && testAll(args)
         case ApplyStatic(_, className, method, args) =>
-          allowSideEffects && (args forall test)
+          allowSideEffects && testAll(args)
         case ApplyDynamicImport(_, _, _, args) =>
-          allowSideEffects && args.forall(test)
+          allowSideEffects && testAll(args)
         case ApplyTypedClosure(_, fun, args) =>
-          allowSideEffects && test(fun) && args.forall(test)
+          allowSideEffects && test(fun) && testAll(args)
 
         // Transients with side effects.
         case Transient(TypedArrayToArray(expr, primRef)) =>
@@ -1476,7 +1486,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case NewArray(tpe, length) =>
           allowBehavior(semantics.negativeArraySizes) && allowUnpure && test(length)
         case ArraySelect(array, index) =>
-          allowBehavior(semantics.arrayIndexOutOfBounds) && allowUnpure && testNPE(array) && test(index)
+          allowBehavior(semantics.arrayIndexOutOfBounds) && allowUnpure &&
+          testNPE(array) && test(index) && !isRTLongType(tree.tpe)
 
         // Casts
         case AsInstanceOf(expr, _) =>
@@ -1516,7 +1527,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case JSTypeOfGlobalRef(_) =>
           allowSideEffects
         case CreateJSClass(_, captureValues) =>
-          allowSideEffects && captureValues.forall(test)
+          allowSideEffects && testAll(captureValues)
 
         /* LoadJSConstructor is pure only for non-native JS classes,
          * which do not have a native load spec. Note that this test makes
@@ -1529,7 +1540,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         // Non-expressions
         case _ => false
       }
-      test(tree)
+
+      test(tree, allowUnsplittableLongs)
     }
 
     /** Can the given tree be freely duplicated without extra computation?
@@ -1545,17 +1557,17 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
     /** Test whether the given tree is a standard JS expression.
      */
     def isExpression(tree: Tree)(implicit env: Env): Boolean =
-      isExpressionInternal(tree, allowUnpure = true, allowSideEffects = true)
+      isExpressionInternal(tree, allowUnpure = true, allowSideEffects = true, allowUnsplittableLongs = false)
 
     /** Test whether the given tree is a side-effect-free standard JS expression.
      */
     def isSideEffectFreeExpression(tree: Tree)(implicit env: Env): Boolean =
-      isExpressionInternal(tree, allowUnpure = true, allowSideEffects = false)
+      isExpressionInternal(tree, allowUnpure = true, allowSideEffects = false, allowUnsplittableLongs = false)
 
     /** Test whether the given tree is a pure standard JS expression.
      */
     def isPureExpression(tree: Tree)(implicit env: Env): Boolean =
-      isExpressionInternal(tree, allowUnpure = false, allowSideEffects = false)
+      isExpressionInternal(tree, allowUnpure = false, allowSideEffects = false, allowUnsplittableLongs = false)
 
     /** Test whether the given tree is an expression, or an RTLong computation
      *  whose arguments are real expressions.
@@ -1563,56 +1575,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
      *  These can be directly assigned to an `Lhs`, but cannot otherwise be
      *  used as expressions.
      */
-    def isExpressionOrLongOpOfExpressions(tree: Tree)(implicit env: Env): Boolean = {
-      if (!isRTLongType(tree.tpe)) {
-        isExpression(tree)
-      } else {
-        // Unfortunately, there is significant duplication wrt. isExpressionInternal
-
-        def test(arg: Tree): Boolean = isExpression(arg)
-        def testAll(args: List[Tree]): Boolean = args.forall(test(_))
-
-        tree match {
-          case LongLiteral(_)                     => true
-          case VarRef(_)                          => true
-          case Transient(JSVarRef(_, mutable))    => true
-          case Transient(JSBoxedRTLongVarRef(_))  => true
-          case Transient(JSLongArraySelect(_, _)) => true
-
-          case Transient(PackLong(lo, hi)) =>
-            test(lo) && test(hi)
-          case Transient(Cast(expr, _)) =>
-            test(expr)
-
-          case tree @ UnaryOp(_, lhs) =>
-            canUnaryOpBeExpression(tree) && test(lhs)
-          case BinaryOp(_, lhs, rhs) =>
-            test(lhs) && test(rhs)
-
-          case Select(qualifier, _) =>
-            test(qualifier) && isDuplicatable(qualifier)
-          case SelectStatic(_) =>
-            true
-
-          case Apply(_, receiver, method, args) =>
-            test(receiver) && testAll(args)
-          case ApplyStatically(_, receiver, className, method, args) =>
-            test(receiver) && testAll(args)
-          case ApplyStatic(_, className, method, args) =>
-            testAll(args)
-          case ApplyDynamicImport(_, _, _, args) =>
-            testAll(args)
-          case ApplyTypedClosure(_, fun, args) =>
-            test(fun) && testAll(args)
-
-          case AsInstanceOf(expr, _) =>
-            test(expr)
-
-          case _ =>
-            false
-        }
-      }
-    }
+    def isExpressionOrLongOpOfExpressions(tree: Tree)(implicit env: Env): Boolean =
+      isExpressionInternal(tree, allowUnpure = true, allowSideEffects = true, allowUnsplittableLongs = true)
 
     /** Test whether, at the top level, the given tree (assumed of type `Long`)
      *  is splittable.
