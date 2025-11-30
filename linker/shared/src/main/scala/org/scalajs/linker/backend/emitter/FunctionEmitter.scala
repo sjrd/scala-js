@@ -1107,7 +1107,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                 }
                 result
 
-              /* Handle PackLong and Select first.
+              /* Handle PackLong, Select and RecordSelect first.
                *
                * These are the only trees that both
                * a) have subtrees and
@@ -1125,14 +1125,16 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                   if (isRTLongType(arg.tpe)) extractInSyntheticVar(qualifier)
                   else rec(qualifier)
                 Select(newQualifier, item)(arg.tpe)
+              case RecordSelect(record, field) if noExtractYet =>
+                RecordSelect(rec(record), field)(arg.tpe)
 
               /* Extract any remaining arguments of type `long`.
                *
                * When we have an argument of type `long`, we will almost always
                * have to split it at the end of the day. As explained in the
-               * previous comment on PackLong/Select, if we get here, we have
-               * exhausted all the trees that *could* become splittable if we
-               * extracted their parts.
+               * previous comment on PackLong/Select/RecordSelect, if we get
+               * here, we have exhausted all the trees that *could* become
+               * splittable if we extracted their parts.
                *
                * It is easier to deal with all of them once and for all at this
                * point. Otherwise, we would need exceptions for longs in many
@@ -1204,8 +1206,6 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
               case ArraySelect(array, index) if noExtractYet =>
                 val newIndex = rec(index)
                 ArraySelect(rec(array), newIndex)(arg.tpe)
-              case RecordSelect(record, field) if noExtractYet =>
-                RecordSelect(rec(record), field)(arg.tpe)
 
               case Transient(ExtractLongHi(longValue)) =>
                 Transient(ExtractLongHi(rec(longValue)))
@@ -1401,6 +1401,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           }
         case SelectStatic(_) =>
           allowUnpure
+        case RecordSelect(record, _) =>
+          test(record)
 
         // Other trees of type long cannot be split
         case _ if !allowUnsplittableLongs && isRTLongType(tree.tpe) =>
@@ -1441,11 +1443,14 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           allowSideEffects && test(lhs) && test(rhs)
 
         // Expressions preserving pureness (modulo NPE)
-        case Block(trees)            => testAll(trees)
-        case If(cond, thenp, elsep)  => test(cond) && test(thenp) && test(elsep) && !isRTLongType(tree.tpe)
-        case BinaryOp(_, lhs, rhs)   => test(lhs) && test(rhs)
-        case RecordSelect(record, _) => test(record)
-        case IsInstanceOf(expr, _)   => test(expr)
+        case Block(trees) =>
+          testAll(trees)
+        case If(cond, thenp, elsep) =>
+          test(cond) && test(thenp) && test(elsep) && !isRTLongType(tree.tpe)
+        case BinaryOp(_, lhs, rhs) =>
+          test(lhs) && test(rhs)
+        case IsInstanceOf(expr, _) =>
+          test(expr)
 
         // Transients preserving pureness (modulo NPE)
         case Transient(ExtractLongHi(longValue)) =>
@@ -1600,12 +1605,13 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
       tree match {
         case LongLiteral(_)                     => true
         case VarRef(_)                          => true
-        case Transient(JSVarRef(_, mutable))    => true
+        case Transient(JSVarRef(_, _))          => true
         case Transient(JSBoxedRTLongVarRef(_))  => true
         case Transient(JSLongArraySelect(_, _)) => true
-        case Transient(PackLong(lo, hi))        => true
-        case Select(qualifier, _)               => true
+        case Transient(PackLong(_, _))          => true
+        case Select(_, _)                       => true
         case SelectStatic(_)                    => true
+        case RecordSelect(_, _)                 => true
         case _                                  => false
       }
     }
@@ -3567,10 +3573,6 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case Transient(PackLong(lo, hi)) =>
           (transformExprNoChar(lo), transformExprNoChar(hi))
 
-        case tree: RecordSelect =>
-          val jsIdent = makeRecordFieldIdentForVarRef(tree)
-          (js.VarRef(identLongLo(jsIdent)), js.VarRef(identLongHi(jsIdent)))
-
         case Select(qualifier, field) =>
           assert(isDuplicatable(qualifier),
               s"trying to make a long selection ${tree.show} from a non-duplicatable qualifier at $pos")
@@ -3578,6 +3580,10 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
         case SelectStatic(item) =>
           (globalVar(VarField.t, item.name), globalVar(VarField.thi, item.name))
+
+        case tree: RecordSelect =>
+          val jsIdent = makeRecordFieldIdentForVarRef(tree)
+          (js.VarRef(identLongLo(jsIdent)), js.VarRef(identLongHi(jsIdent)))
 
         case _ =>
           throw new IllegalArgumentException(
