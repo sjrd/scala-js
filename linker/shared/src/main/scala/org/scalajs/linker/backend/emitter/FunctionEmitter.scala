@@ -1056,6 +1056,29 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
          * single method.
          */
 
+        def extractInSyntheticVar(arg: Tree)(implicit env: Env): Tree = {
+          implicit val pos = arg.pos
+
+          /* The duplication in the two branches is unfortunate, but any
+           * attempt at factorization makes it worse.
+           */
+          if (isRTLongType(arg.tpe) && !isRTLongBoxingAvoidable(arg)) {
+            // Extract into a jl.Long!, then re-export as a JSBoxedRTLongVarRef
+            val temp = newSyntheticVar()
+            val computeTemp = pushLhsInto(
+                Lhs.VarDef(temp, BoxedRTLongType, mutable = false), arg, Set.empty)
+            computeTemp +=: extractedStatements
+            Transient(JSBoxedRTLongVarRef(temp))
+          } else {
+            // Regular extraction
+            val temp = newSyntheticVar()
+            val computeTemp = pushLhsInto(
+                Lhs.VarDef(temp, arg.tpe, mutable = false), arg, Set.empty)
+            computeTemp +=: extractedStatements
+            Transient(JSVarRef(temp, mutable = false)(arg.tpe))
+          }
+        }
+
         def rec(arg: Tree)(implicit env: Env): Tree = {
           def noExtractYet = extractedStatements.isEmpty
 
@@ -1067,14 +1090,6 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
             arg
           } else {
             implicit val pos = arg.pos
-
-            def extractInSyntheticVar(): Tree = {
-              val temp = newSyntheticVar()
-              val computeTemp = pushLhsInto(
-                  Lhs.VarDef(temp, arg.tpe, mutable = false), arg, Set.empty)
-              computeTemp +=: extractedStatements
-              Transient(JSVarRef(temp, mutable = false)(arg.tpe))
-            }
 
             arg match {
               case Block(stats :+ expr) =>
@@ -1092,39 +1107,44 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                 }
                 result
 
-              /* Handle arguments of type `long` first.
+              /* Handle PackLong and Select first.
+               *
+               * These are the only trees that both
+               * a) have subtrees and
+               * b) can be split.
+               *
+               * All other trees that can be split are atomic. If they cause
+               * !keepAsIs, they need to be extracted themselves, rather than
+               * extracting their parts.
+               */
+              case Transient(PackLong(lo, hi)) =>
+                val newHi = rec(hi)
+                Transient(PackLong(rec(lo), newHi))
+              case Select(qualifier, item) if noExtractYet =>
+                val newQualifier =
+                  if (isRTLongType(arg.tpe)) extractInSyntheticVar(qualifier)
+                  else rec(qualifier)
+                Select(newQualifier, item)(arg.tpe)
+
+              /* Extract any remaining arguments of type `long`.
                *
                * When we have an argument of type `long`, we will almost always
-               * have to split it at the end of the day. Longs that
-               * a) are splittable at the top-level, and
-               * b) are non-pure or have subtrees that could be non-expression
-               *    (which could have caused keepAsIs to be false),
-               * are rare. Conversely, if we reach here for a long, it is
-               * almost certainly not splittable at the top-level.
+               * have to split it at the end of the day. As explained in the
+               * previous comment on PackLong/Select, if we get here, we have
+               * exhausted all the trees that *could* become splittable if we
+               * extracted their parts.
                *
                * It is easier to deal with all of them once and for all at this
                * point. Otherwise, we would need exceptions for longs in many
                * different kinds of trees below, which complicates the logic.
                *
-               * We may unnest a little bit too much because of that strategy.
-               * That's a trade-off we take.
-               *
                * If it turns out we didn't need to split it after all, we'll
                * reuse the `JSBoxedRTLongVarRef` as is, without unboxing+boxing
-               * it. Again, that can cause more unnesting than necessary, but
-               * it won't cause more boxing than necessary.
+               * it. In that case, we may unnest a little bit too much than
+               * necessary, but it won't cause more boxing than necessary.
                */
               case _ if isRTLongType(arg.tpe) =>
-                if (isRTLongBoxingAvoidable(arg)) {
-                  // Do not unnecessarily box things that can be split
-                  extractInSyntheticVar()
-                } else {
-                  val temp = newSyntheticVar()
-                  val computeTemp = pushLhsInto(
-                      Lhs.VarDef(temp, BoxedRTLongType, mutable = false), arg, Set.empty)
-                  computeTemp +=: extractedStatements
-                  Transient(JSBoxedRTLongVarRef(temp))
-                }
+                extractInSyntheticVar(arg)
 
               case arg @ UnaryOp(op, lhs)
                   if canUnaryOpBeExpression(arg) && (UnaryOp.isPureOp(op) || noExtractYet) =>
@@ -1168,8 +1188,6 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
               case New(className, constr, args) if noExtractYet =>
                 New(className, constr, recs(args))
-              case Select(qualifier, item) if noExtractYet =>
-                Select(rec(qualifier), item)(arg.tpe)
               case Apply(flags, receiver, method, args) if noExtractYet =>
                 val newArgs = recs(args)
                 Apply(flags, rec(receiver), method, newArgs)(arg.tpe)
@@ -1189,9 +1207,6 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
               case RecordSelect(record, field) if noExtractYet =>
                 RecordSelect(rec(record), field)(arg.tpe)
 
-              case Transient(PackLong(lo, hi)) =>
-                val newHi = rec(hi)
-                Transient(PackLong(rec(lo), newHi))
               case Transient(ExtractLongHi(longValue)) =>
                 Transient(ExtractLongHi(rec(longValue)))
               case Transient(Cast(expr, tpe)) =>
@@ -1215,7 +1230,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
                 If(rec(cond), thenp, elsep)(arg.tpe)
 
               case _ =>
-                extractInSyntheticVar()
+                extractInSyntheticVar(arg)
             }
           }
         }
@@ -1382,7 +1397,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           test(lo) && test(hi)
         case Select(qualifier, _) =>
           allowUnpure && testNPE(qualifier) && {
-            allowUnsplittableLongs || !isRTLongType(tree.tpe) || isDuplicatable(qualifier)
+            !isRTLongType(tree.tpe) || isDuplicatable(qualifier)
           }
         case SelectStatic(_) =>
           allowUnpure
