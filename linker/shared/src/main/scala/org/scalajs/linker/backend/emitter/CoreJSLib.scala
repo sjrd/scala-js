@@ -1215,7 +1215,16 @@ private[emitter] object CoreJSLib {
             genCallHelper(VarField.arraycopyGeneric, src.u, srcPos, dest.u, destPos, length)
           } else {
             If((src DOT classData) === genClassDataOf(ArrayTypeRef(LongRef, 1)), {
-              genCallHelper(VarField.arraycopyGeneric, src.u, srcPos << 1, dest.u, destPos << 1, length << 1)
+              /* We cannot use `<< 1` to multiply by 2 here. If we do, then
+               * large positive values will wrap around to negative values.
+               * We use a true `* 2`, which will exploit a 33rd bit within the
+               * double values that JavaScript gives us. From a performance
+               * point of view, it's not great. But this code is only used when
+               * targeting ES5.1, which is deprecated anyway. Also as long as
+               * it doesn't actually overflow, the JITs should deal with this
+               * reasonably well.
+               */
+              genCallHelper(VarField.arraycopyGeneric, src.u, srcPos * 2, dest.u, destPos * 2, length * 2)
             }, {
               genCallHelper(VarField.arraycopyGeneric, src.u, srcPos, dest.u, destPos, length)
             })
