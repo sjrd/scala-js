@@ -1698,7 +1698,9 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           })
 
         case LongType if !useBigIntForLongs =>
-          // TODO Handle static mirrors
+          /* There cannot be any static mirrors here.
+           * Only static variables of type `any` can be exported.
+           */
           val (lhsLo, lhsHi) = transformLongExpr(lhs)
           val (rhsLo, rhsHi) = transformLongExpr(rhs)
           js.Block(
