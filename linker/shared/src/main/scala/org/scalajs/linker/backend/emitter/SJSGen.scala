@@ -36,6 +36,7 @@ private[emitter] final class SJSGen(
     val varGen: VarGen,
     val nameCompressor: Option[NameCompressor]
 ) {
+  import SJSGen._
 
   import jsGen._
   import config._
@@ -287,52 +288,69 @@ private[emitter] final class SJSGen(
 
   def genSelect(receiver: Tree, field: irt.FieldIdent)(
       implicit pos: Position): Tree = {
-    DotSelect(receiver, genFieldIdent(field.name)(field.pos))
-  }
 
-  def genSelectLong(receiver: Tree, field: irt.FieldIdent)(
-      implicit pos: Position): (Tree, Tree) = {
-    // TODO Name compressor
-    val baseName = genName(field.name)
-    val loIdent = Ident(baseName + "_$lo")(field.pos)
-    val hiIdent = Ident(baseName + "_$hi")(field.pos)
-    (DotSelect(receiver, loIdent), DotSelect(receiver, hiIdent))
+    val fieldName = field.name
+    val fieldIdent = nameCompressor match {
+      case None =>
+        Ident(genName(fieldName))(field.pos)
+      case Some(compressor) =>
+        DelayedIdent(compressor.genResolverFor(fieldName))(field.pos)
+    }
+    DotSelect(receiver, fieldIdent)
   }
 
   def genSelectForDef(receiver: Tree, field: irt.FieldIdent,
       originalName: OriginalName)(
       implicit pos: Position): Tree = {
-    DotSelect(receiver, genFieldIdentForDef(field.name, originalName)(field.pos))
+
+    val fieldName = field.name
+    val fieldIdent = nameCompressor match {
+      case None =>
+        val jsName = genName(fieldName)
+        val jsOrigName = genOriginalName(fieldName, originalName, jsName)
+        Ident(jsName, jsOrigName)(field.pos)
+      case Some(compressor) =>
+        DelayedIdent(compressor.genResolverFor(fieldName), originalName.orElse(fieldName))(field.pos)
+    }
+    DotSelect(receiver, fieldIdent)
+  }
+
+  def genSelectLong(receiver: Tree, field: irt.FieldIdent)(
+      implicit pos: Position): (Tree, Tree) = {
+
+    val fieldName = field.name
+
+    val (loFieldIdent, hiFieldIdent) = nameCompressor match {
+      case None =>
+        val baseName = genName(fieldName)
+        (Ident(baseName + "_$lo")(field.pos), Ident(baseName + "_$hi")(field.pos))
+      case Some(compressor) =>
+        val (loResolver, hiResolver) = compressor.genResolversForLong(fieldName)
+        (DelayedIdent(loResolver)(field.pos), DelayedIdent(hiResolver)(field.pos))
+    }
+
+    (DotSelect(receiver, loFieldIdent), DotSelect(receiver, hiFieldIdent))
   }
 
   def genSelectLongForDef(receiver: Tree, field: irt.FieldIdent,
       originalName: OriginalName)(
       implicit pos: Position): (Tree, Tree) = {
-    // TODO Name compressor; originalName
-    genSelectLong(receiver, field)
-  }
 
-  private def genFieldIdent(fieldName: FieldName)(
-      implicit pos: Position): MaybeDelayedIdent = {
-    nameCompressor match {
-      case None =>
-        Ident(genName(fieldName))
-      case Some(compressor) =>
-        DelayedIdent(compressor.genResolverFor(fieldName))
-    }
-  }
+    val fieldName = field.name
+    val baseOrigName = originalName.getOrElse(fieldName)
+    val loOrigName = OriginalName(baseOrigName ++ LoFieldSuffixUTF8String)
+    val hiOrigName = OriginalName(baseOrigName ++ HiFieldSuffixUTF8String)
 
-  private def genFieldIdentForDef(fieldName: FieldName,
-      originalName: OriginalName)(
-      implicit pos: Position): MaybeDelayedIdent = {
-    nameCompressor match {
+    val (loFieldIdent, hiFieldIdent) = nameCompressor match {
       case None =>
-        val jsName = genName(fieldName)
-        val jsOrigName = genOriginalName(fieldName, originalName, jsName)
-        Ident(jsName, jsOrigName)
+        val baseName = genName(fieldName)
+        (Ident(baseName + "_$lo", loOrigName)(field.pos), Ident(baseName + "_$hi", hiOrigName)(field.pos))
       case Some(compressor) =>
-        DelayedIdent(compressor.genResolverFor(fieldName), originalName.orElse(fieldName))
+        val (loResolver, hiResolver) = compressor.genResolversForLong(fieldName)
+        (DelayedIdent(loResolver, loOrigName)(field.pos), DelayedIdent(hiResolver, hiOrigName)(field.pos))
     }
+
+    (DotSelect(receiver, loFieldIdent), DotSelect(receiver, hiFieldIdent))
   }
 
   def genApply(receiver: Tree, methodName: MethodName, args: List[Tree])(
@@ -805,4 +823,9 @@ private[emitter] final class SJSGen(
     else
       genCallHelper(VarField.n, obj)
   }
+}
+
+private[emitter] object SJSGen {
+  private val LoFieldSuffixUTF8String = UTF8String(".lo")
+  private val HiFieldSuffixUTF8String = UTF8String(".hi")
 }
