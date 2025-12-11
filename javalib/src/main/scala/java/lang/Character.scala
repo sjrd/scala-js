@@ -481,16 +481,13 @@ object Character {
     isWhitespace(c.toInt)
 
   def isWhitespace(codePoint: scala.Int): scala.Boolean = {
-    def isSeparator(tpe: Int): scala.Boolean =
-      tpe == SPACE_SEPARATOR || tpe == LINE_SEPARATOR || tpe == PARAGRAPH_SEPARATOR
     if (codePoint < 256) {
-      codePoint == '\t' || codePoint == '\n' || codePoint == '\u000B' ||
-      codePoint == '\f' || codePoint == '\r' ||
+      ('\t' <= codePoint && codePoint <= '\r') || // \t \n \u000B \f \r
       ('\u001C' <= codePoint && codePoint <= '\u001F') ||
-      (codePoint != '\u00A0' && isSeparator(getTypeLT256(codePoint)))
+      (codePoint != '\u00A0' && isSpaceCharImpl(getTypeLT256(codePoint)))
     } else {
       (codePoint != '\u2007' && codePoint != '\u202F') &&
-      isSeparator(getTypeGE256(codePoint))
+      isSpaceCharImpl(getTypeGE256(codePoint))
     }
   }
 
@@ -500,8 +497,10 @@ object Character {
   def isSpaceChar(codePoint: Int): scala.Boolean =
     isSpaceCharImpl(getType(codePoint))
 
-  @inline private[this] def isSpaceCharImpl(tpe: Int): scala.Boolean =
-    tpe == SPACE_SEPARATOR || tpe == LINE_SEPARATOR || tpe == PARAGRAPH_SEPARATOR
+  @inline private[this] def isSpaceCharImpl(tpe: Int): scala.Boolean = {
+    // tpe == SPACE_SEPARATOR || tpe == LINE_SEPARATOR || tpe == PARAGRAPH_SEPARATOR
+    tpe >= SPACE_SEPARATOR && tpe <= PARAGRAPH_SEPARATOR
+  }
 
   def isLowerCase(c: scala.Char): scala.Boolean =
     isLowerCase(c.toInt)
@@ -566,8 +565,10 @@ object Character {
   def isLetter(cp: Int): scala.Boolean = isLetterImpl(getType(cp))
 
   @inline private[this] def isLetterImpl(tpe: Int): scala.Boolean = {
-    tpe == UPPERCASE_LETTER || tpe == LOWERCASE_LETTER ||
-    tpe == TITLECASE_LETTER || tpe == MODIFIER_LETTER || tpe == OTHER_LETTER
+    /* tpe == UPPERCASE_LETTER || tpe == LOWERCASE_LETTER ||
+     * tpe == TITLECASE_LETTER || tpe == MODIFIER_LETTER || tpe == OTHER_LETTER
+     */
+    tpe >= UPPERCASE_LETTER && tpe <= OTHER_LETTER
   }
 
   def isLetterOrDigit(c: scala.Char): scala.Boolean =
@@ -597,9 +598,7 @@ object Character {
 
   def isAlphabetic(codePoint: Int): scala.Boolean = {
     val tpe = getType(codePoint)
-    tpe == UPPERCASE_LETTER || tpe == LOWERCASE_LETTER ||
-    tpe == TITLECASE_LETTER || tpe == MODIFIER_LETTER ||
-    tpe == OTHER_LETTER || tpe == LETTER_NUMBER
+    isLetterImpl(tpe) || tpe == LETTER_NUMBER
   }
 
   def isIdeographic(c: Int): scala.Boolean = {
