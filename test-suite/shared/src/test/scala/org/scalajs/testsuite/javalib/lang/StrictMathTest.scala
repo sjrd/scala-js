@@ -135,4 +135,27 @@ class StrictMathTest {
       assertExactEquals(s"sqrt($inputHex)", expected, actual)
     }
   }
+
+  @Test def pow(): Unit = {
+    // Special cases
+    assertTrue(StrictMath.pow(Double.NaN, 3.0).isNaN)
+    assertExactEquals(1.0, StrictMath.pow(1.0, Double.NaN))
+    assertTrue(StrictMath.pow(Double.NaN, Double.NaN).isNaN)
+
+    def parseDouble(str: String): Double = {
+      if (str == "HUGE_VAL") Double.PositiveInfinity
+      else if (str == "-HUGE_VAL") Double.NegativeInfinity
+      else JDouble.parseDouble(str)
+    }
+
+    StrictMathPow.data.foreach { case (expectedHex, x, y) =>
+      val expected = parseDouble(expectedHex)
+      val actual = StrictMath.pow(parseDouble(x), parseDouble(y))
+      // Bionic uses 1 ULP tolerance
+      // https://android.googlesource.com/platform/bionic/+/refs/heads/main/tests/math_test.cpp#2109
+      val ulp = Math.ulp(expected)
+      assertEquals(s"pow($x, $y)", expected, actual, ulp)
+    }
+  }
+
 }
