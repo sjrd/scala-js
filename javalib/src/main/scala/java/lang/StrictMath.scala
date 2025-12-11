@@ -28,6 +28,7 @@ import java.lang.{Double => JDouble}
 object StrictMath {
 
   private final val SignBit = scala.Long.MinValue
+  private final val SignBitInt = scala.Int.MinValue
 
   // Port from https://www.netlib.org/fdlibm/e_log.c
   def log(x: scala.Double): scala.Double = {
@@ -397,6 +398,140 @@ object StrictMath {
     } else {
       k * Ln2High - ((hfsq - (s * (hfsq + approx) + (k * Ln2Low + correction))) - f)
     }
+  }
+
+  // Port from https://www.netlib.org/fdlibm/e_sqrt.c
+  def sqrt(x: scala.Double): scala.Double = {
+    val bits = JDouble.doubleToRawLongBits(x)
+    val high0 = (bits >>> 32).toInt
+    val low0 = bits.toInt
+
+    if ((high0 & 0x7ff00000) == 0x7ff00000)
+      return x * x + x // sqrt(NaN)=NaN, sqrt(+inf)=+inf, sqrt(-inf)=sNaN
+
+    if (high0 <= 0) {
+      if (((high0 & (~SignBitInt)) | low0) == 0)
+        return x // sqrt(+-0) = +-0
+      else if (high0 < 0)
+        return scala.Double.NaN // sqrt(-ve) = NaN
+    }
+
+    /* 1. Normalization
+     * Scale x to y in [1,4) with even powers of 2:
+     * find an integer k such that  1 <= (y=x*2^(2k)) < 4, then
+     *   sqrt(x) = 2^k * sqrt(y)
+     */
+    val (high, low, exp0) = {
+      val rawE = high0 >> 20
+      // subnormal numbers. shift until we find the leading 1 bit.
+      if (rawE == 0) {
+        var highTmp = high0
+        var lowTmp = low0
+        var expTmp = 0
+        // optimization: shift in 21-bit chunks from low word to high word
+        while (highTmp == 0) {
+          expTmp -= 21
+          highTmp |= (lowTmp >>> 11)
+          lowTmp <<= 21
+        }
+        var i = 0
+        while ((highTmp & 0x100000) == 0) {
+          highTmp <<= 1
+          i += 1
+        }
+        expTmp -= i - 1
+        highTmp |= (lowTmp >>> (32 - i))
+        lowTmp <<= i
+        (highTmp, lowTmp, expTmp - 1023)
+      } else {
+        (high0, low0, rawE - 1023)
+      }
+    }
+
+    /* If exponent is odd, double the mantissa to make exponent even
+     * because sqrt(2^e * m) = 2^(e/2) * sqrt(m).
+     * We need e to be even for integer division, so if e is odd:
+     * 2^e * m = 2^(e-1) * (2*m), now (e-1) is even
+     */
+    val mHigh0 = (high & 0xfffff) | 0x100000 // implicit leading 1
+    val mLow0 = low
+    val (mHigh, mLow) = if ((exp0 & 1) == 1) {
+      (mHigh0 + mHigh0 + ((mLow0 & SignBitInt) >>> 31), mLow0 + mLow0)
+    } else {
+      (mHigh0, mLow0)
+    }
+    val newExp = exp0 >> 1
+
+    /* Step 2: Bit-by-bit computation of sqrt(mantissa) using integer arithmetic
+     *
+     * After Step 1, we have: `x = 2^e * m`, and `sqrt(x) = 2^(e/2) * sqrt(m)`, where m ∈ [1, 4).
+     * here we compute `sqrt(m)` using digit-by-digit calculation:
+     * https://en.wikipedia.org/wiki/Square_root_algorithms#Digit-by-digit_calculation
+     */
+    // Initialize remainder = mantissa * 2 (scaled for bit extraction)
+    var remHigh = mHigh + mHigh + ((mLow & SignBitInt) >>> 31)
+    var remLow = mLow + mLow
+
+    var q = 0
+    var s0 = 0 // 2 * q (for testing next bit)
+    var r = 0x200000 // Current bit position (starts at bit 21)
+    while (r != 0) {
+      // Test if we can set this bit: (result + r)^2 still be <= original value?
+      val t = s0 + r
+      if (t <= remHigh) {
+        s0 = t + r
+        remHigh = remHigh - t
+        q = q + r
+      }
+      // Shift remainder left by 1 for next iteration (extract next bit of precision)
+      remHigh = remHigh + remHigh + ((remLow & SignBitInt) >>> 31)
+      remLow = remLow + remLow
+      r = r >>> 1
+    }
+
+    var q1 = 0
+    var s1 = 0
+    r = SignBitInt
+    while (r != 0) {
+      val t1 = s1 + r
+      val t = s0
+      if ((t < remHigh) ||
+          ((t == remHigh) && Integer.unsigned_<=(t1, remLow))) {
+        s1 = t1 + r
+        if (((t1 & SignBitInt) == SignBitInt) && ((s1 & SignBitInt) == 0))
+          s0 = s0 + 1
+        remHigh = remHigh - t
+        if (Integer.unsigned_<(remLow, t1))
+          remHigh = remHigh - 1
+        remLow = remLow - t1
+        q1 = q1 + r
+      }
+      remHigh = remHigh + remHigh + ((remLow & SignBitInt) >>> 31)
+      remLow = remLow + remLow
+      r = r >>> 1
+    }
+
+    // Step 3: Rounding based on remainder
+    // Original e_sqrt implementation had a rouding mode check,
+    // but here we omit those checks because we always round to even.
+    val (resHigh, resLow) = {
+      if ((remHigh | remLow) != 0) {
+        if (q1 == 0xffffffff) {
+          (q + 1, 0)
+        } else {
+          (q, q1 + (q1 & 1))
+        }
+      } else {
+        (q, q1)
+      }
+    }
+
+    // Reconstruct the double value
+    val newHigh = (resHigh >>> 1) + 0x3fe00000 + (newExp << 20)
+    val newLow =
+      if ((resHigh & 1) == 1) (resLow >>> 1) | SignBitInt
+      else resLow >>> 1
+    makeDouble(newHigh, newLow.toLong)
   }
 
   @inline private def makeDouble(high: Int, low: scala.Long): scala.Double =
