@@ -229,9 +229,19 @@ object Math {
   @inline def round(a: scala.Double): scala.Long = js.Math.round(a).toLong
 
   // Wasm intrinsic
-  @inline def sqrt(a: scala.Double): scala.Double = js.Math.sqrt(a)
+  @inline def sqrt(a: scala.Double): scala.Double =
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      StrictMath.sqrt(a)
+    } {
+      js.Math.sqrt(a)
+    }
 
-  @inline def pow(a: scala.Double, b: scala.Double): scala.Double = js.Math.pow(a, b)
+  @inline def pow(a: scala.Double, b: scala.Double): scala.Double =
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      StrictMath.pow(a, b)
+    } {
+      js.Math.pow(a, b)
+    }
 
   @inline def exp(a: scala.Double): scala.Double = js.Math.exp(a)
   @inline def log(a: scala.Double): scala.Double = {
