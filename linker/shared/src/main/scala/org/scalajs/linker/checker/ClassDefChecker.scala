@@ -1051,7 +1051,9 @@ private final class ClassDefChecker(classDef: ClassDef,
       case CreateJSClass(className, captureValues) =>
         checkTrees(captureValues, env)
 
-      case Transient(Transients.PackLong(lo, hi)) if featureSet.supports(FeatureSet.PackLongTransient) =>
+      case Transient(Transients.PackLong(lo, hi)) =>
+        if (!featureSet.supports(FeatureSet.PackLongTransient))
+          reportError(i"Illegal PackLong transient.")
         checkTree(lo, env)
         checkTree(hi, env)
 

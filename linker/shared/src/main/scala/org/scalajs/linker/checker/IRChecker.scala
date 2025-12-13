@@ -778,11 +778,17 @@ private final class IRChecker(linkTimeProperties: LinkTimeProperties,
             typecheckExpect(value, env, ctpe)
         }
 
-      case Transient(Transients.PackLong(lo, hi)) if featureSet.supports(FeatureSet.PackLongTransient) =>
+      case Transient(Transients.PackLong(lo, hi)) =>
+        // do the "invalid tree" test inside the body to avoid falling back on OptimizedTransients
+        if (!featureSet.supports(FeatureSet.PackLongTransient))
+          reportError("invalid tree")
         typecheckExpect(lo, env, IntType)
         typecheckExpect(hi, env, IntType)
 
       case Transient(transient) if featureSet.supports(FeatureSet.OptimizedTransients) =>
+        assert(!transient.isInstanceOf[Transients.PackLong],
+            s"Unexpected PackLong transient as OptimizedTransients but without PackLongTransient")
+
         // No precise rules, but at least check that its children type-check on their own
         transient.traverse(new Traversers.Traverser {
           override def traverse(tree: Tree): Unit = typecheck(tree, env)

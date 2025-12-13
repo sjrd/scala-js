@@ -91,7 +91,7 @@ private[checker] object FeatureSet {
   private val NeedsDesugaring =
     LinkTimeNodes | NewLambda
 
-  /** IR that is only the result of desugaring (currently empty). */
+  /** IR that is only the result of desugaring. */
   private val Desugared =
     PackLongTransient
 
