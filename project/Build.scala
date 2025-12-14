@@ -1011,7 +1011,7 @@ object Build {
 
       {
         val allProjects: Seq[Project] = Seq(
-            plugin, linkerPrivateLibrary
+            plugin, linkerPrivateLibrary, linkerProfile
         ) ++ Seq(
             compiler, irProject, irProjectJS,
             linkerInterface, linkerInterfaceJS, linker, linkerJS,
@@ -2999,5 +2999,22 @@ object Build {
   ).withScalaJSCompiler.withScalaJSJUnitPlugin.dependsOnLibrary.dependsOn(
       jUnitRuntime, testBridge % "test"
   )
+
+  lazy val linkerProfile = Project(
+      id = "linkerProfile", base = file("linker-profile")
+  ).settings(
+      commonSettings,
+      fatalWarningsSettings,
+      name := "Scala.js linker profile helper",
+      run / fork := true, // run isolated, easy to attach with YourKit
+      run / connectInput := true, // so we can wait for user input
+      javaOptions += "-XX:+EnableDynamicAgentLoading",
+      buildInfoOrStubs(Compile, Def.setting(baseDirectory.value / "src/main")),
+      buildInfoKeys := Seq(
+        BuildInfoKey.map((testSuite.v2_12 / Test / fullClasspath)) {
+          case (_, v) => "testClasspath" -> Attributed.data(v)
+        }
+      ),
+  ).dependsOn(linker.v2_12, testAdapter.v2_12)
 
 }
