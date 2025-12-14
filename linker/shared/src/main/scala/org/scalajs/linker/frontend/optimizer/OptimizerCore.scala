@@ -475,7 +475,10 @@ private[optimizer] abstract class OptimizerCore(
 
       case tree @ If(cond, thenp, elsep) =>
         trampoline {
-          if (isStat) {
+          /* foldIf only ever folds things of type boolean. Avoid
+           * pretranforming the branches when that is never going to be useful.
+           */
+          if (isStat || thenp.tpe != BooleanType || elsep.tpe != BooleanType) {
             pretransformExpr(cond) { tcond =>
               val resultTree = tcond match {
                 case _ if tcond.tpe.isNothingType =>
@@ -505,7 +508,7 @@ private[optimizer] abstract class OptimizerCore(
               TailCalls.done(resultTree)
             }
           } else {
-            pretransformIf(tree, acceptRecords = false)(finishTransform(isStat = false))
+            pretransformIf(tree)(finishTransform(isStat = false))
           }
         }
 
@@ -1037,7 +1040,7 @@ private[optimizer] abstract class OptimizerCore(
         cont(localDef.toPreTransform)
 
       case tree: If =>
-        pretransformIf(tree, acceptRecords = true)(cont)
+        pretransformIf(tree)(cont)
 
       case Match(selector, cases, default) =>
         val newSelector = transformExpr(selector)
@@ -1259,7 +1262,7 @@ private[optimizer] abstract class OptimizerCore(
     pretransformList(tree.stats)(cont)(scope)
   }
 
-  private def pretransformIf(tree: If, acceptRecords: Boolean)(cont: PreTransCont)(
+  private def pretransformIf(tree: If)(cont: PreTransCont)(
       implicit scope: Scope): TailRec[Tree] = {
     implicit val pos = tree.pos
     val If(cond, thenp, elsep) = tree
@@ -1295,7 +1298,6 @@ private[optimizer] abstract class OptimizerCore(
           def shouldExtractBranchToStat(branch: PreTransform,
               otherBranch: PreTransform): Boolean = {
             branch.tpe.isNothingType &&
-            acceptRecords && // Temporary: minimize spurious diffs
             (resolvesToRecord(otherBranch) || !hasTailPosContinue(branch))
           }
 
@@ -1312,7 +1314,42 @@ private[optimizer] abstract class OptimizerCore(
             cont(foldIf(tcond, tthenp, telsep)(refinedType))
           }
 
-          def withoutRecords(): TailRec[Tree] = {
+          tryOrRollback { cancelFun =>
+            pretransformExprs(thenp, elsep) { (tthenp, telsep) =>
+              if (shouldExtractBranchToStat(tthenp, telsep)) {
+                doExtractBranchToStat(tcond, tthenp, telsep)
+              } else if (shouldExtractBranchToStat(telsep, tthenp)) {
+                doExtractBranchToStat(foldUnaryOp(UnaryOp.Boolean_!, tcond), telsep, tthenp)
+              } else {
+                (resolveRecordPreTransform(tthenp), resolveRecordPreTransform(telsep)) match {
+                  case (PreTransRecordTree(thenTree, thenStructure, thenCancelFun),
+                      PreTransRecordTree(elseTree, elseStructure, elseCancelFun)) =>
+                    if (!thenStructure.sameClassAs(elseStructure))
+                      cancelFun()
+                    assert(thenTree.tpe == elseTree.tpe)
+                    cont(PreTransRecordTree(
+                        If(finishTransformExpr(tcond), thenTree, elseTree)(thenTree.tpe),
+                        thenStructure,
+                        cancelFun))
+
+                  case (PreTransRecordTree(_, _, thenCancelFun), _) =>
+                    thenCancelFun()
+
+                  case (_, PreTransRecordTree(_, _, elseCancelFun)) =>
+                    elseCancelFun()
+
+                  case (tthenpNoRecord, telsepNoRecord) =>
+                    default(tcond, tthenpNoRecord, telsepNoRecord)
+                }
+              }
+            }
+          } { () =>
+            /* If the If is canceled as a whole, it's because *both* the thenp
+             * and elsep resulted in a record, but either a) they did not have
+             * the same structure or b) the If was canceled later on.
+             * Either way, we want to retry but make sure that neither branch
+             * results in a record.
+             */
             pretransformExprNoRecord(thenp) { tthenp =>
               pretransformExprNoRecord(elsep) { telsep =>
                 if (shouldExtractBranchToStat(tthenp, telsep))
@@ -1322,49 +1359,6 @@ private[optimizer] abstract class OptimizerCore(
                 else
                   default(tcond, tthenp, telsep)
               }
-            }
-          }
-
-          if (!acceptRecords) {
-            withoutRecords()
-          } else {
-            tryOrRollback { cancelFun =>
-              pretransformExprs(thenp, elsep) { (tthenp, telsep) =>
-                if (shouldExtractBranchToStat(tthenp, telsep)) {
-                  doExtractBranchToStat(tcond, tthenp, telsep)
-                } else if (shouldExtractBranchToStat(telsep, tthenp)) {
-                  doExtractBranchToStat(foldUnaryOp(UnaryOp.Boolean_!, tcond), telsep, tthenp)
-                } else {
-                  (resolveRecordPreTransform(tthenp), resolveRecordPreTransform(telsep)) match {
-                    case (PreTransRecordTree(thenTree, thenStructure, thenCancelFun),
-                        PreTransRecordTree(elseTree, elseStructure, elseCancelFun)) =>
-                      if (!thenStructure.sameClassAs(elseStructure))
-                        cancelFun()
-                      assert(thenTree.tpe == elseTree.tpe)
-                      cont(PreTransRecordTree(
-                          If(finishTransformExpr(tcond), thenTree, elseTree)(thenTree.tpe),
-                          thenStructure,
-                          cancelFun))
-
-                    case (PreTransRecordTree(_, _, thenCancelFun), _) =>
-                      thenCancelFun()
-
-                    case (_, PreTransRecordTree(_, _, elseCancelFun)) =>
-                      elseCancelFun()
-
-                    case (tthenpNoRecord, telsepNoRecord) =>
-                      default(tcond, tthenpNoRecord, telsepNoRecord)
-                  }
-                }
-              }
-            } { () =>
-              /* If the If is canceled as a whole, it's because *both* the thenp
-               * and elsep resulted in a record, but either a) they did not have
-               * the same structure or b) the If was canceled later on.
-               * Either way, we want to retry but make sure that neither branch
-               * results in a record.
-               */
-              withoutRecords()
             }
           }
       }
