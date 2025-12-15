@@ -1261,6 +1261,10 @@ object Build {
       fatalWarningsSettings,
       name := "Scala.js linker",
 
+      // Temporarily disable scaladoc generation for linker on publish
+      // https://github.com/scala-js/scala-js/issues/5272
+      Compile / packageDoc / publishArtifact := false,
+
       Compile / unmanagedSourceDirectories +=
         baseDirectory.value.getParentFile.getParentFile / "shared/src/main/scala",
       Test / unmanagedSourceDirectories +=
