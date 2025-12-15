@@ -166,3 +166,21 @@ jobs:
         run: sbt "testSuiteJVM${{ matrix.suffix }}/test"
       - name: testSuiteExJVM${{ matrix.suffix }}/test
         run: sbt "testSuiteExJVM${{ matrix.suffix }}/test"
+
+  sbt-plugin-scripted:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'sbt'
+      - uses: sbt/setup-sbt@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: npm install
+        run: npm install
+      - name: sbtPlugin/scripted
+        run: sbt sbtPlugin/scripted
