@@ -492,7 +492,7 @@ private[optimizer] abstract class OptimizerCore(
                     case (Skip(), Skip()) =>
                       finishTransformStat(tcond)
                     case (Skip(), _) =>
-                      val newCond = finishTransformExpr(foldUnaryOp(UnaryOp.Boolean_!, tcond))
+                      val newCond = finishTransformExpr(foldNot(tcond))
                       If(newCond, newElsep, newThenp)(VoidType)
                     case _ =>
                       val newCond = finishTransformExpr(tcond)
@@ -1299,7 +1299,7 @@ private[optimizer] abstract class OptimizerCore(
               if (shouldExtractBranchToStat(tthenp)) {
                 doExtractBranchToStat(tcond, tthenp, telsep)
               } else if (shouldExtractBranchToStat(telsep)) {
-                doExtractBranchToStat(foldUnaryOp(UnaryOp.Boolean_!, tcond), telsep, tthenp)
+                doExtractBranchToStat(foldNot(tcond), telsep, tthenp)
               } else {
                 (resolveRecordPreTransform(tthenp), resolveRecordPreTransform(telsep)) match {
                   case (PreTransRecordTree(thenTree, thenStructure, thenCancelFun),
@@ -1762,7 +1762,7 @@ private[optimizer] abstract class OptimizerCore(
         case (Skip(), Skip()) =>
           finishTransformStat(cond)
         case (Skip(), _) =>
-          val newCond = finishTransformExpr(foldUnaryOp(UnaryOp.Boolean_!, cond))
+          val newCond = finishTransformExpr(foldNot(cond))
           If(newCond, newElsep, newThenp)(VoidType)
         case _ =>
           val newCond = finishTransformExpr(cond)
@@ -3611,8 +3611,9 @@ private[optimizer] abstract class OptimizerCore(
 
     @inline def default = PreTransIf(cond, thenp, elsep, tpe)
 
-    def isLitOrLocalDef(preTrans: PreTransform): Boolean = preTrans match {
+    def isCombinable(preTrans: PreTransform): Boolean = preTrans match {
       case PreTransLit(_) | PreTransLocalDef(_) => true
+      case PreTransUnaryOp(op, lhs)             => UnaryOp.isPureOp(op) && isCombinable(lhs)
       case _                                    => false
     }
 
@@ -3622,7 +3623,7 @@ private[optimizer] abstract class OptimizerCore(
         else elsep
 
       case _ =>
-        @inline def negCond = foldUnaryOp(UnaryOp.Boolean_!, cond)
+        @inline def negCond = foldNot(cond)
 
         if (thenp.tpe.base == BooleanType && elsep.tpe.base == BooleanType) {
           (cond, thenp, elsep) match {
@@ -3652,15 +3653,19 @@ private[optimizer] abstract class OptimizerCore(
             case (PreTransBinaryOp(IntComparison(op1), l1, r1),
                   PreTransLit(BooleanLiteral(true)),
                   PreTransBinaryOp(IntComparison(op2), l2, r2))
-                if isLitOrLocalDef(r1) && isLitOrLocalDef(r2) && l1 == l2 && r1 == r2 && op1.isCompatibleWith(op2) =>
-              makeBinaryOp(op1 | op2, l1, r1)
+                if isCombinable(l1) && isCombinable(r1) &&
+                    isCombinable(l2) && isCombinable(r2) &&
+                    op1.isCompatibleWith(op2) =>
+              foldTwoIntComparisonsOr(l1, op1, r1, l2, op2, r2)
 
-            // Example: (x >= y) && (x <= y)  ->  (x == y)
+            // Example: (x >= y) && (x <= z)  ->  ((x-y) unsigned_<= (z-y))
             case (PreTransBinaryOp(IntComparison(op1), l1, r1),
                   PreTransBinaryOp(IntComparison(op2), l2, r2),
                   PreTransLit(BooleanLiteral(false)))
-                if isLitOrLocalDef(r1) && isLitOrLocalDef(r2) && l1 == l2 && r1 == r2&& op1.isCompatibleWith(op2) =>
-              makeBinaryOp(op1 & op2, l1, r1)
+                if isCombinable(l1) && isCombinable(r1) &&
+                    isCombinable(l2) && isCombinable(r2) &&
+                    op1.isCompatibleWith(op2) =>
+              foldTwoIntComparisonsAnd(l1, op1, r1, l2, op2, r2)
 
             case _ => default
           }
@@ -3875,6 +3880,9 @@ private[optimizer] abstract class OptimizerCore(
         cont(pretrans)
     }
   }
+
+  private def foldNot(arg: PreTransform)(implicit pos: Position): PreTransform =
+    foldUnaryOp(UnaryOp.Boolean_!, arg)
 
   private def foldUnaryOp(op: UnaryOp.Code, arg: PreTransform)(
       implicit pos: Position): PreTransform = {
@@ -4433,7 +4441,7 @@ private[optimizer] abstract class OptimizerCore(
 
           case (PreTransLit(BooleanLiteral(l)), _) =>
             if (l == positive) rhs
-            else foldUnaryOp(UnaryOp.Boolean_!, rhs)
+            else foldNot(rhs)
 
           case _ =>
             default
@@ -5290,6 +5298,156 @@ private[optimizer] abstract class OptimizerCore(
     }
   }
 
+  /** Folds `(lhs1 op1 rhs1) || (lhs2 op2 rhs2)`.
+   *
+   *  All the operands must be pure, and have a meaningful `==` test.
+   */
+  private def foldTwoIntComparisonsOr(
+      lhs1: PreTransform, op1: IntComparison, rhs1: PreTransform,
+      lhs2: PreTransform, op2: IntComparison, rhs2: PreTransform)(
+      implicit pos: Position): PreTransform = {
+
+    import BinaryOp._
+    import IntComparison._
+
+    def default: PreTransform = {
+      PreTransIf(
+        makeBinaryOp(op1, lhs1, rhs1),
+        PreTransLit(BooleanLiteral(true)),
+        makeBinaryOp(op2, lhs2, rhs2),
+        RefinedType(BooleanType)
+      )
+    }
+
+    val combinedOp = op1 | op2 // mostly for the signedness and its properties
+    val signBitIfUnsigned =
+      if (combinedOp.isSigned) 0L else Long.MinValue // to perform comparisons with the chosen signedness
+
+    // produce the equivalent of (lhs >= min && lhs <= max), possibly negated
+    def makeTestForInclusiveRange(lhs: PreTransform, min: Long, max: Long,
+        negated: Boolean): PreTransform = {
+      val minusOp = if (op1.isLongOp) Long_- else Int_-
+      val op = op1.toUnsigned.withRels(if (negated) Rels_> else Rels_<=)
+      makeBinaryOp(op, foldBinaryOp(minusOp, lhs, op.makeLit(min)), max - min)
+    }
+
+    def forLiterals(lhs: PreTransform, op1: IntComparison, r1: Long,
+        op2: IntComparison, r2: Long): PreTransform = {
+      if ((r1 ^ signBitIfUnsigned) > (r2 ^ signBitIfUnsigned)) {
+        // Normalize r1 < r2 according to the chosen signedness
+        forLiterals(lhs, op2, r2, op1, r1)
+      } else if (r1 == r2) {
+        makeBinaryOp(op1 | op2, lhs, r1)
+      } else if (op1.rels == Rels_<=) {
+        // Since r1 < r2, r1 + 1 won't overflow -- normalize <= r1 to <
+        forLiterals(lhs, op1.withRels(Rels_<), r1 + 1L, op2, r2)
+      } else if (op2.rels == Rels_>=) {
+        // Symmetric
+        forLiterals(lhs, op1, r1, op2.withRels(Rels_>), r2 - 1L)
+      } else if (op1.hasGT) {
+        if (op2.hasLT)
+          PreTransLit(BooleanLiteral(true)) // tautology: x > r1 || x < r2 is always true when r1 < r2
+        else
+          makeBinaryOp(op1, lhs, r1) // x >= r2 implies x > r1, so we can drop the former
+      } else if (op2.hasLT) {
+        makeBinaryOp(op2, lhs, r2) // x <= r1 implies x < r2, so we can drop the former
+      } else {
+        /* Now we have normalized with
+         * - r1 < r2
+         * - op1 is not <= and has no >, so it can only be < or ==
+         * - op2 is not >= and has no <, so it can only be > or ==
+         */
+        assert(op1.rels == Rels_< || op1.rels == Rels_==)
+        assert(op2.rels == Rels_> || op2.rels == Rels_==)
+
+        if ((op1.hasLT || r1 == combinedOp.minValue) && (op2.hasGT || r2 == combinedOp.maxValue)) {
+          // x < r1 || x > r2  -->  !(x >= r1 && x <= r2)
+          // we can consider x == minValue as x < minValue + 1; likewise for maxValue
+          makeTestForInclusiveRange(
+              lhs,
+              if (op1.hasLT) r1 else r1 + 1L,
+              if (op2.hasGT) r2 else r2 - 1L,
+              negated = true)
+        } else if (op1.hasEQ && op2.hasEQ && r1 + 1L == r2) {
+          // x == r1 || x == r1 + 1  -->  x >= r1 && x <= r1 + 1
+          makeTestForInclusiveRange(lhs, r1, r2, negated = false)
+        } else {
+          // Otherwise, there's nothing we can do
+          default
+        }
+      }
+    }
+
+    def isLiteral(preTrans: PreTransform): Boolean = preTrans match {
+      case PreTransLit(_) => true
+      case _              => false
+    }
+
+    def combinedInequalitiesOrDefault(): PreTransform = {
+      if (op1.rels == Rels_!= && op2.rels == Rels_!=) {
+        // (lhs1 != rhs1) || (lhs2 != rhs2)  -->  (lhs1 ^ rhs1) | (lhs2 ^ rhs2) != 0
+        val xorOp = if (combinedOp.isLongOp) Long_^ else Int_^
+        val orOp = if (combinedOp.isLongOp) Long_| else Int_|
+        foldCmp(
+          combinedOp,
+          foldBinaryOp(
+            orOp,
+            foldBinaryOp(xorOp, lhs1, rhs1),
+            foldBinaryOp(xorOp, lhs2, rhs2)
+          ),
+          combinedOp.makeLit(0L)
+        )
+      } else {
+        default
+      }
+    }
+
+    if (lhs1 != lhs2) {
+      // Try to normalize so that lhs1 == lhs2
+      if (lhs1 == rhs2) {
+        // Flip lhs2 op2 rhs2
+        foldTwoIntComparisonsOr(lhs1, op1, rhs1, rhs2, op2.flipped, lhs2)
+      } else if (lhs2 == rhs1) {
+        // Flip lhs1 op1 rhs1
+        foldTwoIntComparisonsOr(rhs1, op1.flipped, lhs1, lhs2, op2, rhs2)
+      } else if (rhs1 == rhs2 && !isLiteral(rhs1)) {
+        // Flip both; don't do that if they are a literal, because it won't help
+        foldTwoIntComparisonsOr(rhs1, op1.flipped, lhs1, rhs2, op2.flipped, lhs2)
+      } else {
+        combinedInequalitiesOrDefault()
+      }
+    } else if (rhs1 == rhs2) {
+      makeBinaryOp(combinedOp, lhs1, rhs1)
+    } else {
+      // lhs1 == lhs2 but rhs1 != rhs2
+      (rhs1, rhs2) match {
+        case (PreTransLit(r1), PreTransLit(r2)) =>
+          forLiterals(lhs1, op1, combinedOp.extractLit(r1), op2, combinedOp.extractLit(r2))
+        case _ =>
+          combinedInequalitiesOrDefault()
+      }
+    }
+  }
+
+  /** Folds `(lhs1 op1 rhs1) && (lhs2 op2 rhs2)`.
+   *
+   *  All the operands must be pure, and have a meaningful `==` test.
+   */
+  private def foldTwoIntComparisonsAnd(
+      lhs1: PreTransform, op1: IntComparison, rhs1: PreTransform,
+      lhs2: PreTransform, op2: IntComparison, rhs2: PreTransform)(
+      implicit pos: Position): PreTransform = {
+
+    // Delegate to the Or variant using De Morgan laws
+    foldTwoIntComparisonsOr(lhs1, !op1, rhs1, lhs2, !op2, rhs2) match {
+      case PreTransIf(x, PreTransLit(BooleanLiteral(true)), y, tpe) =>
+        // undo the De Morgan transformation if we couldn't improve anything
+        PreTransIf(foldNot(x), foldNot(y), PreTransLit(BooleanLiteral(false)), tpe)
+      case negResult =>
+        foldNot(negResult)
+    }
+  }
+
   /** Constructs a BinaryOp node for the given IntComparison.
    *
    *  Do not fold it, unless it is a tautology or a contradiction (because
@@ -5303,6 +5461,16 @@ private[optimizer] abstract class OptimizerCore(
     } else {
       PreTransBinaryOp(cmp.toBinaryOpCode, lhs, rhs)
     }
+  }
+
+  /** Constructs a BinaryOp node for the given IntComparison, where the rhs is
+   *  a literal value.
+   *
+   *  Convenience overload.
+   */
+  private def makeBinaryOp(cmp: IntComparison, lhs: PreTransform, rhs: Long)(
+      implicit pos: Position): PreTransform = {
+    makeBinaryOp(cmp, lhs, cmp.makeLit(rhs))
   }
 
   /** Simplifies the given `value` expression with the knowledge that only some
@@ -7378,6 +7546,9 @@ private[optimizer] object OptimizerCore {
       else
         if (isLongOp) -1L else Integer.toUnsignedLong(-1)
     }
+
+    def toUnsigned: IntComparison =
+      new IntComparison((bits & ~SignednessMask) | Unsigned)
 
     def rels: Int = bits & RelationshipsMask
 
