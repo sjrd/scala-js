@@ -10,7 +10,7 @@
  * additional information regarding copyright ownership.
  */
 
-/* Port test data from FreeBSD:
+/* Port test data from FreeBSD for log, log10, and log1p:
  * - https://github.com/freebsd/freebsd-src/blob/9b0102837e305ca75de2bc14d284f786a33f9a6a/lib/msun/tests/logarithm_test.c
  *
  * Copyright (c) 2008-2010 David Schultz <das@FreeBSD.org>
@@ -47,7 +47,7 @@ import java.lang.{Double => JDouble}
 import java.lang.{Math, StrictMath}
 
 import org.scalajs.testsuite.utils.AssertExtensions.assertExactEquals
-
+import org.scalajs.testsuite.javalib.lang.data._
 class StrictMathTest {
 
   @Test def log(): Unit = {
@@ -115,5 +115,46 @@ class StrictMathTest {
 
     assertExactEquals(0.1823215567939546, StrictMath.log1p(0.19999999999999996)) // 0x0.3333333333333p0
     assertExactEquals(-0.2231435513142097, StrictMath.log1p(-0.19999999999999996)) // -0x0.3333333333333p0
+  }
+
+  @Test def sqrt(): Unit = {
+    // Special cases
+    assertExactEquals(-0.0, StrictMath.sqrt(-0.0))
+    assertExactEquals(0.0, StrictMath.sqrt(0.0))
+    assertTrue(StrictMath.sqrt(Double.NaN).isNaN)
+    assertExactEquals(Double.PositiveInfinity, StrictMath.sqrt(Double.PositiveInfinity))
+    assertTrue(StrictMath.sqrt(Double.NegativeInfinity).isNaN)
+    assertTrue(StrictMath.sqrt(-1.0).isNaN) // sqrt(-ve) = NaN
+
+    StrictMathSqrt.data.foreach { case (expectedHex, inputHex) =>
+      val expected = JDouble.parseDouble(expectedHex)
+      val input = JDouble.parseDouble(inputHex)
+      val actual = StrictMath.sqrt(input)
+      // Bionic uses 1 ULP tolerance, but it passes with 0 ULP
+      // https://android.googlesource.com/platform/bionic/+/refs/heads/main/tests/math_test.cpp#2219
+      assertExactEquals(s"sqrt($inputHex)", expected, actual)
+    }
+  }
+
+  @Test def pow(): Unit = {
+    // Special cases
+    // assertTrue(StrictMath.pow(Double.NaN, 3.0).isNaN)
+    // assertTrue(StrictMath.pow(1.0, Double.NaN).isNaN)
+    // assertTrue(StrictMath.pow(Double.NaN, Double.NaN).isNaN)
+
+    def parseDouble(str: String): Double = {
+      if (str == "HUGE_VAL") Double.PositiveInfinity
+      else if (str == "-HUGE_VAL") Double.NegativeInfinity
+      else JDouble.parseDouble(str)
+    }
+
+    StrictMathPow.data.foreach { case (expectedHex, x, y) =>
+      val expected = parseDouble(expectedHex)
+      val actual = StrictMath.pow(parseDouble(x), parseDouble(y))
+      // Bionic uses 1 ULP tolerance
+      // https://android.googlesource.com/platform/bionic/+/refs/heads/main/tests/math_test.cpp#2109
+      val ulp = Math.ulp(expected)
+      assertEquals(s"pow($x, $y)", expected, actual, ulp)
+    }
   }
 }
