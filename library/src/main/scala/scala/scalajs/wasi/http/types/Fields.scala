@@ -35,7 +35,7 @@ trait Fields {
 
   // entries: func() -> list<tuple<field-name,field-value>>;
   @ComponentResourceMethod("entries")
-  def entries(): Array[(FieldName, FieldValue)] = cm.native
+  def entries(): Array[cm.Tuple2[FieldName, FieldValue]] = cm.native
 
   // clone: func() -> fields;
   @ComponentResourceMethod("clone")
@@ -46,5 +46,5 @@ object Fields {
   def apply(): Fields = cm.native
 
   @ComponentResourceStaticMethod("from-list")
-  def fromList(entries: Array[(FieldName, FieldValue)]): Fields = cm.native
+  def fromList(entries: Array[cm.Tuple2[FieldName, FieldValue]]): Fields = cm.native
 }

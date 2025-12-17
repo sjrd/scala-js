@@ -94,8 +94,7 @@ object ScalaJSToCABI {
         fb += wa.I32Store()
 
       case wit.TupleType(fields) =>
-        val className = ClassName("scala.Tuple" + fields.size)
-        val isSpecialized = fields.size <= 2
+        val className = ClassName("scala.scalajs.component.Tuple" + fields.size)
         val ptr = fb.addLocal(NoOriginalName, watpe.Int32)
         val tuple = fb.addLocal(NoOriginalName, watpe.RefType.nullable(genTypeID.forClass(className)))
         fb += wa.RefCast(watpe.RefType.nullable(genTypeID.forClass(className)))
@@ -105,16 +104,11 @@ object ScalaJSToCABI {
         for ((f, i) <- fields.zipWithIndex) {
           genAlignTo(fb, wit.alignment(f), ptr)
           fb += wa.LocalGet(ptr)
-          if (isSpecialized) {
-            val methodName = MethodName(s"_${i + 1}", Nil, ClassRef(ObjectClass))
-            genVTableDispatch(fb, className, methodName, tuple)
-          } else {
-            fb += wa.LocalGet(tuple)
-            fb += wa.StructGet(
-              genTypeID.forClass(className),
-              genFieldID.forClassInstanceField(FieldName(className, SimpleFieldName(s"_${i + 1}")))
-            )
-          }
+          fb += wa.LocalGet(tuple)
+          fb += wa.StructGet(
+            genTypeID.forClass(className),
+            genFieldID.forClassInstanceField(FieldName(className, SimpleFieldName(s"_${i + 1}")))
+          )
           f.toIRType() match {
             case t: PrimTypeWithRef => genUnbox(fb, t)
             case _ =>
@@ -240,22 +234,16 @@ object ScalaJSToCABI {
       case wit.FlagsType(_) =>
 
       case wit.TupleType(fields) =>
-        val className = ClassName("scala.Tuple" + fields.size)
+        val className = ClassName("scala.scalajs.component.Tuple" + fields.size)
         val tuple = fb.addLocal(NoOriginalName, watpe.RefType.nullable(genTypeID.forClass(className)))
-        val isSpecialized = fields.size <= 2
         fb += wa.RefCast(watpe.RefType.nullable(genTypeID.forClass(className)))
         fb += wa.LocalSet(tuple)
         for ((f, i) <- fields.zipWithIndex) {
-          if (isSpecialized) {
-            val methodName = MethodName(s"_${i + 1}", Nil, ClassRef(ObjectClass))
-            genVTableDispatch(fb, className, methodName, tuple)
-          } else {
-            fb += wa.LocalGet(tuple)
-            fb += wa.StructGet(
-              genTypeID.forClass(className),
-              genFieldID.forClassInstanceField(FieldName(className, SimpleFieldName(s"_${i + 1}")))
-            )
-          }
+          fb += wa.LocalGet(tuple)
+          fb += wa.StructGet(
+            genTypeID.forClass(className),
+            genFieldID.forClassInstanceField(FieldName(className, SimpleFieldName(s"_${i + 1}")))
+          )
           f.toIRType() match {
             case t: PrimTypeWithRef => genUnbox(fb, t)
             case _ =>

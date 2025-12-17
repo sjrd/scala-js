@@ -729,9 +729,13 @@ object Infos {
           resultType.foreach { t => generateForWIT(t) }
 
         case wit.TupleType(fields) =>
-          val className = ClassName("scala.Tuple" + fields.size)
+          val className = ClassName("scala.scalajs.component.Tuple" + fields.size)
           val ctorID = MethodName.constructor(List.fill(fields.size)(ClassRef(ObjectClass)))
           builder.addInstantiatedClass(className, ctorID)
+          // Add field reads for each tuple field
+          for (i <- 1 to fields.size) {
+            builder.addFieldRead(FieldName(className, SimpleFieldName(s"_$i")))
+          }
           for (f <- fields) generateForWIT(f)
 
         case wit.RecordType(className, fields) =>

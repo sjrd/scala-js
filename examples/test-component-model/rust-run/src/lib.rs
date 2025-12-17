@@ -95,6 +95,9 @@ impl Run for Component {
 
       assert_eq!(roundtrip_flags((F1::B0 | F1::B7, F1::B3)), (F1::B0 | F1::B7, F1::B3));
 
+      assert_eq!(roundtrip_tuple2((111, "hello")), (111, "hello".to_string()));
+      assert_eq!(roundtrip_tuple3((111, "hello", false)), (111, "hello".to_string(), false));
+
       return Ok(());
     }
 }
