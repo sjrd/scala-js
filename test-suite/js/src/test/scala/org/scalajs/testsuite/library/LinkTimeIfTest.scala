@@ -80,13 +80,13 @@ class LinkTimeIfTest {
 
   @Test def exponentOp(): Unit = {
     def pow(x: Double, y: Double): Double = {
-      linkTimeIf(esVersion >= ESVersion.ES2016) {
+      linkTimeIf(esVersion >= ESVersion.ES2016 && !targetPureWasm) {
         assertTrue("Took the wrong branch of linkTimeIf when linking for ES 2016+",
-            esVersion >= ESVersion.ES2016)
+            esVersion >= ESVersion.ES2016 && !targetPureWasm)
         (x.asInstanceOf[js.Dynamic] ** y.asInstanceOf[js.Dynamic]).asInstanceOf[Double]
       } {
         assertFalse("Took the wrong branch of linkTimeIf when linking for ES 2015-",
-            esVersion >= ESVersion.ES2016)
+            esVersion >= ESVersion.ES2016 && !targetPureWasm)
         Math.pow(x, y)
       }
     }

@@ -2321,7 +2321,6 @@ object Build {
 
                 // javalib/util
                 !endsWith(f, "/FormatterTest.scala") &&
-                !endsWith(f, "/RandomTest.scala") && // Math.sqrt
                 !endsWith(f, "/ArraysTest.scala") && // Arrays.deepEquals
                 !endsWith(f, "/IntConsumerTest.scala") && // Long#StringRadixInfos
                 !endsWith(f, "/DateTest.scala") && // js.Date
@@ -2339,7 +2338,7 @@ object Build {
                 endsWith(f, "/ModuleInitializersTest.scala") ||
                 endsWith(f, "/EqJSTest.scala") ||
                 // library
-                // endsWith(f, "/LinkTimeIfTest.scala") || Math.pow
+                endsWith(f, "/LinkTimeIfTest.scala") ||
                 endsWith(f, "/ReflectTest.scala")
               )
             )

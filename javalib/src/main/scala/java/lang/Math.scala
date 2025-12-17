@@ -306,28 +306,36 @@ object Math {
   }
 
   def cbrt(a: scala.Double): scala.Double = {
-    if (assumingES6 || !Utils.isUndefined(g.Math.cbrt)) {
-      js.Math.cbrt(a)
-    } else {
-      if (a == 0 || Double.isNaN(a) || Double.isInfinite(a)) {
-        a
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      cbrtImpl(a)
+    } {
+      if (assumingES6 || !Utils.isUndefined(g.Math.cbrt)) {
+        js.Math.cbrt(a)
       } else {
-        val sign = if (a < 0.0) -1.0 else 1.0
-        val value = sign * a
-
-        //Initial Approximation
-        var x = 0.0
-        var xi = pow(value, 0.3333333333333333)
-
-        //Halley's Method (http://metamerist.com/cbrt/cbrt.htm)
-        while (abs(x - xi) >= 1E-16) {
-          x = xi
-          val x3 = js.Math.pow(x, 3)
-          val x3Plusa = x3 + value
-          xi = x * (x3Plusa + value) / (x3Plusa + x3)
-        }
-        sign * xi
+        cbrtImpl(a)
       }
+    }
+  }
+
+  @inline private def cbrtImpl(a: scala.Double): scala.Double = {
+    if (a == 0 || Double.isNaN(a) || Double.isInfinite(a)) {
+      a
+    } else {
+      val sign = if (a < 0.0) -1.0 else 1.0
+      val value = sign * a
+
+      //Initial Approximation
+      var x = 0.0
+      var xi = pow(value, 0.3333333333333333)
+
+      //Halley's Method (http://metamerist.com/cbrt/cbrt.htm)
+      while (abs(x - xi) >= 1E-16) {
+        x = xi
+        val x3 = pow(x, 3)
+        val x3Plusa = x3 + value
+        xi = x * (x3Plusa + value) / (x3Plusa + x3)
+      }
+      sign * xi
     }
   }
 
@@ -496,25 +504,33 @@ object Math {
   }
 
   def hypot(a: scala.Double, b: scala.Double): scala.Double = {
-    if (assumingES6 || !Utils.isUndefined(g.Math.hypot)) {
-      js.Math.hypot(a, b)
-    } else {
-      // http://en.wikipedia.org/wiki/Hypot#Implementation
-      if (abs(a) == scala.Double.PositiveInfinity || abs(b) == scala.Double.PositiveInfinity)
-        scala.Double.PositiveInfinity
-      else if (Double.isNaN(a) || Double.isNaN(b))
-        scala.Double.NaN
-      else if (a == 0 && b == 0)
-        0.0
-      else {
-        //To Avoid Overflow and UnderFlow
-        // calculate |x| * sqrt(1 - (y/x)^2) instead of sqrt(x^2 + y^2)
-        val x = abs(a)
-        val y = abs(b)
-        val m = max(x, y)
-        val t = min(x, y) / m
-        m * sqrt(1 + t * t)
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      hypotImpl(a, b)
+    } {
+      if (assumingES6 || !Utils.isUndefined(g.Math.hypot)) {
+        js.Math.hypot(a, b)
+      } else {
+        hypotImpl(a, b)
       }
+    }
+  }
+
+  @inline private def hypotImpl(a: scala.Double, b: scala.Double): scala.Double = {
+    // http://en.wikipedia.org/wiki/Hypot#Implementation
+    if (abs(a) == scala.Double.PositiveInfinity || abs(b) == scala.Double.PositiveInfinity)
+      scala.Double.PositiveInfinity
+    else if (Double.isNaN(a) || Double.isNaN(b))
+      scala.Double.NaN
+    else if (a == 0 && b == 0)
+      0.0
+    else {
+      //To Avoid Overflow and UnderFlow
+      // calculate |x| * sqrt(1 - (y/x)^2) instead of sqrt(x^2 + y^2)
+      val x = abs(a)
+      val y = abs(b)
+      val m = max(x, y)
+      val t = min(x, y) / m
+      m * sqrt(1 + t * t)
     }
   }
 
