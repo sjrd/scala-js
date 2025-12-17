@@ -162,8 +162,6 @@ class MathTest {
 
 
   @Test def cbrt(): Unit = {
-    assumeFalse(executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertSameDouble(-0.0, Math.cbrt(-0.0))
     assertSameDouble(0.0, Math.cbrt(0.0))
     assertEquals(3.0, Math.cbrt(27.0), 0.0)
@@ -174,7 +172,6 @@ class MathTest {
     assertTrue(Math.cbrt(Double.NaN).isNaN)
     assertSameDouble(Double.PositiveInfinity, Math.cbrt(Double.PositiveInfinity))
     assertSameDouble(Double.NegativeInfinity, Math.cbrt(Double.NegativeInfinity))
-    } {}
   }
 
   @Test def log1p(): Unit = {
@@ -419,8 +416,6 @@ class MathTest {
   }
 
   @Test def hypot(): Unit = {
-    assumeFalse(executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
     assertEquals(0.0, Math.hypot(0.0, 0.0), 0.01)
     assertEquals(5.0, Math.hypot(3.0, 4.0), 0.01)
     assertTrue(Math.hypot(3.0, Double.NaN).isNaN)
@@ -432,7 +427,6 @@ class MathTest {
     assertSameDouble(0.0, Math.hypot(-0.0, -0.0))
     assertSameDouble(0.0, Math.hypot(0.0, -0.0))
     assertSameDouble(0.0, Math.hypot(-0.0, 0.0))
-    } {}
   }
 
   @Test def expm1(): Unit = {
