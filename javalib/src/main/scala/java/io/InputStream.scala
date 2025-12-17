@@ -20,8 +20,7 @@ abstract class InputStream extends Closeable {
   def read(b: Array[Byte]): Int = read(b, 0, b.length)
 
   def read(b: Array[Byte], off: Int, len: Int): Int = {
-    if (off < 0 || len < 0 || len > b.length - off)
-      throw new IndexOutOfBoundsException
+    BoundsChecks.checkOffsetCount(off, len, b.length)
 
     if (len == 0) 0
     else {
@@ -93,8 +92,7 @@ abstract class InputStream extends Closeable {
   }
 
   def readNBytes(b: Array[Byte], off: Int, len: Int): Int = {
-    if (off < 0 || len < 0 || len > b.length - off)
-      throw new IndexOutOfBoundsException
+    BoundsChecks.checkOffsetCount(off, len, b.length)
 
     var bytesRead = 0
     var lastRead = 0
@@ -119,7 +117,8 @@ abstract class InputStream extends Closeable {
     var remaining = n
     while (remaining > 0) {
       val skipped = skip(remaining)
-      if (skipped < 0 || skipped > remaining) {
+      // skipped < 0 || skipped > remaining, manually optimized based on `remaining > 0`
+      if (java.lang.Long.unsigned_>(skipped, remaining)) {
         throw new IOException
       } else if (skipped == 0) {
         if (read() == -1)

@@ -218,7 +218,7 @@ final class _String private () // scalastyle:ignore
 
   def getChars(srcBegin: Int, srcEnd: Int, dst: Array[Char],
       dstBegin: Int): Unit = {
-    if (srcEnd > length() || srcBegin < 0 || srcEnd < 0 || srcBegin > srcEnd)
+    if (BoundsChecks.isSrcDestStartEndInvalid(srcBegin, srcEnd, length(), dstBegin, dst.length))
       throw new StringIndexOutOfBoundsException("Index out of Bound")
 
     val offset = dstBegin - srcBegin
@@ -257,8 +257,7 @@ final class _String private () // scalastyle:ignore
     lastIndexOf(Character.toString(ch))
 
   def lastIndexOf(ch: Int, fromIndex: Int): Int =
-    if (fromIndex < 0) -1
-    else lastIndexOf(Character.toString(ch), fromIndex)
+    lastIndexOf(Character.toString(ch), fromIndex)
 
   @inline
   def lastIndexOf(str: String): Int =
@@ -375,7 +374,7 @@ final class _String private () // scalastyle:ignore
   @inline
   def substring(beginIndex: Int): String = {
     // Bounds check
-    if (beginIndex < 0 || beginIndex > length())
+    if (BoundsChecks.isStartInvalid(beginIndex, length()))
       charAt(beginIndex)
 
     thisString.jsSubstring(beginIndex)
@@ -385,12 +384,13 @@ final class _String private () // scalastyle:ignore
   @inline
   def substring(beginIndex: Int, endIndex: Int): String = {
     // Bounds check
-    if (beginIndex < 0)
-      charAt(beginIndex)
-    if (endIndex > length())
+    if (BoundsChecks.isStartEndInvalid(beginIndex, endIndex, length())) {
+      if (beginIndex < 0)
+        charAt(beginIndex)
+      if (endIndex < beginIndex)
+        charAt(-1)
       charAt(endIndex)
-    if (endIndex < beginIndex)
-      charAt(-1)
+    }
 
     thisString.jsSubstring(beginIndex, endIndex)
   }
@@ -967,10 +967,10 @@ object _String { // scalastyle:ignore
     `new`(value, 0, value.length)
 
   def `new`(value: Array[Char], offset: Int, count: Int): String = {
-    val end = offset + count
-    if (offset < 0 || end < offset || end > value.length)
+    if (BoundsChecks.isOffsetCountInvalid(offset, count, value.length))
       throw new StringIndexOutOfBoundsException
 
+    val end = offset + count
     var result = ""
     var i = offset
     while (i != end) {
@@ -1003,10 +1003,10 @@ object _String { // scalastyle:ignore
   }
 
   def `new`(codePoints: Array[Int], offset: Int, count: Int): String = {
-    val end = offset + count
-    if (offset < 0 || end < offset || end > codePoints.length)
+    if (BoundsChecks.isOffsetCountInvalid(offset, count, codePoints.length))
       throw new StringIndexOutOfBoundsException
 
+    val end = offset + count
     var result = ""
     var i = offset
     while (i != end) {
