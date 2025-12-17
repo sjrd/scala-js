@@ -42,8 +42,7 @@ class CharArrayWriter(initialSize: Int)  extends Writer {
   override def toString(): String = new String(this.buf, 0, this.count)
 
   override def write(c: Array[Char], offset: Int, len: Int): Unit = {
-    if (offset < 0 || offset > c.length || len < 0 || len > c.length - offset)
-      throw new IndexOutOfBoundsException
+    Utils.checkOffsetCount(offset, len, c.length)
 
     ensureCapacity(len)
     System.arraycopy(c, offset, this.buf, this.count, len)
@@ -57,8 +56,7 @@ class CharArrayWriter(initialSize: Int)  extends Writer {
   }
 
   override def write(str: String, offset: Int, len: Int): Unit = {
-    if (offset < 0 || offset > str.length || len < 0 || len > str.length - offset)
-      throw new StringIndexOutOfBoundsException
+    Utils.checkOffsetCount(offset, len, str.length())
 
     ensureCapacity(len)
     str.getChars(offset, offset + len, this.buf, this.count)

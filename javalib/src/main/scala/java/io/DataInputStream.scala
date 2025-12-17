@@ -47,8 +47,7 @@ class DataInputStream(in: InputStream) extends FilterInputStream(in)
   def readFully(b: Array[Byte]): Unit = readFully(b, 0, b.length)
 
   def readFully(b: Array[Byte], off: Int, len: Int): Unit = {
-    if (off < 0 || len < 0 || off + len > b.length)
-      throw new IndexOutOfBoundsException()
+    Utils.checkOffsetCount(off, len, b.length)
 
     var remaining = len
     var offset = off

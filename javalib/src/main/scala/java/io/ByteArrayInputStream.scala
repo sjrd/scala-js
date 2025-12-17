@@ -33,8 +33,7 @@ class ByteArrayInputStream(
   }
 
   override def read(b: Array[Byte], off: Int, reqLen: Int): Int = {
-    if (off < 0 || reqLen < 0 || reqLen > b.length - off)
-      throw new IndexOutOfBoundsException
+    Utils.checkOffsetCount(off, reqLen, b.length)
 
     if (pos == count) {
       /* There is nothing left to read.

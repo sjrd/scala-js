@@ -296,9 +296,7 @@ object Character {
 
   @inline
   private[lang] def codePointCountImpl(seq: CharSequence, beginIndex: Int, endIndex: Int): Int = {
-    // Bounds check (and implicit null check)
-    if (endIndex > seq.length() || beginIndex < 0 || endIndex < beginIndex)
-      throw new IndexOutOfBoundsException()
+    Utils.checkStartEnd(beginIndex, endIndex, seq.length())
 
     var res = endIndex - beginIndex
     var i = beginIndex
@@ -334,7 +332,7 @@ object Character {
     val len = seq.length() // implicit null check
 
     // Bounds check
-    if (index < 0 || index > len)
+    if (Utils.isStartInvalid(index, len))
       throw new IndexOutOfBoundsException()
 
     offsetByCodePointsInternal(seq, start = 0, limit = len, index, codePointOffset)
@@ -458,7 +456,7 @@ object Character {
 
   // ported from https://github.com/gwtproject/gwt/blob/master/user/super/com/google/gwt/emul/java/lang/Character.java
   def forDigit(digit: Int, radix: Int): Char = {
-    if (radix < MIN_RADIX || radix > MAX_RADIX || digit < 0 || digit >= radix) {
+    if ((radix < MIN_RADIX || radix > MAX_RADIX) || Integer.unsigned_>=(digit, radix)) {
       0
     } else {
       val overBaseTen = digit - 10
