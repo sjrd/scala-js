@@ -69,8 +69,8 @@ object Countable {
 import TestImportsHelper._
 object Tests {
   @ComponentImport("component:testing/tests", "roundtrip-basics1")
-  def roundtripBasics1(a: (UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char)):
-      (UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char) = cm.native
+  def roundtripBasics1(a: cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char]):
+      cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char] = cm.native
 
   @ComponentImport("component:testing/tests", "roundtrip-list-u16")
   def roundtripListU16(a: Array[UShort]): Array[UShort] = cm.native
@@ -100,7 +100,7 @@ object Tests {
   def roundtripEnum(a: E1): E1 = cm.native
 
   @ComponentImport("component:testing/tests", "roundtrip-tuple")
-  def roundtripTuple(a: (C1, Z1)): (C1, Z1) = cm.native
+  def roundtripTuple(a: cm.Tuple2[C1, Z1]): cm.Tuple2[C1, Z1] = cm.native
 
   @ComponentImport("component:testing/tests", "roundtrip-option")
   def roundtripOption(a: Optional[String]): Optional[String] = cm.native
@@ -121,5 +121,11 @@ object Tests {
   def roundtripF8(a: F1): F1 = cm.native
 
   @ComponentImport("component:testing/tests", "roundtrip-flags")
-  def roundtripFlags(a: (F1, F1)): (F1, F1) = cm.native
+  def roundtripFlags(a: cm.Tuple2[F1, F1]): cm.Tuple2[F1, F1] = cm.native
+
+  @ComponentImport("component:testing/tests", "roundtrip-tuple2")
+  def roundtripTuple2(a: cm.Tuple2[Int, String]): cm.Tuple2[Int, String] = cm.native
+
+  @ComponentImport("component:testing/tests", "roundtrip-tuple3")
+  def roundtripTuple3(a: cm.Tuple3[Int, String, Boolean]): cm.Tuple3[Int, String, Boolean] = cm.native
 }

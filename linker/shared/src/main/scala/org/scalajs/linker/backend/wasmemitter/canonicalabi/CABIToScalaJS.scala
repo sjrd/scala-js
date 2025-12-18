@@ -119,8 +119,8 @@ object CABIToScalaJS {
         // genAlignTo(fb, wit.alignment(tpe), ptr)
 
       case wit.TupleType(fields) =>
-        val ctor = MethodName.constructor(fields.map(_ => ClassRef(ObjectClass)))
-        val className = ClassName("scala.Tuple" + fields.size)
+        val ctor = MethodName.constructor(List.fill(fields.size)(ClassRef(ObjectClass)))
+        val className = ClassName("scala.scalajs.component.Tuple" + fields.size)
         val ptr = fb.addLocal(NoOriginalName, watpe.Int32)
         fb += wa.LocalSet(ptr)
         genNewScalaClass(fb, className, ctor) {
@@ -220,8 +220,8 @@ object CABIToScalaJS {
         vi.next(watpe.Int32)
 
       case wit.TupleType(fields) =>
-        val ctor = MethodName.constructor(fields.map(_ => ClassRef(ObjectClass)))
-        val className = ClassName("scala.Tuple" + fields.size)
+        val ctor = MethodName.constructor(List.fill(fields.size)(ClassRef(ObjectClass)))
+        val className = ClassName("scala.scalajs.component.Tuple" + fields.size)
         genNewScalaClass(fb, className, ctor) {
           for (f <- fields) {
             val fieldType = Flatten.flattenType(f)

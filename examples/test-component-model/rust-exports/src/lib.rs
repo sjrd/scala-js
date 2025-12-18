@@ -100,6 +100,8 @@ impl Tests for Component {
   fn roundtrip_f16(a: F2) -> F2 { a }
   fn roundtrip_f32(a: F3) -> F3 { a }
   fn roundtrip_flags(a: (F1, F1)) -> (F1, F1) { a }
+  fn roundtrip_tuple2(a: (i32, String)) -> (i32, String) { a }
+  fn roundtrip_tuple3(a: (i32, String, bool)) -> (i32, String, bool) { a }
 }
 
 bindings::export!(Component with_types_in bindings);

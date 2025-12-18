@@ -48,6 +48,9 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
   def isWasmComponentRecordClass(sym: Symbol): Boolean =
     sym.hasAnnotation(ComponentRecordAnnotation) && sym.isFinal
 
+  def isWasmComponentTupleClass(sym: Symbol): Boolean =
+    sym.fullName.startsWith("scala.scalajs.component.Tuple")
+
   def isWasmComponentFlags(sym: Symbol): Boolean =
     sym.hasAnnotation(ComponentFlagsAnnotation)
 
@@ -228,7 +231,7 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
       primitiveIRWIT.get(toIRType(tpe.dealiasWiden))
     }.getOrElse {
       tpe.dealiasWiden.typeSymbol match {
-        case tsym if tsym.fullName.startsWith("scala.Tuple") =>
+        case tsym if isWasmComponentTupleClass(tsym) =>
           wit.TupleType(tpe.typeArgs.map(toWIT(_)))
 
         case tsym if isWasmComponentRecordClass(tsym) =>

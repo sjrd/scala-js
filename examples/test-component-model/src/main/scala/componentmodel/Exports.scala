@@ -10,8 +10,8 @@ import java.util.Optional
 
 object TestsExport {
   @ComponentExport("component:testing/tests", "roundtrip-basics1")
-  def roundtripBasics1(a: (UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char)):
-      (UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char) = a
+  def roundtripBasics1(a: cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char]):
+      cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char] = a
 
   @ComponentExport("component:testing/tests", "roundtrip-list-u16")
   def roundtripListU16(a: Array[UShort]): Array[UShort] = a
@@ -41,7 +41,7 @@ object TestsExport {
   def roundtripEnum(a: E1): E1 = a
 
   @ComponentExport("component:testing/tests", "roundtrip-tuple")
-  def roundtripTuple(a: (C1, Z1)): (C1, Z1) = a
+  def roundtripTuple(a: cm.Tuple2[C1, Z1]): cm.Tuple2[C1, Z1] = a
 
   @ComponentExport("component:testing/tests", "roundtrip-option")
   def roundtripOption(a: Optional[String]): Optional[String] = a
@@ -69,7 +69,13 @@ object TestsExport {
   def roundtripF32(a: F3): F3 = a
 
   @ComponentExport("component:testing/tests", "roundtrip-flags")
-  def roundtripFlags(a: (F1, F1)): (F1, F1) = a
+  def roundtripFlags(a: cm.Tuple2[F1, F1]): cm.Tuple2[F1, F1] = a
+
+  @ComponentExport("component:testing/tests", "roundtrip-tuple2")
+  def roundtripTuple2(a: cm.Tuple2[Int, String]): cm.Tuple2[Int, String] = a
+
+  @ComponentExport("component:testing/tests", "roundtrip-tuple3")
+  def roundtripTuple3(a: cm.Tuple3[Int, String, Boolean]): cm.Tuple3[Int, String, Boolean] = a
 }
 
 object TestImports {
@@ -93,10 +99,17 @@ object TestImports {
 
     assert('a' == roundtripChar('a'))
 
-    assert(
-      (127, 127, 32767, 32767, 532423, 2147483647, 0.0f, 0.0, 'x') ==
-      roundtripBasics1((127, 127, 32767, 32767, 532423, 2147483647, 0.0f, 0.0, 'x'))
-    )
+    val basics1Input = (127.asInstanceOf[UByte], 127.toByte, 32767.asInstanceOf[UShort], 32767.toShort, 532423, 2147483647, 0.0f, 0.0, 'x')
+    val basics1Result = roundtripBasics1(basics1Input)
+    assert(basics1Result._1 == 127)
+    assert(basics1Result._2 == 127)
+    assert(basics1Result._3 == 32767)
+    assert(basics1Result._4 == 32767)
+    assert(basics1Result._5 == 532423)
+    assert(basics1Result._6 == 2147483647)
+    assert(basics1Result._7 == 0.0f)
+    assert(basics1Result._8 == 0.0)
+    assert(basics1Result._9 == 'x')
 
     val arr = Array[UShort](0, 1, 2)
     assert(arr.sameElements(roundtripListU16(arr)))
@@ -122,10 +135,14 @@ object TestImports {
     assert(E1.B == roundtripEnum(E1.B))
     assert(E1.C == roundtripEnum(E1.C))
 
-    assert((C1.A(5), Z1.A(500)) == roundtripTuple((C1.A(5), Z1.A(500))))
-    assert((C1.B(200.0f), Z1.B) == roundtripTuple((C1.B(200.0f), Z1.B)))
-    assert(C1.A(4) == roundtripTuple(C1.A(4), Z1.B)._1)
-    assert(Z1.B == roundtripTuple(C1.A(4), Z1.B)._2)
+    val tupleResult1: (C1, Z1) = roundtripTuple((C1.A(5), Z1.A(500)))
+    assert(tupleResult1 == (C1.A(5), Z1.A(500)))
+
+    val tupleResult2: (C1, Z1) = roundtripTuple((C1.B(200.0f), Z1.B))
+    assert(tupleResult2 == (C1.B(200.0f), Z1.B))
+
+    val tupleResult3: (C1, Z1) = roundtripTuple((C1.A(4), Z1.B))
+    assert(tupleResult3 == (C1.A(4), Z1.B))
 
     assert(Optional.of("ok") == roundtripOption(Optional.of("ok")))
     assert(Optional.empty == roundtripOption(Optional.empty[String]))
@@ -147,10 +164,16 @@ object TestImports {
     import TestImportsHelper._
     assert((F1.b3 | F1.b6 | F1.b7) == roundtripF8(F1.b3 | F1.b6 | F1.b7))
 
-    assert(
-      (F1.b3 | F1.b6, F1.b2 | F1.b3 | F1.b7) ==
-      roundtripFlags((F1.b3 | F1.b6, F1.b2 | F1.b3 | F1.b7))
-    )
+    val flagsTuple = new cm.Tuple2(F1.b3 | F1.b6, F1.b2 | F1.b3 | F1.b7)
+    val flagsResult = roundtripFlags(flagsTuple)
+    assert(flagsResult._1 == (F1.b3 | F1.b6))
+    assert(flagsResult._2 == (F1.b2 | F1.b3 | F1.b7))
+
+    val result2: (Int, String) = roundtripTuple2((42, "hello"))
+    assert(result2 == (123, "world"))
+
+    val result3: (Int, String, Boolean) = roundtripTuple3((123, "world", true))
+    assert(result3 == (123, "world", true))
 
     locally {
       val c1 = Counter(0)
