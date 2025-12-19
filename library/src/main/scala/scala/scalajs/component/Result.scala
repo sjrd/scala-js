@@ -1,11 +1,19 @@
+/*
+ * Scala.js (https://www.scala-js.org/)
+ *
+ * Copyright EPFL.
+ *
+ * Licensed under Apache License 2.0
+ * (https://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.scalajs.component
 
-sealed trait Result[+A, +B] extends Variant
-final class Ok[A](val value: A) extends Result[A, Nothing] {
-  type T = A
-  val _index: Int = 0
-}
-final class Err[B](val value: B) extends Result[Nothing, B] {
-  type T = B
-  val _index: Int = 1
-}
+sealed trait Result[+A, +B]
+
+final case class Ok[A](val value: A) extends Result[A, Nothing]
+
+final case class Err[B](val value: B) extends Result[Nothing, B]

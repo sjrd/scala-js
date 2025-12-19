@@ -149,16 +149,13 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
       }
     }
 
-    lazy val ComponentVariantClass = getRequiredClass("scala.scalajs.component.Variant")
-
     private def transformMemberDef(tree: MemberDef): Tree = {
       val sym = moduleToModuleClass(tree.symbol)
 
       checkInternalAnnotations(sym)
 
-      val isComponentVariantCase = sym.isSubClass(ComponentVariantClass) && sym.isConcreteClass
-      if (isComponentVariantCase)
-        checkComponentVariant(sym)
+      if (sym.hasAnnotation(ComponentVariantAnnotation))
+        checkComponentVariantTrait(tree.pos, sym)
       if (sym.hasAnnotation(ComponentRecordAnnotation))
         checkComponentRecord(sym)
 
@@ -837,11 +834,104 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
       } // what else?
     }
 
-    private def checkComponentVariant(sym: Symbol): Unit = {
-      // assert(sym.isSubClass(ComponentVariantClass) && sym.isConcreteClass)
-      val valueTypeMember = sym.info.memberBasedOnName(newTypeName("T"), 0)
-      if (valueTypeMember.exists)
-        jsInterop.storeComponentVariantValueType(sym, valueTypeMember.info)
+    /** Validates a @ComponentVariant annotated sealed trait and its cases. */
+    private def checkComponentVariantTrait(pos: Position, sym: Symbol): Unit = {
+      if (!sym.isSealed) {
+        reporter.error(pos,
+          "@ComponentVariant can only be used on sealed traits or sealed abstract classes")
+        return
+      }
+
+      val cases = sym.sealedChildren.toList
+      if (cases.isEmpty) {
+        reporter.error(pos,
+          s"Component variant '${sym.name}' must have at least one case")
+      } else {
+        cases.foreach { caseSym =>
+          validateComponentVariantCase(caseSym)
+        }
+      }
+    }
+
+    private def validateComponentVariantCase(caseSym: Symbol): Unit = {
+      if (!caseSym.isCaseClass && !caseSym.isModuleClass) {
+        reporter.error(caseSym.pos,
+          s"Component variant case '${caseSym.name}' must be a case class or case object")
+      } else if (caseSym.isCaseClass) {
+        val primaryCtor = caseSym.primaryConstructor
+        if (primaryCtor == NoSymbol) {
+          reporter.error(caseSym.pos,
+            s"Component variant case '${caseSym.name}' has no primary constructor")
+          return
+        }
+
+        val params = primaryCtor.paramss.flatten
+
+        if (params.length > 1) {
+          reporter.error(caseSym.pos,
+            s"Component variant case '${caseSym.name}' must have exactly one field, found ${params.length}.")
+        } else if (params.length == 1) {
+          val param = params.head
+          val fieldName = param.name.decoded
+          val fieldType = param.tpe
+
+          // Validate field name must be "value"
+          if (fieldName != "value") {
+            reporter.error(param.pos,
+              s"Component variant case '${caseSym.name}' field must be named 'value', found '${fieldName}'.")
+          } else if (!isComponentModelCompatible(fieldType)) {
+            reporter.error(param.pos,
+              s"Field '${param.name}' has type '${fieldType}' which is not compatible with Component Model. ")
+          } else {
+            jsInterop.storeComponentVariantValueType(caseSym, fieldType)
+          }
+        } else { // case object
+          jsInterop.storeComponentVariantValueType(caseSym, definitions.UnitTpe)
+        }
+      } else { // not a case class or case object
+        reporter.error(caseSym.pos,
+          s"Component variant case '${caseSym.name}' must be a case class or case object")
+      }
+    }
+
+    /** Checks if a type is compatible with Component Model. */
+    private def isComponentModelCompatible(tpe: Type): Boolean = {
+      import definitions._
+
+      val dealiased = tpe.dealiasWiden
+      val sym = dealiased.typeSymbol
+      val fullName = sym.fullName
+
+      // Check primitives
+      if (sym == ByteClass || sym == ShortClass || sym == IntClass || sym == LongClass ||
+          sym == FloatClass || sym == DoubleClass || sym == CharClass || sym == BooleanClass) {
+        true
+      } else if (sym.fullName == "java.lang.String") {
+        true
+      } else if (
+          // Check unsigned types (they're type aliases, so check by full name)
+          fullName == "scala.scalajs.component.unsigned.UByte" ||
+          fullName == "scala.scalajs.component.unsigned.UShort" ||
+          fullName == "scala.scalajs.component.unsigned.UInt" ||
+          fullName == "scala.scalajs.component.unsigned.ULong") {
+        true
+      } else if (sym.fullName == "scala.Array") {
+        dealiased.typeArgs.headOption.forall(isComponentModelCompatible)
+      } else if (sym.fullName == "java.util.Optional") {
+        dealiased.typeArgs.headOption.forall(isComponentModelCompatible)
+      } else if (sym.fullName.startsWith("scala.scalajs.component.Tuple")) {
+        dealiased.typeArgs.forall(isComponentModelCompatible)
+      } else if (sym.fullName.startsWith("scala.scalajs.component.Result")) {
+        dealiased.typeArgs.forall(isComponentModelCompatible)
+      } else if (
+          sym.hasAnnotation(ComponentRecordAnnotation) ||
+          sym.hasAnnotation(ComponentVariantAnnotation) ||
+          sym.hasAnnotation(ComponentFlagsAnnotation) ||
+          sym.hasAnnotation(ComponentResourceImportAnnotation)) {
+        true
+      } else {
+        false
+      }
     }
 
     private def checkComponentRecord(sym: Symbol): Unit = {

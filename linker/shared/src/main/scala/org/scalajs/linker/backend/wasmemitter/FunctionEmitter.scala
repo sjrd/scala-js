@@ -612,7 +612,7 @@ private class FunctionEmitter private (
        * synthesize a fake result.
        */
       if (expectedType != VoidType && expectedType != NothingType)
-        fb += SWasmGen.genZeroOf(expectedType)
+        fb ++= SWasmGen.genZeroOf(expectedType)
     }
 
     currentExceptionHandler = null
@@ -751,8 +751,6 @@ private class FunctionEmitter private (
     (generatedType, expectedType) match {
       case _ if generatedType == expectedType =>
         ()
-      case (ClassType(className, _), IntType) if ctx.getClassInfo(className).isWasmComponentResource =>
-        ()
       case (NothingType, _) =>
         ()
       case (_, VoidType) =>
@@ -788,9 +786,6 @@ private class FunctionEmitter private (
              */
             fb += wa.Call(genFunctionID.box(primType.primRef))
         }
-
-      case (ClassType(className, _), _) if ctx.getClassInfo(className).isWasmComponentResource =>
-        fb += wa.Call(genFunctionID.box(IntRef))
 
       case (StringType | ClassType(BoxedStringClass, _), _) =>
         if (!targetPureWasm)
@@ -995,8 +990,8 @@ private class FunctionEmitter private (
           case AnyType | AnyNotNullType | ArrayType(_, _) =>
             ObjectClass
 
-          // WasmComponentResourceType should be compiled to WasmComponentFunctionApply in frontend
-          case tpe @ (_:ClosureType | _:RecordType) =>
+          // ComponentResourceType should be compiled to WasmComponentFunctionApply in frontend
+          case tpe @ (_:ClosureType | _:RecordType | ComponentResourceType(_)) =>
             throw new AssertionError(s"Invalid receiver type $tpe")
         }
         val receiverClassInfo = ctx.getClassInfo(receiverClassName)
@@ -2375,7 +2370,7 @@ private class FunctionEmitter private (
       case ArrayType(_, _) =>
         genWithDispatch(isAncestorOfHijackedClass = false)
 
-      case tpe @ (_:ClosureType | _:RecordType) =>
+      case tpe @ (_:ClosureType | _:RecordType | _:ComponentResourceType) =>
         throw new AssertionError(
             s"Invalid type ${tree.tpe} for String_+ at ${tree.pos}: $tree")
     }
@@ -2589,7 +2584,8 @@ private class FunctionEmitter private (
             }
         }
 
-      case AnyType | ClassType(_, true) | ArrayType(_, true) | _:ClosureType | _:RecordType =>
+      case AnyType | ClassType(_, true) | ArrayType(_, true) | _:ClosureType | _:RecordType |
+          _:ComponentResourceType =>
         throw new AssertionError(s"Illegal type in IsInstanceOf: $testType")
     }
 
@@ -2614,10 +2610,6 @@ private class FunctionEmitter private (
       case AnyType | ClassType(ObjectClass, true) =>
         // no-op
         ()
-
-      case ClassType(className, _)
-          if ctx.getClassInfo(className).isWasmComponentResource =>
-        fb += wa.Call(genFunctionID.unbox(IntRef))
 
       case ArrayType(arrayTypeRef, true) =>
         arrayTypeRef match {
@@ -2689,10 +2681,6 @@ private class FunctionEmitter private (
               // TODO Opt: We could do something better for things like double.asInstanceOf[int]
               genUnbox(targetTpe)
 
-            case ClassType(className, _)
-                if ctx.getClassInfo(className).isWasmComponentResource =>
-              fb += wa.Call(genFunctionID.unbox(IntRef))
-
             case _ =>
               targetWasmType match {
                 case watpe.RefType(targetNullable, watpe.HeapType.Any) =>
@@ -2737,7 +2725,7 @@ private class FunctionEmitter private (
           )
           fb += wa.Br(doneLabel)
         }
-        fb += genZeroOf(targetTpe)
+        fb ++= genZeroOf(targetTpe)
       }
     }
     targetTpe match {

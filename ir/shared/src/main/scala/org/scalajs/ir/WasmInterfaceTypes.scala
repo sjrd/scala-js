@@ -33,9 +33,6 @@ object WasmInterfaceTypes {
 
   sealed abstract class PrimValType extends FundamentalType
 
-  case object VoidType extends PrimValType {
-    def toIRType(): jstpe.Type = jstpe.VoidType
-  }
   case object BoolType extends PrimValType {
     def toIRType(): jstpe.Type = jstpe.BooleanType
   }
@@ -96,14 +93,14 @@ object WasmInterfaceTypes {
     def toIRType(): jstpe.Type = jstpe.ClassType(ClassName("scala.scalajs.component.Tuple" + ts.size), true)
   }
 
-  final case class CaseType(className: ClassName, tpe: ValType) {
+  final case class CaseType(className: ClassName, tpe: Option[ValType]) {
     def toIRType(): jstpe.Type = jstpe.ClassType(className, true)
   }
   final case class VariantType(className: ClassName, cases: List[CaseType]) extends FundamentalType {
     def toIRType(): jstpe.Type = jstpe.ClassType(className, true)
   }
 
-  final case class ResultType(ok: ValType, err: ValType) extends SpecializedType {
+  final case class ResultType(ok: Option[ValType], err: Option[ValType]) extends SpecializedType {
     def toIRType(): jstpe.Type = jstpe.ClassType(ComponentResultClass, true)
   }
 
@@ -118,7 +115,7 @@ object WasmInterfaceTypes {
   }
 
   final case class ResourceType(className: ClassName) extends FundamentalType {
-    def toIRType(): jstpe.Type = jstpe.IntType
+    def toIRType(): jstpe.Type = jstpe.ComponentResourceType(className)
   }
 
   // ExternTypes
@@ -127,7 +124,6 @@ object WasmInterfaceTypes {
   // utilities
 
   def toTypeRef(tpe: ValType): jstpe.TypeRef = tpe match {
-    case VoidType => jstpe.ClassRef(BoxedUnitClass)
     case BoolType => jstpe.BooleanRef
     case U8Type | S8Type => jstpe.ByteRef
     case U16Type | S16Type => jstpe.ShortRef
@@ -146,14 +142,14 @@ object WasmInterfaceTypes {
     case EnumType(labels) => ???
     case OptionType(tpe) => jstpe.ClassRef(ClassName("java.util.Optional"))
     case FlagsType(_) => jstpe.IntRef
-    case ResourceType(className) => jstpe.ClassRef(className)
+    case ResourceType(className) => jstpe.ComponentResourceTypeRef(className)
   }
 
-  def makeCtorName(tpe: ValType): MethodName = {
-    if (tpe == VoidType)
-      MethodName.constructor(Nil)
-    else
-      MethodName.constructor(List(toTypeRef(tpe)))
+  def makeCtorName(tpe: Option[ValType]): MethodName = {
+    tpe match {
+      case None => MethodName.constructor(Nil)
+      case Some(t) => MethodName.constructor(List(toTypeRef(t)))
+    }
   }
 
   /**
@@ -174,14 +170,14 @@ object WasmInterfaceTypes {
         )
 
       case EnumType(labels) =>
-        VariantType(???, labels.map(l => CaseType(???, VoidType)))
+        VariantType(???, labels.map(l => CaseType(???, None)))
 
       case OptionType(t) =>
         VariantType(
           juOptionalClass,
           List(
-            CaseType(juOptionalClass, VoidType),
-            CaseType(juOptionalClass, t)
+            CaseType(juOptionalClass, None),
+            CaseType(juOptionalClass, Some(t))
           )
         )
 
@@ -203,7 +199,6 @@ object WasmInterfaceTypes {
   }
   def elemSize(tpe: ValType): Int =
     despecialize(tpe) match {
-      case VoidType => 0
       case BoolType | U8Type | S8Type => 1
       case U16Type | S16Type => 2
       case U32Type | S32Type | F32Type => 4
@@ -236,7 +231,6 @@ object WasmInterfaceTypes {
 
   def alignment(tpe: ValType): Int =
     despecialize(tpe) match {
-      case VoidType => 1
       case BoolType | U8Type | S8Type => 1
       case U16Type | S16Type => 2
       case U32Type | S32Type | F32Type => 4
@@ -269,7 +263,7 @@ object WasmInterfaceTypes {
     ((ptr + alignment - 1) / alignment) * alignment
 
   def maxCaseAlignment(cases: List[CaseType]): Int =
-    cases.map(c => alignment(c.tpe)).max
+    cases.map(c => c.tpe.map(alignment).getOrElse(1)).max
 
   def discriminantType(cases: Seq[_]): PrimValType = {
     val n = cases.length

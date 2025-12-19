@@ -275,42 +275,24 @@ object TestImportsHelper {
 @ComponentRecord
 final case class Point(x: Int, y: Int)
 
-sealed trait C1 extends Variant
+@ComponentVariant
+sealed trait C1
 object C1 {
-  final case class A(value: Int) extends C1 {
-    type T = Int
-    val _index = 0
-  }
-  final case class B(value: Float) extends C1 {
-    type T = Float
-    val _index = 1
-  }
+  final case class A(value: Int) extends C1
+  final case class B(value: Float) extends C1
 }
 
-sealed trait Z1 extends Variant
+@ComponentVariant
+sealed trait Z1
 object Z1 {
-  final case class A(value: Int) extends Z1 {
-    type T = Int
-    val _index = 0
-  }
-  // if the field is typed Unit, there's no fields generated in SJSIR
-  // there's only a getter
-  final case object B extends Z1 {
-    type T = Unit
-    val value = ()
-    val _index = 1
-  }
+  final case class A(value: Int) extends Z1
+  final case object B extends Z1
 }
 
-sealed trait E1 extends cm.Enum
+@ComponentVariant
+sealed trait E1
 object E1 {
-  final case object A extends E1 {
-    val _index = 0
-  }
-  final case object B extends E1 {
-    val _index = 1
-  }
-  final case object C extends E1 {
-    val _index = 2
-  }
+  case object A extends E1
+  case object B extends E1
+  case object C extends E1
 }

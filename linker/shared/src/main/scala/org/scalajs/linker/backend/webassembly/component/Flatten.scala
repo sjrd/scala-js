@@ -72,7 +72,6 @@ object Flatten {
 
   def flattenType(tpe: wit.ValType): List[watpe.Type] =
     wit.despecialize(tpe) match {
-      case wit.VoidType => Nil
       case wit.BoolType => List(watpe.Int32)
       case wit.U8Type | wit.U16Type | wit.U32Type => List(watpe.Int32)
       case wit.S8Type | wit.S16Type | wit.S32Type => List(watpe.Int32)
@@ -97,8 +96,8 @@ object Flatten {
     private def flattenRecord(t: wit.RecordType): List[watpe.Type] =
       t.fields.flatMap(f => flattenType(f.tpe))
 
-    private def flattenVariant(t: wit.VariantType): List[watpe.Type] = {
-      val variantTypes = t.cases.collect { case wit.CaseType(_, tpe) => tpe }
+    def flattenVariant(t: wit.VariantType): List[watpe.Type] = {
+      val variantTypes = t.cases.flatMap { case wit.CaseType(_, tpe) => tpe }
       List(watpe.Int32) ++ flattenVariants(variantTypes)
     }
 

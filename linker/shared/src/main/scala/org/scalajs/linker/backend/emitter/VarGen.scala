@@ -233,6 +233,9 @@ private[emitter] final class VarGen(jsGen: JSGen, nameGen: NameGen,
       case ClassRef(className) =>
         implicit val classScope: Scope[ClassName] = Scope.ClassScope
         globalVar(field, className)
+
+      case ComponentResourceTypeRef(_) =>
+        throw new AssertionError(s"Unexpected component resource type in JS backend")
     }
   }
 
@@ -400,13 +403,15 @@ private[emitter] final class VarGen(jsGen: JSGen, nameGen: NameGen,
 
     implicit object NonArrayTypeRefScope extends Scope[NonArrayTypeRef] {
       def subField(x: NonArrayTypeRef): String = x match {
-        case ClassRef(className) => ClassScope.subField(className)
-        case x: PrimRef          => PrimRefScope.subField(x)
+        case ClassRef(className)        => ClassScope.subField(className)
+        case x: PrimRef                 => PrimRefScope.subField(x)
+        case _:ComponentResourceTypeRef => throw new AssertionError(s"Unexpected component resource type")
       }
 
       def reprClass(x: Types.NonArrayTypeRef): Names.ClassName = x match {
-        case ClassRef(className) => ClassScope.reprClass(className)
-        case x: PrimRef          => PrimRefScope.reprClass(x)
+        case ClassRef(className)        => ClassScope.reprClass(className)
+        case x: PrimRef                 => PrimRefScope.reprClass(x)
+        case _:ComponentResourceTypeRef => throw new AssertionError(s"Unexpected component resource type")
       }
     }
   }

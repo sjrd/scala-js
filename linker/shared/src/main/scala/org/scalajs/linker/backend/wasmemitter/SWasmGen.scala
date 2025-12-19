@@ -25,7 +25,16 @@ import org.scalajs.linker.backend.webassembly.Identitities.LocalID
 /** Scala.js-specific Wasm generators that are used across the board. */
 object SWasmGen {
 
-  def genZeroOf(tpe: Type)(implicit ctx: WasmContext): Instr = {
+  def genZeroOf(tpe: Type)(implicit ctx: WasmContext): List[Instr] = {
+    tpe match {
+      case ComponentResourceType(className) =>
+        List(I32Const(0), StructNew(genTypeID.forResourceClass(className)))
+      case _ =>
+        List(genZeroOf0(tpe))
+    }
+  }
+
+  private def genZeroOf0(tpe: Type)(implicit ctx: WasmContext): Instr = {
     tpe match {
       case BooleanType | CharType | ByteType | ShortType | IntType =>
         I32Const(0)
@@ -40,9 +49,6 @@ object SWasmGen {
           ctx.stringPool.getEmptyStringInstr()
       case UndefType  => GlobalGet(genGlobalID.undef)
 
-      case ClassType(className, nullable)
-          if ctx.getClassInfo(className).isWasmComponentResource =>
-        I32Const(0)
       case ClassType(BoxedStringClass, true) =>
         if (ctx.coreSpec.wasmFeatures.targetPureWasm)
           RefNull(HeapType(genTypeID.wasmString))
@@ -53,7 +59,7 @@ object SWasmGen {
         RefNull(Types.HeapType.None)
 
       case NothingType | VoidType | ClassType(_, false) | ArrayType(_, false) |
-          ClosureType(_, _, false) | AnyNotNullType | _:RecordType =>
+          ClosureType(_, _, false) | AnyNotNullType | _:ComponentResourceType | _:RecordType =>
         throw new AssertionError(s"Unexpected type for field: ${tpe.show()}")
     }
   }

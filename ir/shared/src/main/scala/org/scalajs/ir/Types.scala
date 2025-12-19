@@ -41,6 +41,7 @@ object Types {
       case ClassType(_, nullable)      => nullable
       case ArrayType(_, nullable)      => nullable
       case ClosureType(_, _, nullable) => nullable
+      case ComponentResourceType(_)    => false
       case _                           => false
     }
 
@@ -234,6 +235,15 @@ object Types {
         tpe: Type, mutable: Boolean)
   }
 
+  /** WebAssembly Component Model resource type.
+   *
+   *  This represents a handle to a resource in the WebAssembly Component Model.
+   *  Resources are represented as i32 handles at the Wasm level.
+   */
+  final case class ComponentResourceType(className: ClassName) extends Type {
+    def toNonNullable: this.type = this
+  }
+
   /** Void type, the top of type of our type system. */
   case object VoidType extends PrimTypeWithRef('V', "void")
 
@@ -267,6 +277,12 @@ object Types {
           case that: ClassRef => thiz.className.compareTo(that.className)
           case _: PrimRef     => 1
           case _              => -1
+        }
+      case thiz: ComponentResourceTypeRef =>
+        that match {
+          case that: ComponentResourceTypeRef => thiz.className.compareTo(that.className)
+          case _: PrimRef | _: ClassRef       => 1
+          case _                              => -1
         }
       case thiz: ArrayTypeRef =>
         that match {
@@ -356,6 +372,15 @@ object Types {
     def displayName: String = className.nameString
   }
 
+  /** WebAssembly Component Model resource type reference.
+   *
+   *  This represents a reference to a component resource type in method signatures.
+   *  Component resources are opaque handles represented as i32 at the Wasm level.
+   */
+  final case class ComponentResourceTypeRef(className: ClassName) extends NonArrayTypeRef {
+    def displayName: String = "resource<" + className.nameString + ">"
+  }
+
   /** Array type. */
   final case class ArrayTypeRef(base: NonArrayTypeRef, dimensions: Int)
       extends TypeRef {
@@ -408,7 +433,7 @@ object Types {
       RecordValue(tpe, tpe.fields.map(f => zeroOf(f.tpe)))
 
     case NothingType | VoidType | ClassType(_, false) | ArrayType(_, false) |
-        ClosureType(_, _, false) | AnyNotNullType =>
+        ClosureType(_, _, false) | AnyNotNullType | ComponentResourceType(_) =>
       throw new IllegalArgumentException(s"cannot generate a zero for $tpe")
   }
 

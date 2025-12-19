@@ -38,7 +38,6 @@ object ScalaJSToCABI {
       tpe: wit.ValType,
   )(implicit ctx: WasmContext): Unit = {
     tpe match {
-      case wit.VoidType =>
       case wit.BoolType | wit.S8Type | wit.U8Type =>
         fb += wa.I32Store8()
       case wit.S16Type | wit.U16Type =>
@@ -148,7 +147,8 @@ object ScalaJSToCABI {
         genStoreVariantMemory(fb, cases, (_) => {})
 
       case wit.OptionType(t) =>
-        val flattened = Flatten.flattenVariants(List(wit.VoidType, t))
+        val despecialized = wit.despecialize(wit.OptionType(t)).asInstanceOf[wit.VariantType]
+        val flattened = Flatten.flattenVariant(despecialized).tail // drop discriminant
         val optionType = watpe.RefType.nullable(genTypeID.forClass(juOptionalClass))
         val maxCaseAlignment = wit.alignment(t)
 
@@ -195,7 +195,9 @@ object ScalaJSToCABI {
         )
         genStoreVariantMemory(fb, cases, (tpe) => { genUnbox(fb, tpe) })
 
-      case wit.ResourceType(_) =>
+      case wit.ResourceType(className) =>
+        val resourceStructID = genTypeID.forResourceClass(className)
+        fb += wa.StructGet(resourceStructID, genFieldID.handle)
         fb += wa.I32Store()
 
       case _ => ???
@@ -208,14 +210,16 @@ object ScalaJSToCABI {
       tpe: wit.ValType,
   )(implicit ctx: WasmContext): Unit = {
     tpe match {
-      case wit.VoidType =>
       // Scala.js has a same representation
       case wit.BoolType | wit.S8Type | wit.S16Type | wit.S32Type | wit.S64Type |
           wit.U8Type | wit.U16Type | wit.U32Type | // i32
           wit.U64Type | wit.CharType |
           wit.F32Type | wit.F64Type =>
 
-      case wit.ResourceType(_) =>
+      case wit.ResourceType(className) =>
+        // Unwrap: Extract i32 handle from resource struct for stack
+        val resourceStructID = genTypeID.forResourceClass(className)
+        fb += wa.StructGet(resourceStructID, genFieldID.handle)
 
       case tpe: wit.ListType =>
         genStoreList(fb, tpe)
@@ -270,7 +274,8 @@ object ScalaJSToCABI {
 
       case wit.OptionType(t) =>
         val optionType = watpe.RefType.nullable(genTypeID.forClass(juOptionalClass))
-        val flattened = Flatten.flattenVariants(List(wit.VoidType, t))
+        val despecialized = wit.despecialize(wit.OptionType(t)).asInstanceOf[wit.VariantType]
+        val flattened = Flatten.flattenVariant(despecialized).tail // drop discriminant
 
         val opt = fb.addLocal(NoOriginalName, optionType)
         val value = fb.addLocal(NoOriginalName, watpe.RefType.anyref)
@@ -289,7 +294,7 @@ object ScalaJSToCABI {
         fb.ifThenElse(watpe.Int32 +: flattened) {
           // null
           fb += wa.I32Const(0)
-          genCoerceValues(fb, Flatten.flattenType(wit.VoidType), flattened)
+          genCoerceValues(fb, Nil, flattened)
         } {
           // non-null
           fb += wa.I32Const(1)
@@ -393,7 +398,7 @@ object ScalaJSToCABI {
     val variant = fb.addLocal(NoOriginalName, watpe.RefType.anyref)
 
     val base = fb.addLocal(NoOriginalName, watpe.Int32)
-    val flattened = Flatten.flattenVariants(cases.map(t => t.tpe))
+    val flattened = Flatten.flattenVariants(cases.flatMap(t => t.tpe))
     fb += wa.LocalSet(variant)
     fb += wa.LocalTee(base)
     fb += wa.LocalSet(ptr)
@@ -401,17 +406,15 @@ object ScalaJSToCABI {
     fb.switchByType(Nil) {
       () => fb += wa.LocalGet(variant)
     } {
-      cases.map { c =>
+      cases.zipWithIndex.map { case (c, idx) =>
         val l = fb.addLocal(NoOriginalName, watpe.RefType.nullable(genTypeID.forClass(c.className)))
         val classID = genTypeID.forClass(c.className)
-        val index = genFieldID.forClassInstanceField(FieldName(c.className, SimpleFieldName("_index")))
-        val value = genFieldID.forClassInstanceField(FieldName(c.className, SimpleFieldName("value")))
         (c.className, () => {
           fb += wa.LocalSet(l)
 
+          // Store discriminant (use index from position in cases list)
           fb += wa.LocalGet(ptr)
-          fb += wa.LocalGet(l)
-          fb += wa.StructGet(classID, index)
+          fb += wa.I32Const(idx)
           wit.discriminantType(cases) match {
             case wit.U8Type => fb += wa.I32Store8()
             case wit.U16Type => fb += wa.I32Store16()
@@ -419,14 +422,17 @@ object ScalaJSToCABI {
             case t => throw new AssertionError(s"Invalid discriminant type $t")
           }
 
-          if (c.tpe != wit.VoidType) {
+          c.tpe.foreach { tpe =>
             genMovePtr(fb, ptr, wit.discriminantType(cases))
             genAlignTo(fb, wit.maxCaseAlignment(cases), ptr)
             fb += wa.LocalGet(ptr)
             fb += wa.LocalGet(l)
+
+            // Read the field (case class parameter becomes a field with the same name)
+            val value = genFieldID.forClassInstanceField(FieldName(c.className, SimpleFieldName("value")))
             fb += wa.StructGet(classID, value)
-            genUnbox(c.tpe)
-            genStoreMemory(fb, c.tpe)
+            genUnbox(tpe)
+            genStoreMemory(fb, tpe)
           }
         })
       }: _*
@@ -445,26 +451,35 @@ object ScalaJSToCABI {
       genUnbox: (wit.ValType) => Unit,
   )(implicit ctx: WasmContext): Unit = {
     val tmp = fb.addLocal(NoOriginalName, watpe.RefType.anyref)
-    val flattened = Flatten.flattenVariants(cases.map(t => t.tpe))
+    val flattened = Flatten.flattenVariants(cases.flatMap(t => t.tpe))
     fb += wa.LocalSet(tmp)
 
     fb.switchByType(watpe.Int32 +: flattened) {
       () => fb += wa.LocalGet(tmp)
     } {
-      cases.map { case c =>
+      cases.zipWithIndex.map { case (c, idx) =>
         val classID = genTypeID.forClass(c.className)
-        val index = genFieldID.forClassInstanceField(FieldName(c.className, SimpleFieldName("_index")))
-        val value = genFieldID.forClassInstanceField(FieldName(c.className, SimpleFieldName("value")))
+
         (c.className, () => {
           val l = fb.addLocal(NoOriginalName, watpe.RefType.nullable(genTypeID.forClass(c.className)))
           fb += wa.LocalTee(l)
-          fb += wa.StructGet(classID, index)
-          fb += wa.LocalGet(l)
-          fb += wa.StructGet(classID, value)
-          genUnbox(c.tpe)
-          if (c.tpe == wit.VoidType) fb += wa.Drop
-          genStoreStack(fb, c.tpe)
-          genCoerceValues(fb, Flatten.flattenType(c.tpe), flattened)
+
+          // Push discriminant (use index from position in cases list)
+          fb += wa.I32Const(idx)
+
+          c.tpe match {
+            case Some(tpe) =>
+              fb += wa.LocalGet(l)
+
+              // Read the field (case class parameter becomes a field with the same name)
+              val value = genFieldID.forClassInstanceField(FieldName(c.className, SimpleFieldName("value")))
+              fb += wa.StructGet(classID, value)
+              genUnbox(tpe)
+              genStoreStack(fb, tpe)
+              genCoerceValues(fb, Flatten.flattenType(tpe), flattened)
+            case None =>
+              genCoerceValues(fb, Nil, flattened)
+          }
         })
       }: _*
     } { () =>
@@ -569,10 +584,17 @@ object ScalaJSToCABI {
     fb += wa.LocalSet(ptr)
   }
 
-  private def genUnbox(fb: FunctionBuilder, targetTpe: wit.ValType): Unit = {
-    targetTpe.toIRType() match {
-      case t: PrimTypeWithRef => genUnbox(fb, t)
+  private def genUnbox(fb: FunctionBuilder, targetTpe: wit.ValType)(implicit ctx: WasmContext): Unit = {
+    targetTpe match {
+      case wit.ResourceType(className) =>
+        // Cast from anyref (from Result/Option value field) to resource struct type
+        val resourceStructType = watpe.RefType(genTypeID.forResourceClass(className))
+        fb += wa.RefCast(resourceStructType)
       case _ =>
+        targetTpe.toIRType() match {
+          case t: PrimTypeWithRef => genUnbox(fb, t)
+          case _ =>
+        }
     }
   }
 

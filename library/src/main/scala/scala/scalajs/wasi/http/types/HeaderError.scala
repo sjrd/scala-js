@@ -1,25 +1,14 @@
 package scala.scalajs.wasi.http.types
 
-import scala.scalajs.{component => cm}
+import scala.scalajs.component.annotation._
 
 /** This type enumerates the different kinds of errors that may occur when
  *  setting or appending to a `fields` resource.
  */
-sealed trait HeaderError extends cm.Variant
+@ComponentVariant
+sealed trait HeaderError
 object HeaderError {
-  final object InvalidSyntax extends HeaderError {
-    type T = Unit
-    val _index: Int = 0
-    val value = ()
-  }
-  final object Forbidden extends HeaderError {
-    type T = Unit
-    val _index: Int = 1
-    val value = ()
-  }
-  final object Immutable extends HeaderError {
-    type T = Unit
-    val _index: Int = 2
-    val value = ()
-  }
+  case object InvalidSyntax extends HeaderError
+  case object Forbidden extends HeaderError
+  case object Immutable extends HeaderError
 }

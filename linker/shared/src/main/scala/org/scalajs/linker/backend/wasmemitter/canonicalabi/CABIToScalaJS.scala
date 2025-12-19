@@ -31,10 +31,8 @@ object CABIToScalaJS {
     */
   def genLoadMemory(fb: FunctionBuilder, tpe: wit.ValType)(implicit ctx: WasmContext): Unit = {
     tpe match {
-      case wit.VoidType => // do nothing
       case pt: wit.PrimValType =>
         pt match {
-          case wit.VoidType => throw new AssertionError("should be handled outside")
           case wit.BoolType => fb += wa.I32Load8U()
           case wit.S8Type   => fb += wa.I32Load8S()
           case wit.S16Type  => fb += wa.I32Load16S()
@@ -137,8 +135,10 @@ object CABIToScalaJS {
         }
         // genAlignTo(fb, wit.alignment(tpe), ptr)
 
-      case wit.ResourceType(_) =>
+      case wit.ResourceType(className) =>
+        val resourceStructID = genTypeID.forResourceClass(className)
         fb += wa.I32Load()
+        fb += wa.StructNew(resourceStructID)
 
       case variant @ wit.VariantType(className, cases) =>
         genLoadVariantMemory(fb, cases, false)
@@ -187,7 +187,6 @@ object CABIToScalaJS {
 
   def genLoadStack(fb: FunctionBuilder, tpe: wit.ValType, vi: ValueIterator)(implicit ctx: WasmContext): Unit = {
     tpe match {
-      case wit.VoidType => // do nothing
       // Scala.js has a same representation
       case wit.BoolType | wit.S8Type | wit.S16Type | wit.S32Type |
           wit.U8Type | wit.U16Type | wit.U32Type | wit.CharType =>
@@ -216,8 +215,9 @@ object CABIToScalaJS {
           fb += wa.GlobalSet(genGlobalID.savedStackPointer)
         }
 
-      case wit.ResourceType(_) =>
+      case wit.ResourceType(className) =>
         vi.next(watpe.Int32)
+        fb += wa.StructNew(genTypeID.forResourceClass(className))
 
       case wit.TupleType(fields) =>
         val ctor = MethodName.constructor(List.fill(fields.size)(ClassRef(ObjectClass)))
@@ -383,7 +383,6 @@ object CABIToScalaJS {
     val ptr = fb.addLocal(NoOriginalName, watpe.Int32)
     fb += wa.LocalSet(ptr)
 
-    val flattened = Flatten.flattenVariants(cases.map(_.tpe))
     fb.switch(
       Sig(Nil, Nil),
       Sig(Nil, List(watpe.RefType(false, genTypeID.ObjectStruct)))
@@ -403,16 +402,18 @@ object CABIToScalaJS {
               if (boxValue) MethodName.constructor(List(ClassRef(ObjectClass)))
               else wit.makeCtorName(c.tpe)
             genNewScalaClass(fb, c.className, ctorID) {
-              if (c.tpe == wit.VoidType) fb += wa.GlobalGet(genGlobalID.undef)
-              else {
-                fb += wa.LocalGet(ptr)
-                genLoadMemory(fb, c.tpe)
-                if (boxValue) {
-                  c.tpe.toIRType match {
-                    case t: PrimTypeWithRef => genBox(fb, t)
-                    case _ =>
+              c.tpe match {
+                case None =>
+                  fb += wa.GlobalGet(genGlobalID.undef)
+                case Some(tpe) =>
+                  fb += wa.LocalGet(ptr)
+                  genLoadMemory(fb, tpe)
+                  if (boxValue) {
+                    tpe.toIRType match {
+                      case t: PrimTypeWithRef => genBox(fb, t)
+                      case _ =>
+                    }
                   }
-                }
               }
             }
           }
@@ -431,7 +432,7 @@ object CABIToScalaJS {
     boxValue: Boolean,
   )(implicit ctx: WasmContext): Unit = {
     // val idx = fb.addLocal(NoOriginalName, watpe.Int32)
-    val flattened = Flatten.flattenVariants(cases.map(_.tpe))
+    val flattened = Flatten.flattenVariants(cases.flatMap(_.tpe))
     fb.switch(
       Sig(Nil, Nil),
       Sig(Nil, List(watpe.RefType(false, genTypeID.ObjectStruct)))
@@ -449,17 +450,19 @@ object CABIToScalaJS {
               if (boxValue) MethodName.constructor(List(ClassRef(ObjectClass)))
               else wit.makeCtorName(c.tpe)
             genNewScalaClass(fb, c.className, ctorID) {
-              if (c.tpe == wit.VoidType) fb += wa.GlobalGet(genGlobalID.undef)
-              else {
-                val expect = Flatten.flattenType(c.tpe)
-                genCoerceValues(fb, vi.copy(), flattened, expect)
-                genLoadStack(fb, c.tpe, ValueIterator(fb, expect))
-                if (boxValue) {
-                  c.tpe.toIRType match {
-                    case t: PrimTypeWithRef => genBox(fb, t)
-                    case _ =>
+              c.tpe match {
+                case None =>
+                  fb += wa.GlobalGet(genGlobalID.undef)
+                case Some(tpe) =>
+                  val expect = Flatten.flattenType(tpe)
+                  genCoerceValues(fb, vi.copy(), flattened, expect)
+                  genLoadStack(fb, tpe, ValueIterator(fb, expect))
+                  if (boxValue) {
+                    tpe.toIRType match {
+                      case t: PrimTypeWithRef => genBox(fb, t)
+                      case _ =>
+                    }
                   }
-                }
               }
             }
           }

@@ -158,6 +158,8 @@ object Serializers {
             // nothing to do
           case ClassRef(className) =>
             encodedNameToIndex(className.encoded)
+          case ComponentResourceTypeRef(className) =>
+            encodedNameToIndex(className.encoded)
           case ArrayTypeRef(base, _) =>
             reserveTypeRef(base)
           case typeRef: TransientTypeRef =>
@@ -225,6 +227,9 @@ object Serializers {
           }
         case ClassRef(className) =>
           s.writeByte(TagClassRef)
+          s.writeInt(encodedNameIndexMap(new EncodedNameKey(className.encoded)))
+        case ComponentResourceTypeRef(className) =>
+          s.writeByte(TagComponentResourceTypeRef)
           s.writeInt(encodedNameIndexMap(new EncodedNameKey(className.encoded)))
         case ArrayTypeRef(base, dimensions) =>
           s.writeByte(TagArrayTypeRef)
@@ -937,6 +942,10 @@ object Serializers {
           buffer.write(if (nullable) TagClassType else TagNonNullClassType)
           writeName(className)
 
+        case ComponentResourceType(className) =>
+          buffer.write(TagComponentResourceType)
+          writeName(className)
+
         case ArrayType(arrayTypeRef, nullable) =>
           buffer.write(if (nullable) TagArrayType else TagNonNullArrayType)
           writeArrayTypeRef(arrayTypeRef)
@@ -964,7 +973,6 @@ object Serializers {
     }
 
     def writeWITType(tpe: wit.WasmInterfaceType): Unit = tpe match {
-      case wit.VoidType => buffer.writeByte(TagWITVoidType)
       case wit.BoolType => buffer.writeByte(TagWITBoolType)
       case wit.U8Type => buffer.writeByte(TagWITU8Type)
       case wit.U16Type => buffer.writeByte(TagWITU16Type)
@@ -1003,7 +1011,8 @@ object Serializers {
         buffer.writeInt(cases.length)
         for (c <- cases) {
           writeName(c.className)
-          writeWITType(c.tpe)
+          buffer.writeBoolean(c.tpe.isDefined)
+          c.tpe.foreach(writeWITType)
         }
       case wit.EnumType(_) =>
         buffer.writeByte(TagWITEnumType)
@@ -1013,8 +1022,10 @@ object Serializers {
         writeWITType(t)
       case wit.ResultType(ok, err) =>
         buffer.writeByte(TagWITResultType)
-        writeWITType(ok)
-        writeWITType(err)
+        buffer.writeBoolean(ok.isDefined)
+        ok.foreach(writeWITType)
+        buffer.writeBoolean(err.isDefined)
+        err.foreach(writeWITType)
       case wit.FlagsType(numFlags) =>
         buffer.writeByte(TagWITFlagsType)
         buffer.writeInt(numFlags)
@@ -1051,6 +1062,9 @@ object Serializers {
         }
       case ClassRef(className) =>
         buffer.writeByte(TagClassRef)
+        writeName(className)
+      case ComponentResourceTypeRef(className) =>
+        buffer.writeByte(TagComponentResourceTypeRef)
         writeName(className)
       case typeRef: ArrayTypeRef =>
         buffer.writeByte(TagArrayTypeRef)
@@ -2693,7 +2707,6 @@ object Serializers {
     private def readWITType(): wit.ValType = {
       val tag = readByte()
       tag match {
-        case TagWITVoidType => wit.VoidType
         case TagWITBoolType => wit.BoolType
         case TagWITU8Type => wit.U8Type
         case TagWITU16Type => wit.U16Type
@@ -2725,13 +2738,20 @@ object Serializers {
         case TagWITVariantType =>
           wit.VariantType(
             readClassName(),
-            List.fill(readInt()) { wit.CaseType(readClassName(), readWITType()) }
+            List.fill(readInt()) {
+              val className = readClassName()
+              val hasTpe = readBoolean()
+              val tpe = if (hasTpe) Some(readWITType()) else None
+              wit.CaseType(className, tpe)
+            }
           )
         case TagWITEnumType => ???
         case TagWITOptionType =>
           wit.OptionType(readWITType())
         case TagWITResultType =>
-          wit.ResultType(readWITType(), readWITType())
+          val ok = if (readBoolean()) Some(readWITType()) else None
+          val err = if (readBoolean()) Some(readWITType()) else None
+          wit.ResultType(ok, err)
         case TagWITFlagsType =>
           wit.FlagsType(readInt())
         case TagWITResourceType => wit.ResourceType(readClassName())
@@ -2768,6 +2788,8 @@ object Serializers {
         case TagNonNullClassType => ClassType(readClassName(), nullable = false)
         case TagNonNullArrayType => ArrayType(readArrayTypeRef(), nullable = false)
 
+        case TagComponentResourceType => ComponentResourceType(readClassName())
+
         case TagClosureType | TagNonNullClosureType =>
           val paramTypes = readTypes()
           val resultType = readType()
@@ -2798,10 +2820,11 @@ object Serializers {
         case TagLongRef      => LongRef
         case TagFloatRef     => FloatRef
         case TagDoubleRef    => DoubleRef
-        case TagNullRef      => NullRef
-        case TagNothingRef   => NothingRef
-        case TagClassRef     => ClassRef(readClassName())
-        case TagArrayTypeRef => readArrayTypeRef()
+        case TagNullRef                   => NullRef
+        case TagNothingRef                => NothingRef
+        case TagClassRef                  => ClassRef(readClassName())
+        case TagComponentResourceTypeRef  => ComponentResourceTypeRef(readClassName())
+        case TagArrayTypeRef              => readArrayTypeRef()
       }
     }
 

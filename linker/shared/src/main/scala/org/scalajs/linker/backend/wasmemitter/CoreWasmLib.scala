@@ -73,8 +73,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   )
 
   private def charCodeForOriginalName(baseRef: NonArrayTypeRef): Char = baseRef match {
-    case baseRef: PrimRef => baseRef.charCode
-    case _: ClassRef      => 'O'
+    case baseRef: PrimRef            => baseRef.charCode
+    case _: ClassRef                 => 'O'
+    case ComponentResourceTypeRef(_) => 'O'
   }
 
   /** Fields of the `typeData` struct definition.
@@ -1527,7 +1528,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
         )
         fb += Br(doneLabel)
       }
-      fb += genZeroOf(targetTpe)
+      fb ++= genZeroOf(targetTpe)
     }
 
     fb.buildAndAddToModule()
@@ -2336,11 +2337,11 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       // If we get here, it is a CCE
       fb += GlobalGet(genGlobalID.forVTable(PrimTypeToBoxedClass(primType)))
       fb += Call(genFunctionID.classCastException)
-      genForwardThrowAlways(fb, fakeResult = List(SWasmGen.genZeroOf(targetTpe)))
+      genForwardThrowAlways(fb, fakeResult = SWasmGen.genZeroOf(targetTpe))
     }
 
     // obj is null -- load the zero of the target type (which is `null` for boxed classes)
-    fb += SWasmGen.genZeroOf(targetTpe)
+    fb ++= SWasmGen.genZeroOf(targetTpe)
 
     fb.buildAndAddToModule()
   }
@@ -2535,6 +2536,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val elemWasmType = baseRef match {
       case PrimRef(tpe) => transformSingleType(tpe)
       case ClassRef(_)  => anyref
+      case ComponentResourceTypeRef(_) => anyref
     }
 
     val fb = newFunctionBuilder(genFunctionID.arrayGet(baseRef), origName)
@@ -2592,8 +2594,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val underlyingTypeID = genTypeID.underlyingOf(arrayTypeRef)
 
     val elemWasmType = baseRef match {
-      case PrimRef(tpe) => transformSingleType(tpe)
-      case ClassRef(_)  => anyref
+      case PrimRef(tpe)                => transformSingleType(tpe)
+      case ClassRef(_)                 => anyref
+      case ComponentResourceTypeRef(_) => anyref
     }
 
     val fb = newFunctionBuilder(genFunctionID.arraySet(baseRef), origName)

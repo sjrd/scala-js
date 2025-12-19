@@ -59,17 +59,10 @@ object Streams {
     def close(): Unit = cm.native
   }
 
-  sealed trait StreamError extends cm.Variant
+  @ComponentVariant
+  sealed trait StreamError
   object StreamError {
-    final class LastOperationFailed(val value: WasiIOError) extends StreamError {
-      type T = WasiIOError
-      val _index: Int = 0
-    }
-
-    final object Closed extends StreamError {
-      type T = Unit
-      val value = ()
-      val _index = 1
-    }
+    final case class LastOperationFailed(value: WasiIOError) extends StreamError
+    final case object Closed extends StreamError
   }
 }

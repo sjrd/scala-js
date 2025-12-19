@@ -81,6 +81,7 @@ trait JSDefinitions {
     lazy val ComponentImportAnnotation = getRequiredClass("scala.scalajs.component.annotation.ComponentImport")
     lazy val ComponentExportAnnotation = getRequiredClass("scala.scalajs.component.annotation.ComponentExport")
     lazy val ComponentRecordAnnotation = getRequiredClass("scala.scalajs.component.annotation.ComponentRecord")
+    lazy val ComponentVariantAnnotation = getRequiredClass("scala.scalajs.component.annotation.ComponentVariant")
     lazy val ComponentFlagsAnnotation  = getRequiredClass("scala.scalajs.component.annotation.ComponentFlags")
 
     lazy val ComponentResourceImportAnnotation = getRequiredClass("scala.scalajs.component.annotation.ComponentResourceImport")
@@ -92,7 +93,6 @@ trait JSDefinitions {
     lazy val ComponentResultClass      = getRequiredClass("scala.scalajs.component.Result")
     lazy val ComponentResultOkClass    = getRequiredClass("scala.scalajs.component.Ok")
     lazy val ComponentResultErrClass   = getRequiredClass("scala.scalajs.component.Err")
-    lazy val ComponentVariantClass     = getRequiredClass("scala.scalajs.component.Variant")
 
     lazy val ScalaJSComponentUnsignedPackageModule = getPackageObject("scala.scalajs.component.unsigned")
       lazy val ComponentUnsigned_UByte = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("UByte"))
