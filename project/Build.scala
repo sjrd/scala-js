@@ -36,6 +36,7 @@ import org.scalastyle.sbt.ScalastylePlugin.autoImport.scalastyle
 import Loggers._
 
 import org.scalajs.linker.interface._
+import build.ExposedValues.autoImport.regenerateUnicodeData
 
 /* Things that we want to expose in the sbt command line (and hence also in
  * `ci/matrix.xml`).
@@ -57,6 +58,9 @@ object ExposedValues extends AutoPlugin {
       settingKey("force usage of the `minify` option of the linker in all contexts (fast and full)")
     val enableWasmEverywhere: SettingKey[Boolean] =
       settingKey("enable the WebAssembly backend everywhere, including additional required linker config")
+
+    val regenerateUnicodeData: TaskKey[Unit] =
+      taskKey("regenerate all the Unicode data in the source files")
 
     // set scalaJSLinkerConfig in someProject ~= makeCompliant
     val makeCompliant: StandardConfig => StandardConfig = { prev =>
@@ -1532,6 +1536,11 @@ object Build {
       delambdafySetting,
 
       recompileAllOrNothingSettings,
+
+      regenerateUnicodeData := {
+        val detectedJDKVersion = javaVersion.value
+        UnicodeDataGen.generateAll(detectedJDKVersion)
+      },
 
       /* Do not import `Predef._` so that we have a better control of when
        * we rely on the Scala library.
