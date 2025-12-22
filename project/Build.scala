@@ -36,6 +36,7 @@ import org.scalastyle.sbt.ScalastylePlugin.autoImport.scalastyle
 import Loggers._
 
 import org.scalajs.linker.interface._
+import build.ExposedValues.autoImport.regenerateUnicodeData
 
 /* Things that we want to expose in the sbt command line (and hence also in
  * `ci/matrix.xml`).
@@ -57,6 +58,9 @@ object ExposedValues extends AutoPlugin {
       settingKey("force usage of the `minify` option of the linker in all contexts (fast and full)")
     val enableWasmEverywhere: SettingKey[Boolean] =
       settingKey("enable the WebAssembly backend everywhere, including additional required linker config")
+
+    val regenerateUnicodeData: TaskKey[Unit] =
+      taskKey("regenerate all the Unicode data in the source files")
 
     // set scalaJSLinkerConfig in someProject ~= makeCompliant
     val makeCompliant: StandardConfig => StandardConfig = { prev =>
@@ -1535,6 +1539,11 @@ object Build {
 
       recompileAllOrNothingSettings,
 
+      regenerateUnicodeData := {
+        val detectedJDKVersion = javaVersion.value
+        UnicodeDataGen.generateAll(detectedJDKVersion)
+      },
+
       /* Do not import `Predef._` so that we have a better control of when
        * we rely on the Scala library.
        * This is particularly important within the java.lang package, as
@@ -2081,7 +2090,7 @@ object Build {
           case `default213Version` =>
             if (!useMinifySizes) {
               Some(ExpectedSizes(
-                  fastLink = 439000 to 440000,
+                  fastLink = 438000 to 439000,
                   fullLink = 90000 to 91000,
                   fastLinkGz = 57000 to 58000,
                   fullLinkGz = 24000 to 25000,
@@ -2089,7 +2098,7 @@ object Build {
             } else {
               Some(ExpectedSizes(
                   fastLink = 304000 to 305000,
-                  fullLink = 264000 to 265000,
+                  fullLink = 263000 to 264000,
                   fastLinkGz = 48000 to 49000,
                   fullLinkGz = 43000 to 44000,
               ))
