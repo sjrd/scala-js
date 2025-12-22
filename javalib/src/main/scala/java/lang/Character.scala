@@ -483,8 +483,10 @@ object Character {
   }
 
   @deprecated("Replaced by isWhitespace(char)", "")
-  def isSpace(c: scala.Char): scala.Boolean =
-    c == '\t' || c == '\n' || c == '\f' || c == '\r' || c == ' '
+  @inline def isSpace(c: scala.Char): scala.Boolean = {
+    // don't consume a flag in UnicodeData for a deprecated method
+    (c >= '\t' && c <= '\r') || c == ' '
+  }
 
   def isWhitespace(c: scala.Char): scala.Boolean =
     isWhitespace(c.toInt)
@@ -588,6 +590,7 @@ object Character {
   @inline private[this] def isLetterOrDigitImpl(tpe: Int): scala.Boolean =
     isDigitImpl(tpe) || isLetterImpl(tpe)
 
+  @deprecated("Replaced by isJavaIdentifierStart(char)", "")
   def isJavaLetter(ch: scala.Char): scala.Boolean = isJavaLetterImpl(getType(ch))
 
   @inline private[this] def isJavaLetterImpl(tpe: Int): scala.Boolean = {
@@ -595,6 +598,7 @@ object Character {
     tpe == CONNECTOR_PUNCTUATION
   }
 
+  @deprecated("Replaced by isJavaIdentifierPart(char)", "")
   def isJavaLetterOrDigit(ch: scala.Char): scala.Boolean =
     isJavaLetterOrDigitImpl(ch, getType(ch))
 
