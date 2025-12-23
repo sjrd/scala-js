@@ -248,6 +248,9 @@ object Infos {
           addMethodCalledStatically(ObjectClass,
               NamespacedMethodName(MemberNamespace.Public, method))
 
+        case ComponentResourceType(className) =>
+          addMethodCalled(className, method)
+
         case NullType | NothingType =>
           // Nothing to do
 
@@ -766,10 +769,10 @@ object Infos {
           for (c <- cases) {
             val ctor = wit.makeCtorName(c.tpe)
             builder.addInstantiatedClass(c.className, MethodName.constructor(List(ClassRef(ObjectClass))))
-            // builder.maybeAddReferencedClass(ClassRef(c.className))
-            builder.addFieldRead(FieldName(c.className, ComponentVariantIndexFieldName))
-            builder.addFieldRead(FieldName(c.className, ComponentVariantValueFieldName))
-            generateForWIT(c.tpe)
+            c.tpe.foreach { tpe =>
+              builder.addFieldRead(FieldName(c.className, ComponentVariantValueFieldName))
+              generateForWIT(tpe)
+            }
           }
 
         case wit.VariantType(className, cases) =>
@@ -779,13 +782,14 @@ object Infos {
           for (c <- cases) {
             val ctor = wit.makeCtorName(c.tpe)
             builder.addInstantiatedClass(c.className, ctor)
-            // builder.maybeAddReferencedClass(ClassRef(c.className)) // forClass
-            builder.addFieldRead(FieldName(c.className, ComponentVariantIndexFieldName))
-            builder.addFieldRead(FieldName(c.className, ComponentVariantValueFieldName))
-            generateForWIT(c.tpe)
+            c.tpe.foreach { tpe =>
+              builder.addFieldRead(FieldName(c.className, ComponentVariantValueFieldName))
+              generateForWIT(tpe)
+            }
           }
 
         case wit.ResourceType(className) =>
+          builder.maybeAddReferencedClass(ClassRef(className))
 
         case _ =>
       }

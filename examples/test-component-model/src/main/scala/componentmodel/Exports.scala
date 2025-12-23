@@ -7,6 +7,7 @@ import scala.scalajs.component.annotation._
 import scala.scalajs.component.unsigned._
 
 import java.util.Optional
+import scala.scalajs.ComponentUtils.toEither
 
 object TestsExport {
   @ComponentExport("component:testing/tests", "roundtrip-basics1")
@@ -151,15 +152,15 @@ object TestImports {
     assert(Optional.empty == roundtripDoubleOption(Optional.empty[Optional[String]]))
     // assert(new cm.Err("aaa") != new cm.Err("bbb"))
 
-    // assert(new cm.Ok(()) == roundtripResult(new cm.Ok(())))
-    // assert(new cm.Err(()) == roundtripResult(new cm.Err(())))
-    // assert(new cm.Ok(3.0f) == roundtripStringError(new cm.Ok(3.0f)))
-    // assert(new cm.Err("err") == roundtripStringError(new cm.Err("err")))
-    // assert(new cm.Ok(C1.A(432)) == roundtripEnumError(new cm.Ok(C1.A(432))))
-    // assert(new cm.Ok(C1.B(0.0f)) == roundtripEnumError(new cm.Ok(C1.B(0.0f))))
-    // assert(new cm.Err(E1.A) == roundtripEnumError(new cm.Err(E1.A)))
-    // assert(new cm.Err(E1.B) == roundtripEnumError(new cm.Err(E1.B)))
-    // assert(new cm.Err(E1.C) == roundtripEnumError(new cm.Err(E1.C)))
+    assert(new cm.Ok(()) == roundtripResult(new cm.Ok(())))
+    assert(new cm.Err(()) == roundtripResult(new cm.Err(())))
+    assert(new cm.Ok(3.0f) == roundtripStringError(new cm.Ok(3.0f)))
+    assert(new cm.Err("err") == roundtripStringError(new cm.Err("err")))
+    assert(new cm.Ok(C1.A(432)) == roundtripEnumError(new cm.Ok(C1.A(432))))
+    assert(new cm.Ok(C1.B(0.0f)) == roundtripEnumError(new cm.Ok(C1.B(0.0f))))
+    assert(new cm.Err(E1.A) == roundtripEnumError(new cm.Err(E1.A)))
+    assert(new cm.Err(E1.B) == roundtripEnumError(new cm.Err(E1.B)))
+    assert(new cm.Err(E1.C) == roundtripEnumError(new cm.Err(E1.C)))
 
     import TestImportsHelper._
     assert((F1.b3 | F1.b6 | F1.b7) == roundtripF8(F1.b3 | F1.b6 | F1.b7))
@@ -175,6 +176,20 @@ object TestImports {
     val result3: (Int, String, Boolean) = roundtripTuple3((123, "world", true))
     assert(result3 == (123, "world", true))
 
+    // Test resource wrappers
+    locally {
+      val successResult = toEither(tryCreateCounter(10))
+      assert(successResult.isRight)
+      assert(10 == successResult.right.get.valueOf())
+
+      val errorResult = toEither(tryCreateCounter(-5))
+      assert(errorResult.isLeft)
+
+      val maybeCounter = maybeGetCounter()
+      assert(maybeCounter.isPresent)
+      assert(42 == maybeCounter.get().valueOf())
+    }
+
     locally {
       val c1 = Counter(0)
       c1.up()
@@ -184,10 +199,10 @@ object TestImports {
       c2.down()
       assert(99 == c2.valueOf())
 
-      // val s1 = Counter.sum(c1, c2)
-      // val s2 = Counter.sum(c1, c2)
-      // assert(s1.valueOf() == s2.valueOf())
-      // assert(100 == s.valueOf())
+      val s1 = Counter.sum(c1, c2)
+      val s2 = Counter.sum(c1, c2)
+      assert(s1.valueOf() == s2.valueOf())
+      assert(100 == s1.valueOf())
 
       // use c1 multiple times fails with
       // unknown handle index 1 (?)
@@ -275,42 +290,24 @@ object TestImportsHelper {
 @ComponentRecord
 final case class Point(x: Int, y: Int)
 
-sealed trait C1 extends Variant
+@ComponentVariant
+sealed trait C1
 object C1 {
-  final case class A(value: Int) extends C1 {
-    type T = Int
-    val _index = 0
-  }
-  final case class B(value: Float) extends C1 {
-    type T = Float
-    val _index = 1
-  }
+  final case class A(value: Int) extends C1
+  final case class B(value: Float) extends C1
 }
 
-sealed trait Z1 extends Variant
+@ComponentVariant
+sealed trait Z1
 object Z1 {
-  final case class A(value: Int) extends Z1 {
-    type T = Int
-    val _index = 0
-  }
-  // if the field is typed Unit, there's no fields generated in SJSIR
-  // there's only a getter
-  final case object B extends Z1 {
-    type T = Unit
-    val value = ()
-    val _index = 1
-  }
+  final case class A(value: Int) extends Z1
+  final case object B extends Z1
 }
 
-sealed trait E1 extends cm.Enum
+@ComponentVariant
+sealed trait E1
 object E1 {
-  final case object A extends E1 {
-    val _index = 0
-  }
-  final case object B extends E1 {
-    val _index = 1
-  }
-  final case object C extends E1 {
-    val _index = 2
-  }
+  case object A extends E1
+  case object B extends E1
+  case object C extends E1
 }

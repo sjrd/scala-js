@@ -75,6 +75,18 @@ impl GuestCounter for GuestCounterImpl {
 
 impl Countable for Component {
   type Counter = GuestCounterImpl;
+
+  fn try_create_counter(value: i32) -> Result<Counter, String> {
+    if value >= 0 {
+      Ok(Counter::new(GuestCounterImpl::create(value)))
+    } else {
+      Err("Counter value must be non-negative".to_string())
+    }
+  }
+
+  fn maybe_get_counter() -> Option<Counter> {
+    Some(Counter::new(GuestCounterImpl::create(42)))
+  }
 }
 
 #[allow(unused_variables)]

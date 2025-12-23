@@ -74,7 +74,6 @@ trait TypeConversions[G <: Global with Singleton] extends SubComponent {
   }
 
   private lazy val primitiveIRWIT: Map[Types.Type, wit.ValType] = Map(
-    Types.VoidType -> wit.VoidType,
     Types.BooleanType -> wit.BoolType,
     Types.ByteType -> wit.S8Type,
     Types.ShortType -> wit.S16Type,
@@ -101,7 +100,12 @@ trait TypeConversions[G <: Global with Singleton] extends SubComponent {
   )
 
   private def makeNonArrayTypeRef(sym: Symbol): Types.NonArrayTypeRef =
-    primitiveRefMap.getOrElse(sym, Types.ClassRef(encodeClassName(sym)))
+    primitiveRefMap.getOrElse(sym, {
+      if (isWasmComponentResourceType(sym))
+        Types.ComponentResourceTypeRef(encodeClassName(sym))
+      else
+        Types.ClassRef(encodeClassName(sym))
+    })
 
   private def makeArrayTypeRef(base: Symbol, depth: Int): Types.ArrayTypeRef =
     Types.ArrayTypeRef(makeNonArrayTypeRef(base), depth)

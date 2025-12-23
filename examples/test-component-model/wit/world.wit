@@ -48,6 +48,9 @@ interface countable {
     down: func();
     value-of: func() -> s32;
   }
+
+  try-create-counter: func(value: s32) -> result<counter, string>;
+  maybe-get-counter: func() -> option<counter>;
 }
 
 interface tests {
@@ -102,7 +105,6 @@ interface tests {
 
   roundtrip-tuple2: func(a: tuple<s32, string>) -> tuple<s32, string>;
   roundtrip-tuple3: func(a: tuple<s32, string, bool>) -> tuple<s32, string, bool>;
-
 }
 
 interface test-imports {

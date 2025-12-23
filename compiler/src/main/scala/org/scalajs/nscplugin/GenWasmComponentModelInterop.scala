@@ -251,13 +251,13 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
 
         case tsym if tsym.isSubClass(ComponentResultClass) && tsym.isSealed =>
           val List(ok, err) = tpe.typeArgs
-          wit.ResultType(toWIT(ok), toWIT(err))
+          wit.ResultType(toResultWIT(ok), toResultWIT(err))
 
         case tsym if tsym.fullName == "java.util.Optional" =>
           val List(t) = tpe.dealiasWiden.typeArgs
           wit.OptionType(toWIT(t))
 
-        case tsym if tsym.isSubClass(ComponentVariantClass) && tsym.isSealed =>
+        case tsym if tsym.hasAnnotation(ComponentVariantAnnotation) && tsym.isSealed =>
           // Sort by declaration order, we need to know which index
           // corresponds to which type.
           // Make sure code generator declare children by index order.
@@ -266,9 +266,14 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
             // assert(child.isFinal)
             // assert(child.isClass)
             val valueType = jsInterop.componentVariantValueTypeOf(child)
+            val caseTyp = if (toIRType(valueType) == jstpe.VoidType) {
+              None
+            } else {
+              Some(toWIT(valueType))
+            }
             wit.CaseType(
               encodeClassName(child),
-              toWIT(valueType)
+              caseTyp
             )
           }
           wit.VariantType(
@@ -307,7 +312,6 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
   )
 
   private lazy val primitiveIRWIT: Map[jstpe.Type, wit.ValType] = Map(
-    jstpe.VoidType -> wit.VoidType,
     jstpe.BooleanType -> wit.BoolType,
     jstpe.ByteType -> wit.S8Type,
     jstpe.ShortType -> wit.S16Type,

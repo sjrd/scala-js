@@ -67,7 +67,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
         origName,
         isMutable = true,
         transformFieldType(ftpe),
-        wa.Expr(List(genZeroOf(ftpe)))
+        wa.Expr(genZeroOf(ftpe))
       )
       ctx.addGlobal(global)
     }
@@ -94,12 +94,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
         genInterface(clazz)
       case ClassKind.JSClass | ClassKind.JSModuleClass =>
         genJSClass(clazz)
+      case ClassKind.NativeWasmComponentResourceClass =>
+        genResourceStruct(clazz)
+        genResourceCastFunction(clazz)
       case ClassKind.HijackedClass | ClassKind.AbstractJSType | ClassKind.NativeJSClass |
-          ClassKind.NativeJSModuleClass | ClassKind.NativeWasmComponentResourceClass =>
+          ClassKind.NativeJSModuleClass =>
         () // nothing to do
     }
   }
-
 
   /** Generates code for a top-level export.
    *
@@ -571,6 +573,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       val nameStr = baseTypeRef match {
         case baseTypeRef: PrimRef => "[" + baseTypeRef.charCode.toString()
         case ClassRef(className)  => "[L" + runtimeClassNameOf(className) + ";"
+        case ComponentResourceTypeRef(className) => "[W" + runtimeClassNameOf(className) + ";"
       }
       val nameValue =
         if (targetPureWasm)
@@ -809,7 +812,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     if (targetPureWasm) fb += wa.I32Const(0)
 
     classInfo.allFieldDefs.foreach { f =>
-      fb += genZeroOf(f.ftpe)
+      fb ++= genZeroOf(f.ftpe)
     }
     for (dataParam <- dataParamOpt)
       fb += wa.LocalGet(dataParam)
@@ -1596,6 +1599,46 @@ class ClassEmitter(coreSpec: CoreSpec) {
     }
   }
 
+  /** Generates struct type definition for a component resource class.
+   *
+   *  Resource structs are simple wrappers containing only an i32 handle field.
+   *  struct { handle: i32 }
+   */
+  private def genResourceStruct(clazz: LinkedClass)(implicit ctx: WasmContext): Unit = {
+    val id = genTypeID.forResourceClass(clazz.className)
+    val handleField = watpe.StructField(
+      genFieldID.handle,
+      NoOriginalName,
+      watpe.Int32,
+      isMutable = false
+    )
+    val structType = watpe.StructType(List(handleField))
+    ctx.mainRecType.addSubType(id, OriginalName(id.toString()), structType)
+  }
+
+  /** Generates the asInstance cast function for a resource type.
+   *
+   *  This function casts from anyref to the resource struct type.
+   *  It's used when Result/Option type erasure causes resource types to be stored as anyref.
+   */
+  private def genResourceCastFunction(clazz: LinkedClass)(implicit ctx: WasmContext): Unit = {
+    val className = clazz.className
+    val resourceStructType = TypeTransformer.transformComponentResourceType(className)
+
+    val fb = new FunctionBuilder(
+      ctx.moduleBuilder,
+      genFunctionID.asInstance(ComponentResourceType(className)),
+      makeDebugName(ns.AsInstance, className),
+      clazz.pos
+    )
+    val objParam = fb.addParam("obj", watpe.RefType.anyref)
+    fb.setResultType(resourceStructType)
+    fb += wa.LocalGet(objParam)
+    fb += wa.RefCast(resourceStructType)
+
+    fb.buildAndAddToModule()
+  }
+
   private def emitSpecialMethod(
       functionID: wanme.FunctionID,
       originalName: OriginalName,
@@ -1684,6 +1727,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val encoded = typeRef match {
       case typeRef: PrimRef    => UTF8String(typeRef.charCode.toString())
       case ClassRef(className) => className.encoded
+      case ComponentResourceTypeRef(className) => UTF8String("W") ++ className.encoded
     }
     OriginalName(namespace ++ encoded)
   }

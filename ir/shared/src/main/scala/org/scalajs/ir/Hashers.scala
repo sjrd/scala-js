@@ -617,6 +617,9 @@ object Hashers {
       case ClassRef(className) =>
         mixTag(TagClassRef)
         mixName(className)
+      case ComponentResourceTypeRef(className) =>
+        mixTag(TagComponentResourceTypeRef)
+        mixName(className)
       case typeRef: ArrayTypeRef =>
         mixTag(TagArrayTypeRef)
         mixArrayTypeRef(typeRef)
@@ -650,6 +653,10 @@ object Hashers {
 
       case ClassType(className, nullable) =>
         mixTag(if (nullable) TagClassType else TagNonNullClassType)
+        mixName(className)
+
+      case ComponentResourceType(className) =>
+        mixTag(TagComponentResourceType)
         mixName(className)
 
       case ArrayType(arrayTypeRef, nullable) =>

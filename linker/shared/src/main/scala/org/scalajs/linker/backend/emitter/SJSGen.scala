@@ -477,7 +477,8 @@ private[emitter] final class SJSGen(
       case AnyNotNullType => expr !== Null()
 
       case VoidType | NullType | NothingType | AnyType |
-          ClassType(_, true) | ArrayType(_, true) | _:ClosureType | _:RecordType =>
+          ClassType(_, true) | ArrayType(_, true) | _:ClosureType | _:RecordType |
+          _:ComponentResourceType =>
         throw new AssertionError(s"Unexpected type $tpe in genIsInstanceOf")
     }
   }
@@ -551,7 +552,8 @@ private[emitter] final class SJSGen(
           genCallPolyfillableBuiltin(FroundBuiltin, expr)
 
         case VoidType | NullType | NothingType | AnyNotNullType |
-            ClassType(_, false) | ArrayType(_, false) | _:ClosureType | _:RecordType =>
+            ClassType(_, false) | ArrayType(_, false) | _:ClosureType | _:RecordType |
+            _:ComponentResourceType =>
           throw new AssertionError(s"Unexpected type $tpe in genAsInstanceOf")
       }
     } else {
@@ -577,7 +579,8 @@ private[emitter] final class SJSGen(
         case AnyType     => expr
 
         case VoidType | NullType | NothingType | AnyNotNullType |
-            ClassType(_, false) | ArrayType(_, false) | _:ClosureType | _:RecordType =>
+            ClassType(_, false) | ArrayType(_, false) | _:ClosureType | _:RecordType |
+            _:ComponentResourceType =>
           throw new AssertionError(s"Unexpected type $tpe in genAsInstanceOf")
       }
 

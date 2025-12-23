@@ -89,12 +89,10 @@ object TypeTransformer {
     tpe match {
       case AnyType                        => watpe.RefType.anyref
       case AnyNotNullType                 => watpe.RefType.any
-      case ClassType(className, nullable)
-          if ctx.getClassInfo(className).isWasmComponentResource =>
-        watpe.Int32
-
       case ClassType(className, nullable) => transformClassType(className, nullable)
       case tpe: PrimType                  => transformPrimType(tpe)
+
+      case ComponentResourceType(className) => transformComponentResourceType(className)
 
       case ArrayType(arrayTypeRef, nullable) =>
         watpe.RefType(nullable, genTypeID.forArrayClass(arrayTypeRef))
@@ -124,8 +122,6 @@ object TypeTransformer {
           watpe.HeapType.None
         else if (info.isInterface)
           watpe.HeapType(genTypeID.ObjectStruct)
-        else if (info.isWasmComponentResource)
-          ???
         else
           watpe.HeapType(genTypeID.forClass(className))
 
@@ -134,6 +130,16 @@ object TypeTransformer {
     }
 
     watpe.RefType(nullable, heapType)
+  }
+
+  def transformComponentResourceType(className: ClassName)(
+      implicit ctx: WasmContext): watpe.RefType = {
+    /* Component resources are represented as simple wrapper structs containing
+     * only an i32 handle field. They are converted to/from i32 handles at
+     * component model boundaries
+     */
+    val heapType = watpe.HeapType(genTypeID.forResourceClass(className))
+    watpe.RefType(nullable = false, heapType)
   }
 
   def transformPrimType(tpe: PrimType)(implicit ctx: WasmContext): watpe.Type = {

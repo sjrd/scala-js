@@ -64,6 +64,12 @@ object Countable {
     @ComponentResourceStaticMethod("sum")
     def sum(a: Counter, b: Counter): Counter = cm.native
   }
+
+  @ComponentImport("component:testing/countable", "try-create-counter")
+  def tryCreateCounter(value: Int): cm.Result[Counter, String] = cm.native
+
+  @ComponentImport("component:testing/countable", "maybe-get-counter")
+  def maybeGetCounter(): Optional[Counter] = cm.native
 }
 
 import TestImportsHelper._

@@ -164,8 +164,6 @@ object WellKnownNames {
     ClassName("scala.scalajs.component.Err")
   final val ComponentVariantValueFieldName: SimpleFieldName =
     SimpleFieldName("value")
-  final val ComponentVariantIndexFieldName: SimpleFieldName =
-    SimpleFieldName("_index")
 
   final val juOptionalClass = ClassName("java.util.Optional")
 }

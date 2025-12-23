@@ -1178,6 +1178,10 @@ object Printers {
         print(tpe)
       case ClassRef(className) =>
         print(className)
+      case ComponentResourceTypeRef(className) =>
+        print("resource<")
+        print(className)
+        print(">")
       case ArrayTypeRef(base, dims) =>
         print(base)
         for (i <- 1 to dims)
@@ -1207,6 +1211,11 @@ object Printers {
         print(className)
         if (!nullable)
           print("!")
+
+      case ComponentResourceType(className) =>
+        print("resource<")
+        print(className)
+        print(">")
 
       case ArrayType(arrayTypeRef, nullable) =>
         print(arrayTypeRef)

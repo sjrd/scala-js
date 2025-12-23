@@ -476,10 +476,14 @@ object VarGen {
        */
       case object left extends FieldID
     }
+
+    /** Resource handle for Component Model resource type. */
+    final case object handle extends FieldID
   }
 
   object genTypeID {
     final case class forClass(className: ClassName) extends TypeID
+    final case class forResourceClass(className: ClassName) extends TypeID
     final case class captureData(index: Int) extends TypeID
     final case class forVTable(className: ClassName) extends TypeID
     final case class forITable(className: ClassName) extends TypeID

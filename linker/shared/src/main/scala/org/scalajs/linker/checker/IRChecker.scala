@@ -880,6 +880,7 @@ private final class IRChecker(linkTimeProperties: LinkTimeProperties,
       case ClassRef(className)        => classNameToType(className)
       case arrayTypeRef: ArrayTypeRef => ArrayType(arrayTypeRef, nullable = true)
       case typeRef: TransientTypeRef  => typeRef.tpe
+      case ComponentResourceTypeRef(className) => ComponentResourceType(className)
     }
   }
 
