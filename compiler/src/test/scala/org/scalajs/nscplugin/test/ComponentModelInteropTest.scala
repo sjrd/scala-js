@@ -335,4 +335,103 @@ class ComponentModelInteropTest extends DirectTest with TestHelpers {
     """.hasNoWarns()
   }
 
+  // --- Component Variant Tests ---
+
+  @Test def variantMustBeSealed: Unit = {
+    """
+    @ComponentVariant
+    trait NotSealed
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentVariant can only be used on sealed traits or sealed abstract classes
+      |    trait NotSealed
+      |          ^
+    """
+  }
+
+  @Test def variantMustHaveAtLeastOneCase: Unit = {
+    """
+    @ComponentVariant
+    sealed trait Empty
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: Component variant 'Empty' must have at least one case
+      |    sealed trait Empty
+      |                 ^
+    """
+  }
+
+  @Test def variantCasesMustBeCaseClassOrObject: Unit = {
+    """
+    @ComponentVariant
+    sealed trait MyVariant
+    object MyVariant {
+      class NotACase extends MyVariant
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:9: error: Component variant case 'NotACase' must be a case class or case object
+      |      class NotACase extends MyVariant
+      |            ^
+    """
+  }
+
+  @Test def variantCaseClassMustHaveAtMostOneField: Unit = {
+    """
+    @ComponentVariant
+    sealed trait MyVariant
+    object MyVariant {
+      final case class TooManyFields(x: Int, y: String) extends MyVariant
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:9: error: Component variant case 'TooManyFields' must have exactly one field, found 2.
+      |      final case class TooManyFields(x: Int, y: String) extends MyVariant
+      |                       ^
+    """
+  }
+
+  @Test def variantCaseFieldMustBeNamedValue: Unit = {
+    """
+    @ComponentVariant
+    sealed trait MyVariant
+    object MyVariant {
+      final case class WrongName(data: Int) extends MyVariant
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:9: error: Component variant case 'WrongName' field must be named 'value', found 'data'.
+      |      final case class WrongName(data: Int) extends MyVariant
+      |                                 ^
+    """
+  }
+
+  @Test def variantCaseFieldMustBeCompatibleType: Unit = {
+    """
+    class NotCompatible
+
+    @ComponentVariant
+    sealed trait MyVariant
+    object MyVariant {
+      final case class InvalidType(value: NotCompatible) extends MyVariant
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:11: error: Field 'value' has type 'NotCompatible' which is not compatible with Component Model.
+      |      final case class InvalidType(value: NotCompatible) extends MyVariant
+      |                                   ^
+    """
+  }
+
+  @Test def variantValidCaseClassWithValue: Unit = {
+    """
+    @ComponentVariant
+    sealed trait MyVariant
+    object MyVariant {
+      final case class IntValue(value: Int) extends MyVariant
+      final case class StringValue(value: String) extends MyVariant
+      final case object None extends MyVariant
+    }
+    """.hasNoWarns()
+  }
 }
