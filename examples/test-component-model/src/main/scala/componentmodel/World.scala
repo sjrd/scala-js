@@ -59,14 +59,14 @@ object World {
   @ComponentExport("component:testing/tests", "roundtrip-enum-error")
   def roundtripEnumError(a: cm.Result[C1, E1]): cm.Result[C1, E1] = a
 
-  @ComponentExport("component:testing/tests", "roundtrip-f8")
-  def roundtripF8(a: F1): F1 = a
+  @ComponentExport("component:testing/tests", "roundtrip-f1")
+  def roundtripF1(a: F1): F1 = a
 
-  @ComponentExport("component:testing/tests", "roundtrip-f16")
-  def roundtripF16(a: F2): F2 = a
+  @ComponentExport("component:testing/tests", "roundtrip-f2")
+  def roundtripF2(a: F2): F2 = a
 
-  @ComponentExport("component:testing/tests", "roundtrip-f32")
-  def roundtripF32(a: F3): F3 = a
+  @ComponentExport("component:testing/tests", "roundtrip-f3")
+  def roundtripF3(a: F3): F3 = a
 
   @ComponentExport("component:testing/tests", "roundtrip-flags")
   def roundtripFlags(a: cm.Tuple2[F1, F1]): cm.Tuple2[F1, F1] = a

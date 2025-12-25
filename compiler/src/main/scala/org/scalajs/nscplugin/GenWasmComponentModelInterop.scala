@@ -214,18 +214,8 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
     }
   }
 
-  private def toFlagTypeOpt(tpe: Type): Option[wit.FlagsType] = {
-    for {
-      ann <- tpe.typeSymbolDirect.getAnnotation(ComponentFlagsAnnotation)
-      numFlags <- ann.intArg(0)
-      if toIRType(tpe) == jstpe.IntType
-    } yield wit.FlagsType(numFlags)
-  }
-
   private def toWIT(tpe: Type): wit.ValType = {
-    toFlagTypeOpt(tpe).orElse {
-      unsigned2WIT.get(tpe.typeSymbolDirect)
-    }.orElse {
+    unsigned2WIT.get(tpe.typeSymbolDirect).orElse {
       toWITMaybeArray(tpe.dealiasWiden)
     }.orElse {
       primitiveIRWIT.get(toIRType(tpe.dealiasWiden))
@@ -233,6 +223,16 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
       tpe.dealiasWiden.typeSymbol match {
         case tsym if isWasmComponentTupleClass(tsym) =>
           wit.TupleType(tpe.typeArgs.map(toWIT(_)))
+
+        case tsym if tsym.hasAnnotation(ComponentFlagsAnnotation) =>
+          // Read numFlags from annotation parameter
+          val numFlags = tsym.getAnnotation(ComponentFlagsAnnotation)
+            .flatMap(_.intArg(0))
+            .getOrElse {
+              throw new AssertionError(s"@ComponentFlags on $tsym missing numFlags parameter")
+            }
+          val className = encodeClassName(tsym)
+          wit.FlagsType(className, numFlags)
 
         case tsym if isWasmComponentRecordClass(tsym) =>
           // TODO: it needs to be sorted by the order of record in wit definition

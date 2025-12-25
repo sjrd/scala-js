@@ -108,9 +108,9 @@ impl Tests for Component {
   fn roundtrip_option(a: Option<String>) -> Option<String> { a }
   fn roundtrip_double_option(a: Option<Option<String>>) -> Option<Option<String>> { a }
 
-  fn roundtrip_f8(a: F1) -> F1 { a }
-  fn roundtrip_f16(a: F2) -> F2 { a }
-  fn roundtrip_f32(a: F3) -> F3 { a }
+  fn roundtrip_f1(a: F1) -> F1 { a }
+  fn roundtrip_f2(a: F2) -> F2 { a }
+  fn roundtrip_f3(a: F3) -> F3 { a }
   fn roundtrip_flags(a: (F1, F1)) -> (F1, F1) { a }
   fn roundtrip_tuple2(a: (i32, String)) -> (i32, String) { a }
   fn roundtrip_tuple3(a: (i32, String, bool)) -> (i32, String, bool) { a }

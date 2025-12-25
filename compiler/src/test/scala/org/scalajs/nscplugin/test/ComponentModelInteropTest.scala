@@ -489,7 +489,7 @@ class ComponentModelInteropTest extends DirectTest with TestHelpers {
     final case class InvalidRecord(x: Int, y: NotCompatible)
     """ hasErrors
     """
-      |newSource1.scala:10: error: Field 'y' has type 'NotCompatible' which is not compatible with Component Model
+      |newSource1.scala:9: error: Field 'y' has type 'NotCompatible' which is not compatible with Component Model
       |    final case class InvalidRecord(x: Int, y: NotCompatible)
       |                                           ^
     """
@@ -501,12 +501,12 @@ class ComponentModelInteropTest extends DirectTest with TestHelpers {
     final case class MultipleInvalid(a: NotCompatible, b: String, c: NotCompatible)
     """ hasErrors
     """
-      |newSource1.scala:10: error: Field 'a' has type 'NotCompatible' which is not compatible with Component Model
+      |newSource1.scala:9: error: Field 'a' has type 'NotCompatible' which is not compatible with Component Model
       |    final case class MultipleInvalid(a: NotCompatible, b: String, c: NotCompatible)
       |                                     ^
-      |newSource1.scala:10: error: Field 'c' has type 'NotCompatible' which is not compatible with Component Model
+      |newSource1.scala:9: error: Field 'c' has type 'NotCompatible' which is not compatible with Component Model
       |    final case class MultipleInvalid(a: NotCompatible, b: String, c: NotCompatible)
-      |                                                                    ^
+      |                                                                  ^
     """
   }
 
@@ -520,6 +520,120 @@ class ComponentModelInteropTest extends DirectTest with TestHelpers {
 
     @ComponentRecord
     final case class Empty()
+    """.hasNoWarns()
+  }
+
+  // --- Component Flags Tests ---
+
+  @Test def flagsMustBeCaseClass: Unit = {
+    """
+    @ComponentFlags(1)
+    class NotCaseClass(value: Int)
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentFlags can only be used on case classes
+      |    class NotCaseClass(value: Int)
+      |          ^
+    """
+
+    """
+    @ComponentFlags(1)
+    trait NotCaseClass
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentFlags can only be used on case classes
+      |    trait NotCaseClass
+      |          ^
+    """
+  }
+
+  @Test def flagsMustBeFinal: Unit = {
+    """
+    @ComponentFlags(1)
+    case class NotFinal(value: Int)
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentFlags case class must be final
+      |    case class NotFinal(value: Int)
+      |               ^
+    """
+  }
+
+  @Test def flagsMustNotExtendAnyVal: Unit = {
+    """
+    @ComponentFlags(1)
+    final case class ValueClass(value: Int) extends AnyVal
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentFlags case class must NOT extend AnyVal. Use a regular case class instead.
+      |    final case class ValueClass(value: Int) extends AnyVal
+      |                     ^
+    """
+  }
+
+  @Test def flagsMustHaveOneParameter: Unit = {
+    """
+    @ComponentFlags(1)
+    final case class NoParameters()
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentFlags case class must have exactly one parameter, found 0
+      |    final case class NoParameters()
+      |                     ^
+    """
+
+    """
+    @ComponentFlags(2)
+    final case class TwoParameters(value: Int, other: Int)
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentFlags case class must have exactly one parameter, found 2
+      |    final case class TwoParameters(value: Int, other: Int)
+      |                     ^
+    """
+  }
+
+  @Test def flagsParameterMustBeIntNamedValue: Unit = {
+    """
+    @ComponentFlags(1)
+    final case class WrongType(value: String)
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentFlags case class parameter must be of type Int, found 'String'
+      |    final case class WrongType(value: String)
+      |                               ^
+    """
+
+    """
+    @ComponentFlags(1)
+    final case class WrongName(data: Int)
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentFlags case class parameter must be named 'value', found 'data'
+      |    final case class WrongName(data: Int)
+      |                               ^
+    """
+  }
+
+  @Test def flagsValidExamples: Unit = {
+    """
+    @ComponentFlags(3)
+    final case class MyFlags(value: Int) {
+      def |(other: MyFlags): MyFlags = MyFlags(value | other.value)
+      def &(other: MyFlags): MyFlags = MyFlags(value & other.value)
+    }
+    object MyFlags {
+      val Flag0 = MyFlags(1 << 0)
+      val Flag1 = MyFlags(1 << 1)
+      val Flag2 = MyFlags(1 << 2)
+    }
+
+    @ComponentFlags(2)
+    final case class SimpleFlags(value: Int)
+    object SimpleFlags {
+      val A = SimpleFlags(1 << 0)
+      val B = SimpleFlags(1 << 1)
+    }
     """.hasNoWarns()
   }
 }

@@ -94,9 +94,9 @@ interface tests {
     b16, b17, b18, b19, b20, b21, b22, b23,
     b24, b25, b26, b27, b28, b29, b30, b31,
   }
-  roundtrip-f8: func(a: f1) -> f1;
-  roundtrip-f16: func(a: f2) -> f2;
-  roundtrip-f32: func(a: f3) -> f3;
+  roundtrip-f1: func(a: f1) -> f1;
+  roundtrip-f2: func(a: f2) -> f2;
+  roundtrip-f3: func(a: f3) -> f3;
   roundtrip-flags: func(a: tuple<f1, f1>) -> tuple<f1, f1>;
 
   roundtrip-result: func(a: result) -> result;

@@ -154,11 +154,6 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
       checkInternalAnnotations(sym)
 
-      if (sym.hasAnnotation(ComponentVariantAnnotation))
-        checkComponentVariantTrait(tree.pos, sym)
-      if (sym.hasAnnotation(ComponentRecordAnnotation))
-        checkComponentRecord(sym)
-
       /* Checks related to @js.native:
        * - if @js.native, verify that it is allowed in this context, and if
        *   yes, compute and store the JS native load spec
@@ -173,7 +168,13 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
       checkJSCallingConventionAnnots(sym)
 
-      if (WasmComponentResourceAnnots.exists(sym.hasAnnotation(_)))
+      if (sym.hasAnnotation(ComponentVariantAnnotation))
+        checkComponentVariantTrait(tree.pos, sym)
+      else if (sym.hasAnnotation(ComponentRecordAnnotation))
+        checkComponentRecord(sym)
+      else if (sym.hasAnnotation(ComponentFlagsAnnotation))
+        checkComponentFlags(sym)
+      else if (WasmComponentResourceAnnots.exists(sym.hasAnnotation(_)))
         checkWasmComponentResourceAnnotationContext(tree.pos, sym)
       else if (WasmComponentFunctionAnnots.exists(sym.hasAnnotation(_)))
         checkWasmComponentFunction(tree.pos, sym)
@@ -1083,9 +1084,50 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         // Store field types for code generation
         for {
           f <- sym.info.decls
-          if !f.isMethod && f.isTerm && !f.isModule
+          if !f.isMethod && f.isField
         } {
           jsInterop.storeComponentVariantValueType(f, f.tpe)
+        }
+      }
+    }
+
+    private def checkComponentFlags(sym: Symbol): Unit = {
+      if (!sym.isCaseClass) {
+        reporter.error(sym.pos,
+            "@ComponentFlags can only be used on case classes")
+      } else if (!sym.isFinal) {
+        reporter.error(sym.pos,
+            "@ComponentFlags case class must be final")
+      } else if (sym.isDerivedValueClass) {
+        reporter.error(sym.pos,
+            "@ComponentFlags case class must NOT extend AnyVal. Use a regular case class instead.")
+      } else {
+        val primaryCtor = sym.primaryConstructor
+        val params = primaryCtor.paramss.flatten
+        if (params.length != 1) {
+          reporter.error(sym.pos,
+              s"@ComponentFlags case class must have exactly one parameter, found ${params.length}")
+          return
+        }
+
+        val param = params.headOption.getOrElse(throw new Error("checkComponentFlags"))
+        if (param.tpe.typeSymbol != IntClass) {
+          reporter.error(param.pos,
+              s"@ComponentFlags case class parameter must be of type Int, found '${param.tpe}'")
+        }
+        if (param.name.decoded != "value") {
+          reporter.error(param.pos,
+              s"@ComponentFlags case class parameter must be named 'value', found '${param.name.decoded}'")
+        }
+
+        sym.getAnnotation(ComponentFlagsAnnotation).flatMap(_.intArg(0)) match {
+          case Some(numFlags) if numFlags > 0 =>
+          case Some(numFlags) =>
+            reporter.error(sym.pos,
+                s"@ComponentFlags numFlags parameter must be positive, found $numFlags")
+          case None =>
+            reporter.error(sym.pos,
+                "@ComponentFlags annotation must specify the number of flags as a parameter")
         }
       }
     }

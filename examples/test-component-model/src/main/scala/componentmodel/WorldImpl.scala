@@ -92,7 +92,9 @@ object WorldImpl {
     assert(new cm.Err(E1.B) == roundtripEnumError(new cm.Err(E1.B)))
     assert(new cm.Err(E1.C) == roundtripEnumError(new cm.Err(E1.C)))
 
-    assert((F1.b3 | F1.b6 | F1.b7) == roundtripF8(F1.b3 | F1.b6 | F1.b7))
+    assert((F1.b3 | F1.b6 | F1.b7) == roundtripF1(F1.b3 | F1.b6 | F1.b7))
+    assert((F2.b7 | F2.b8 | F2.b15) == roundtripF2(F2.b7 | F2.b8 | F2.b15))
+    assert((F3.b7 | F3.b8 | F3.b15 | F3.b31) == roundtripF3(F3.b7 | F3.b8 | F3.b15 | F3.b31))
 
     val flagsTuple = new cm.Tuple2(F1.b3 | F1.b6, F1.b2 | F1.b3 | F1.b7)
     val flagsResult = roundtripFlags(flagsTuple)

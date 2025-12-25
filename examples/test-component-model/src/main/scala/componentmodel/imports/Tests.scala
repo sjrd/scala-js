@@ -58,8 +58,14 @@ object Tests {
   @ComponentImport("component:testing/tests", "roundtrip-enum-error")
   def roundtripEnumError(a: cm.Result[C1, E1]): cm.Result[C1, E1] = cm.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-f8")
-  def roundtripF8(a: F1): F1 = cm.native
+  @ComponentImport("component:testing/tests", "roundtrip-f1")
+  def roundtripF1(a: F1): F1 = cm.native
+
+  @ComponentImport("component:testing/tests", "roundtrip-f2")
+  def roundtripF2(a: F2): F2 = cm.native
+
+  @ComponentImport("component:testing/tests", "roundtrip-f3")
+  def roundtripF3(a: F3): F3 = cm.native
 
   @ComponentImport("component:testing/tests", "roundtrip-flags")
   def roundtripFlags(a: cm.Tuple2[F1, F1]): cm.Tuple2[F1, F1] = cm.native

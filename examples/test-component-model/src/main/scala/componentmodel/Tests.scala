@@ -10,8 +10,8 @@ import java.util.Optional
 
 object Tests {
 
-  @ComponentFlags
-  final case class F1(value: Int) extends AnyVal {
+  @ComponentFlags(8)
+  final case class F1(value: Int) {
     def |(other: F1): F1 = F1(value | other.value)
     def &(other: F1): F1 = F1(value & other.value)
     def ^(other: F1): F1 = F1(value ^ other.value)
@@ -29,8 +29,8 @@ object Tests {
     val b7 = F1(1 << 7)
   }
 
-  @ComponentFlags
-  final case class F2(value: Int) extends AnyVal {
+  @ComponentFlags(16)
+  final case class F2(value: Int) {
     def |(other: F2): F2 = F2(value | other.value)
     def &(other: F2): F2 = F2(value & other.value)
     def ^(other: F2): F2 = F2(value ^ other.value)
@@ -56,8 +56,8 @@ object Tests {
     val b15 = F2(1 << 15)
   }
 
-  @ComponentFlags
-  final case class F3(value: Int) extends AnyVal {
+  @ComponentFlags(32)
+  final case class F3(value: Int) {
     def |(other: F3): F3 = F3(value | other.value)
     def &(other: F3): F3 = F3(value & other.value)
     def ^(other: F3): F3 = F3(value ^ other.value)

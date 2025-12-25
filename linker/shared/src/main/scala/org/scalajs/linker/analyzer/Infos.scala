@@ -749,7 +749,7 @@ object Infos {
             generateForWIT(f.tpe)
           }
 
-        case wit.FlagsType(_) =>
+        case wit.FlagsType(_, _) =>
 
         case wit.OptionType(t) =>
           builder.addInstantiatedClass(juOptionalClass, MethodName.constructor(List(ClassRef(ObjectClass))))
