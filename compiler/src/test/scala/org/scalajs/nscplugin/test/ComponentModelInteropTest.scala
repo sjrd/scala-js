@@ -434,4 +434,92 @@ class ComponentModelInteropTest extends DirectTest with TestHelpers {
     }
     """.hasNoWarns()
   }
+
+  // --- Component Record Tests ---
+
+  @Test def recordMustBeCaseClass: Unit = {
+    """
+    @ComponentRecord
+    class NotCaseClass(x: Int, y: Int)
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentRecord can only be used on case classes
+      |    class NotCaseClass(x: Int, y: Int)
+      |          ^
+    """
+
+    """
+    @ComponentRecord
+    trait NotCaseClass
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentRecord can only be used on case classes
+      |    trait NotCaseClass
+      |          ^
+    """
+
+    """
+    @ComponentRecord
+    object NotCaseClass
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentRecord can only be used on case classes
+      |    object NotCaseClass
+      |           ^
+    """
+  }
+
+  @Test def recordMustBeFinal: Unit = {
+    """
+    @ComponentRecord
+    case class NotFinal(x: Int, y: Int)
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentRecord case class must be final
+      |    case class NotFinal(x: Int, y: Int)
+      |               ^
+    """
+  }
+
+  @Test def recordFieldsMustBeCompatible: Unit = {
+    """
+    class NotCompatible
+
+    @ComponentRecord
+    final case class InvalidRecord(x: Int, y: NotCompatible)
+    """ hasErrors
+    """
+      |newSource1.scala:10: error: Field 'y' has type 'NotCompatible' which is not compatible with Component Model
+      |    final case class InvalidRecord(x: Int, y: NotCompatible)
+      |                                           ^
+    """
+
+    """
+    class NotCompatible
+
+    @ComponentRecord
+    final case class MultipleInvalid(a: NotCompatible, b: String, c: NotCompatible)
+    """ hasErrors
+    """
+      |newSource1.scala:10: error: Field 'a' has type 'NotCompatible' which is not compatible with Component Model
+      |    final case class MultipleInvalid(a: NotCompatible, b: String, c: NotCompatible)
+      |                                     ^
+      |newSource1.scala:10: error: Field 'c' has type 'NotCompatible' which is not compatible with Component Model
+      |    final case class MultipleInvalid(a: NotCompatible, b: String, c: NotCompatible)
+      |                                                                    ^
+    """
+  }
+
+  @Test def recordValidExamples: Unit = {
+    """
+    @ComponentRecord
+    final case class Point(x: Int, y: Int)
+
+    @ComponentRecord
+    final case class Person(name: String, age: Int)
+
+    @ComponentRecord
+    final case class Empty()
+    """.hasNoWarns()
+  }
 }

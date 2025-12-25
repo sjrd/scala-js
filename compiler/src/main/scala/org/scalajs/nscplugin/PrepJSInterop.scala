@@ -1063,11 +1063,30 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     }
 
     private def checkComponentRecord(sym: Symbol): Unit = {
-      for {
-        f <- sym.info.decls
-        if !f.isMethod && f.isTerm && !f.isModule
-      } {
-        jsInterop.storeComponentVariantValueType(f, f.tpe)
+      if (!sym.isCaseClass) {
+        reporter.error(sym.pos,
+            "@ComponentRecord can only be used on case classes")
+      } else if (!sym.isFinal) {
+        reporter.error(sym.pos,
+            "@ComponentRecord case class must be final")
+      } else {
+        // Check that each field has a compatible type
+        val primaryCtor = sym.primaryConstructor
+        val params = primaryCtor.paramss.flatten
+        for (param <- params) {
+          val fieldType = param.tpe
+          if (!isComponentModelCompatible(fieldType)) {
+            reporter.error(param.pos,
+                s"Field '${param.name}' has type '${fieldType}' which is not compatible with Component Model")
+          }
+        }
+        // Store field types for code generation
+        for {
+          f <- sym.info.decls
+          if !f.isMethod && f.isTerm && !f.isModule
+        } {
+          jsInterop.storeComponentVariantValueType(f, f.tpe)
+        }
       }
     }
 

@@ -14,6 +14,6 @@ object WallClock {
   def resolution(): Datetime = cm.native
 
   @ComponentRecord
-  final class Datetime(val seconds: ULong, val nanoseconds: UInt)
+  final case class Datetime(seconds: ULong, nanoseconds: UInt)
 
 }
