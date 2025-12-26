@@ -788,6 +788,9 @@ object Infos {
             }
           }
 
+        case wit.ListType(elemType, _) =>
+          generateForWIT(elemType)
+
         case wit.ResourceType(className) =>
           builder.maybeAddReferencedClass(ClassRef(className))
 
