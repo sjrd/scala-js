@@ -34,7 +34,6 @@ import org.scalajs.ir.{
   Hashers,
   OriginalName
 }
-import org.scalajs.ir.{WasmInterfaceTypes => wit}
 import org.scalajs.ir.Names.{
   LocalName,
   LabelName,

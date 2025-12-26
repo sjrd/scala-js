@@ -1,4 +1,4 @@
-package componentmodel
+package componentmodel.imports
 
 import scala.scalajs.{component => cm}
 import scala.scalajs.component.annotation._
@@ -6,73 +6,8 @@ import scala.scalajs.component.unsigned._
 
 import java.util.Optional
 
-object Basics {
- @ComponentImport("component:testing/basics", "roundtrip-u8")
- def roundtripU8(a: UByte): UByte = cm.native
+import componentmodel.Tests._
 
-  @ComponentImport("component:testing/basics", "roundtrip-s8")
-  def roundtripS8(a: Byte): Byte = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-u16")
-  def roundtripU16(a: UShort): UShort = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-s16")
-  def roundtripS16(a: Short): Short = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-u32")
-  def roundtripU32(a: UInt): UInt = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-s32")
-  def roundtripS32(a: Int): Int = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-u64")
-  def roundtripU64(a: ULong): ULong = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-s64")
-  def roundtripS64(a: Long): Long = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-f32")
-  def roundtripF32(a: Float): Float = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-f64")
-  def roundtripF64(a: Double): Double = cm.native
-
-  @ComponentImport("component:testing/basics", "roundtrip-char")
-  def roundtripChar(a: Char): Char = cm.native
-}
-
-
-object Countable {
-  @ComponentResourceImport("component:testing/countable", "counter")
-  trait Counter {
-    @ComponentResourceMethod("up")
-    def up(): Unit = cm.native
-
-    @ComponentResourceMethod("down")
-    def down(): Unit = cm.native
-
-    @ComponentResourceMethod("value-of")
-    def valueOf(): Int = cm.native
-
-    @ComponentResourceDrop
-    def close(): Unit = cm.native
-  }
-  object Counter {
-    @ComponentResourceConstructor
-    def apply(i: Int): Counter = cm.native
-
-    @ComponentResourceStaticMethod("sum")
-    def sum(a: Counter, b: Counter): Counter = cm.native
-  }
-
-  @ComponentImport("component:testing/countable", "try-create-counter")
-  def tryCreateCounter(value: Int): cm.Result[Counter, String] = cm.native
-
-  @ComponentImport("component:testing/countable", "maybe-get-counter")
-  def maybeGetCounter(): Optional[Counter] = cm.native
-}
-
-import TestImportsHelper._
 object Tests {
   @ComponentImport("component:testing/tests", "roundtrip-basics1")
   def roundtripBasics1(a: cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char]):
@@ -123,8 +58,14 @@ object Tests {
   @ComponentImport("component:testing/tests", "roundtrip-enum-error")
   def roundtripEnumError(a: cm.Result[C1, E1]): cm.Result[C1, E1] = cm.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-f8")
-  def roundtripF8(a: F1): F1 = cm.native
+  @ComponentImport("component:testing/tests", "roundtrip-f1")
+  def roundtripF1(a: F1): F1 = cm.native
+
+  @ComponentImport("component:testing/tests", "roundtrip-f2")
+  def roundtripF2(a: F2): F2 = cm.native
+
+  @ComponentImport("component:testing/tests", "roundtrip-f3")
+  def roundtripF3(a: F3): F3 = cm.native
 
   @ComponentImport("component:testing/tests", "roundtrip-flags")
   def roundtripFlags(a: cm.Tuple2[F1, F1]): cm.Tuple2[F1, F1] = cm.native

@@ -116,7 +116,13 @@ object ScalaJSToCABI {
           genMovePtr(fb, ptr, wit.elemSize(f))
         }
 
-      case flags: wit.FlagsType =>
+      case flags @ wit.FlagsType(className, _) =>
+        val valueFieldName = FieldName(className, SimpleFieldName("value"))
+        fb += wa.RefCast(watpe.RefType.nullable(genTypeID.forClass(className)))
+        fb += wa.StructGet(
+          genTypeID.forClass(className),
+          genFieldID.forClassInstanceField(valueFieldName)
+        )
         wit.elemSize(flags) match {
           case 1 => fb += wa.I32Store8()
           case 2 => fb += wa.I32Store16()
@@ -235,7 +241,13 @@ object ScalaJSToCABI {
         fb += wa.LocalTee(offset)
         fb += wa.LocalGet(units)
 
-      case wit.FlagsType(_) =>
+      case wit.FlagsType(className, _) =>
+        val valueFieldName = FieldName(className, SimpleFieldName("value"))
+        fb += wa.RefCast(watpe.RefType.nullable(genTypeID.forClass(className)))
+        fb += wa.StructGet(
+          genTypeID.forClass(className),
+          genFieldID.forClassInstanceField(valueFieldName)
+        )
 
       case wit.TupleType(fields) =>
         val className = ClassName("scala.scalajs.component.Tuple" + fields.size)

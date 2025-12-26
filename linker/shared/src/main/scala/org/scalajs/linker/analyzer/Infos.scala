@@ -749,7 +749,7 @@ object Infos {
             generateForWIT(f.tpe)
           }
 
-        case wit.FlagsType(_) =>
+        case wit.FlagsType(_, _) =>
 
         case wit.OptionType(t) =>
           builder.addInstantiatedClass(juOptionalClass, MethodName.constructor(List(ClassRef(ObjectClass))))
@@ -787,6 +787,9 @@ object Infos {
               generateForWIT(tpe)
             }
           }
+
+        case wit.ListType(elemType, _) =>
+          generateForWIT(elemType)
 
         case wit.ResourceType(className) =>
           builder.maybeAddReferencedClass(ClassRef(className))

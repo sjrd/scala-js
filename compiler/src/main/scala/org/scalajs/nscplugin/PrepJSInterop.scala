@@ -154,11 +154,6 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
       checkInternalAnnotations(sym)
 
-      if (sym.hasAnnotation(ComponentVariantAnnotation))
-        checkComponentVariantTrait(tree.pos, sym)
-      if (sym.hasAnnotation(ComponentRecordAnnotation))
-        checkComponentRecord(sym)
-
       /* Checks related to @js.native:
        * - if @js.native, verify that it is allowed in this context, and if
        *   yes, compute and store the JS native load spec
@@ -173,7 +168,13 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
       checkJSCallingConventionAnnots(sym)
 
-      if (WasmComponentResourceAnnots.exists(sym.hasAnnotation(_)))
+      if (sym.hasAnnotation(ComponentVariantAnnotation))
+        checkComponentVariantTrait(tree.pos, sym)
+      else if (sym.hasAnnotation(ComponentRecordAnnotation))
+        checkComponentRecord(sym)
+      else if (sym.hasAnnotation(ComponentFlagsAnnotation))
+        checkComponentFlags(sym)
+      else if (WasmComponentResourceAnnots.exists(sym.hasAnnotation(_)))
         checkWasmComponentResourceAnnotationContext(tree.pos, sym)
       else if (WasmComponentFunctionAnnots.exists(sym.hasAnnotation(_)))
         checkWasmComponentFunction(tree.pos, sym)
@@ -816,6 +817,15 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         } else if (sym.isConstructor) {
           reporter.error(pos,
               s"$annot is not allowed on constructor")
+        } else if (!sym.owner.isModuleClass || !sym.owner.isPublic) {
+          reporter.error(pos,
+              s"$annot methods must be defined in a public object")
+        } else if (!sym.isPublic) {
+          reporter.error(pos,
+              s"$annot methods must be public")
+        } else if (sym.typeParams.nonEmpty) {
+          reporter.error(pos,
+              s"$annot methods cannot have type parameters")
         } else {
           // Validate @ComponentImport-specific rules
           for (overridden <- sym.allOverriddenSymbols.headOption) {
@@ -823,6 +833,28 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
             reporter.error(pos,
                 s"An $annot member cannot $verb the inherited member " +
                 overridden.fullName)
+          }
+
+          // Validate parameter types and check for repeated/default parameters
+          val paramTypes = if (sym.tpe.paramss.isEmpty) Nil else sym.tpe.paramss.head
+          for (param <- paramTypes) {
+            if (isScalaRepeatedParamType(param.tpe)) {
+              reporter.error(pos,
+                  s"$annot methods may not have repeated parameters")
+            } else if (param.hasFlag(reflect.internal.Flags.DEFAULTPARAM)) {
+              reporter.error(pos,
+                  s"$annot methods may not have default parameters")
+            } else if (!isComponentModelCompatible(param.tpe)) {
+              reporter.error(pos,
+                  s"Parameter '${param.name}' has type '${param.tpe}' which is not compatible with Component Model")
+            }
+          }
+
+          // Validate return type
+          val returnType = sym.tpe.resultType
+          if (!isComponentModelCompatible(returnType)) {
+            reporter.error(pos,
+                s"Return type '${returnType}' is not compatible with Component Model")
           }
 
           val funcType = jsInterop.ComponentFunctionType(
@@ -1063,11 +1095,71 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     }
 
     private def checkComponentRecord(sym: Symbol): Unit = {
-      for {
-        f <- sym.info.decls
-        if !f.isMethod && f.isTerm && !f.isModule
-      } {
-        jsInterop.storeComponentVariantValueType(f, f.tpe)
+      if (!sym.isCaseClass) {
+        reporter.error(sym.pos,
+            "@ComponentRecord can only be used on case classes")
+      } else if (!sym.isFinal) {
+        reporter.error(sym.pos,
+            "@ComponentRecord case class must be final")
+      } else {
+        // Check that each field has a compatible type
+        val primaryCtor = sym.primaryConstructor
+        val params = primaryCtor.paramss.flatten
+        for (param <- params) {
+          val fieldType = param.tpe
+          if (!isComponentModelCompatible(fieldType)) {
+            reporter.error(param.pos,
+                s"Field '${param.name}' has type '${fieldType}' which is not compatible with Component Model")
+          }
+        }
+        // Store field types for code generation
+        for {
+          f <- sym.info.decls
+          if !f.isMethod && f.isField
+        } {
+          jsInterop.storeComponentVariantValueType(f, f.tpe)
+        }
+      }
+    }
+
+    private def checkComponentFlags(sym: Symbol): Unit = {
+      if (!sym.isCaseClass) {
+        reporter.error(sym.pos,
+            "@ComponentFlags can only be used on case classes")
+      } else if (!sym.isFinal) {
+        reporter.error(sym.pos,
+            "@ComponentFlags case class must be final")
+      } else if (sym.isDerivedValueClass) {
+        reporter.error(sym.pos,
+            "@ComponentFlags case class must NOT extend AnyVal. Use a regular case class instead.")
+      } else {
+        val primaryCtor = sym.primaryConstructor
+        val params = primaryCtor.paramss.flatten
+        if (params.length != 1) {
+          reporter.error(sym.pos,
+              s"@ComponentFlags case class must have exactly one parameter, found ${params.length}")
+          return
+        }
+
+        val param = params.headOption.getOrElse(throw new Error("checkComponentFlags"))
+        if (param.tpe.typeSymbol != IntClass) {
+          reporter.error(param.pos,
+              s"@ComponentFlags case class parameter must be of type Int, found '${param.tpe}'")
+        }
+        if (param.name.decoded != "value") {
+          reporter.error(param.pos,
+              s"@ComponentFlags case class parameter must be named 'value', found '${param.name.decoded}'")
+        }
+
+        sym.getAnnotation(ComponentFlagsAnnotation).flatMap(_.intArg(0)) match {
+          case Some(numFlags) if numFlags > 0 =>
+          case Some(numFlags) =>
+            reporter.error(sym.pos,
+                s"@ComponentFlags numFlags parameter must be positive, found $numFlags")
+          case None =>
+            reporter.error(sym.pos,
+                "@ComponentFlags annotation must specify the number of flags as a parameter")
+        }
       }
     }
 
@@ -1996,7 +2088,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
       case head :: tail =>
         reporter.error(pos,
             "Wasm Component function must have exactly one annotation among " +
-            "@ComponentImport, @ComponentResourceMethod, @ComponentResourceStaticMethod " +
+            "@ComponentImport, @ComponentResourceMethod, @ComponentResourceStaticMethod, " +
             "@ComponentResourceConstructor, and @ComponentResourceDrop")
         None
     }

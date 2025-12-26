@@ -94,11 +94,19 @@ object CABIToScalaJS {
           case Some(value) => ???
         }
 
-      case flags: wit.FlagsType =>
+      case flags @ wit.FlagsType(className, _) =>
+        val ptr = fb.addLocal(NoOriginalName, watpe.Int32)
+        fb += wa.LocalTee(ptr)
         wit.elemSize(flags) match {
           case 1 => fb += wa.I32Load8U()
           case 2 => fb += wa.I32Load16U()
           case 4 => fb += wa.I32Load()
+        }
+        val ctor = MethodName.constructor(List(IntRef))
+        val intValue = fb.addLocal(NoOriginalName, watpe.Int32)
+        fb += wa.LocalSet(intValue)
+        genNewScalaClass(fb, className, ctor) {
+          fb += wa.LocalGet(intValue)
         }
 
       case wit.RecordType(className, fields) =>
@@ -255,8 +263,11 @@ object CABIToScalaJS {
           case Some(value) => ???
         }
 
-      case flags: wit.FlagsType =>
-        vi.next(watpe.Int32)
+      case flags @ wit.FlagsType(className, _) =>
+        val ctor = MethodName.constructor(List(IntRef))
+        genNewScalaClass(fb, className, ctor) {
+          vi.next(watpe.Int32)
+        }
 
       case wit.RecordType(className, fields) =>
         val typeRefs = fields.map(f => wit.toTypeRef(f.tpe))

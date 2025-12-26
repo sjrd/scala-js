@@ -1026,8 +1026,9 @@ object Serializers {
         ok.foreach(writeWITType)
         buffer.writeBoolean(err.isDefined)
         err.foreach(writeWITType)
-      case wit.FlagsType(numFlags) =>
+      case wit.FlagsType(className, numFlags) =>
         buffer.writeByte(TagWITFlagsType)
+        writeName(className)
         buffer.writeInt(numFlags)
       case wit.ResourceType(className) =>
         buffer.writeByte(TagWITResourceType)
@@ -2753,7 +2754,9 @@ object Serializers {
           val err = if (readBoolean()) Some(readWITType()) else None
           wit.ResultType(ok, err)
         case TagWITFlagsType =>
-          wit.FlagsType(readInt())
+          val className = readClassName()
+          val numFlags = readInt()
+          wit.FlagsType(className, numFlags)
         case TagWITResourceType => wit.ResourceType(readClassName())
       }
     }
