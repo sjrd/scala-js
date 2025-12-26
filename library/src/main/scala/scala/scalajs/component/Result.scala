@@ -14,6 +14,6 @@ package scala.scalajs.component
 
 sealed trait Result[+A, +B]
 
-final case class Ok[A](val value: A) extends Result[A, Nothing]
+final case class Ok[A](value: A) extends Result[A, Nothing]
 
-final case class Err[B](val value: B) extends Result[Nothing, B]
+final case class Err[B](value: B) extends Result[Nothing, B]

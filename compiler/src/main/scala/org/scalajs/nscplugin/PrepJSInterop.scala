@@ -817,6 +817,15 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         } else if (sym.isConstructor) {
           reporter.error(pos,
               s"$annot is not allowed on constructor")
+        } else if (!sym.owner.isModuleClass || !sym.owner.isPublic) {
+          reporter.error(pos,
+              s"$annot methods must be defined in a public object")
+        } else if (!sym.isPublic) {
+          reporter.error(pos,
+              s"$annot methods must be public")
+        } else if (sym.typeParams.nonEmpty) {
+          reporter.error(pos,
+              s"$annot methods cannot have type parameters")
         } else {
           // Validate @ComponentImport-specific rules
           for (overridden <- sym.allOverriddenSymbols.headOption) {
@@ -824,6 +833,28 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
             reporter.error(pos,
                 s"An $annot member cannot $verb the inherited member " +
                 overridden.fullName)
+          }
+
+          // Validate parameter types and check for repeated/default parameters
+          val paramTypes = if (sym.tpe.paramss.isEmpty) Nil else sym.tpe.paramss.head
+          for (param <- paramTypes) {
+            if (isScalaRepeatedParamType(param.tpe)) {
+              reporter.error(pos,
+                  s"$annot methods may not have repeated parameters")
+            } else if (param.hasFlag(reflect.internal.Flags.DEFAULTPARAM)) {
+              reporter.error(pos,
+                  s"$annot methods may not have default parameters")
+            } else if (!isComponentModelCompatible(param.tpe)) {
+              reporter.error(pos,
+                  s"Parameter '${param.name}' has type '${param.tpe}' which is not compatible with Component Model")
+            }
+          }
+
+          // Validate return type
+          val returnType = sym.tpe.resultType
+          if (!isComponentModelCompatible(returnType)) {
+            reporter.error(pos,
+                s"Return type '${returnType}' is not compatible with Component Model")
           }
 
           val funcType = jsInterop.ComponentFunctionType(
@@ -2057,7 +2088,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
       case head :: tail =>
         reporter.error(pos,
             "Wasm Component function must have exactly one annotation among " +
-            "@ComponentImport, @ComponentResourceMethod, @ComponentResourceStaticMethod " +
+            "@ComponentImport, @ComponentResourceMethod, @ComponentResourceStaticMethod, " +
             "@ComponentResourceConstructor, and @ComponentResourceDrop")
         None
     }
