@@ -969,6 +969,7 @@ object Build {
         "2.12.18",
         "2.12.19",
         "2.12.20",
+        "2.12.21",
       ),
       cross213ScalaVersions := Seq(
         "2.13.3",
@@ -985,6 +986,7 @@ object Build {
         "2.13.14",
         "2.13.15",
         "2.13.16",
+        "2.13.17",
       ),
 
       default212ScalaVersion := cross212ScalaVersions.value.last,
@@ -2201,7 +2203,7 @@ object Build {
           case `default213Version` =>
             if (!useMinifySizes) {
               Some(ExpectedSizes(
-                  fastLink = 440000 to 441000,
+                  fastLink = 439000 to 440000,
                   fullLink = 90000 to 91000,
                   fastLinkGz = 57000 to 58000,
                   fullLinkGz = 24000 to 25000,
@@ -2209,7 +2211,7 @@ object Build {
             } else {
               Some(ExpectedSizes(
                   fastLink = 304000 to 305000,
-                  fullLink = 262000 to 263000,
+                  fullLink = 264000 to 265000,
                   fastLinkGz = 48000 to 49000,
                   fullLinkGz = 43000 to 44000,
               ))
