@@ -1609,7 +1609,11 @@ object Trees {
       exportName: String, field: FieldIdent)(
       implicit val pos: Position) extends TopLevelExportDef
 
-
+  /** Wasm Component Model export definition.
+   *
+   *  This is compiled to a static forwarder for component model export that contains
+   *  Canonical ABI conversion and calls the method.
+   */
   sealed case class WasmComponentExportDef(moduleName: String,
       name: WasmComponentFunctionName, methodDef: MethodDef,
       signature: WasmInterfaceTypes.FuncType)(

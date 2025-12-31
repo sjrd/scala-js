@@ -704,8 +704,14 @@ object Infos {
           builder.addStaticFieldWritten(field)
 
         case wasmComponentExport: WasmComponentExportDef =>
-          assert(wasmComponentExport.methodDef.body.isDefined)
+          // Mark the exported method as being called
+          builder.addAccessedModule(enclosingClass)
+          val namespace = wasmComponentExport.methodDef.flags.namespace
           val methodName = wasmComponentExport.methodDef.name.name
+          builder.addMethodCalledStatically(enclosingClass,
+              NamespacedMethodName(namespace, methodName))
+
+          assert(wasmComponentExport.methodDef.body.isDefined)
           generateForWIT(wasmComponentExport.signature)
           builder.maybeAddReferencedClass(methodName.resultTypeRef)
           methodName.paramTypeRefs.foreach(builder.maybeAddReferencedClass)
