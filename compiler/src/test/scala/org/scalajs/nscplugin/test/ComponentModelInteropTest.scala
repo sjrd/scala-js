@@ -850,4 +850,273 @@ class ComponentModelInteropTest extends DirectTest with TestHelpers {
     }
     """.hasNoWarns()
   }
+
+  // --- Component Export Interface Tests ---
+
+  @Test def exportInterfaceMustBeOnTrait: Unit = {
+    """
+    @ComponentExportInterface
+    class NotATrait {
+      @ComponentExport("test:module", "func")
+      def func(): Unit
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:8: error: @ComponentExport can only be used in @ComponentExportInterface traits.
+      |      @ComponentExport("test:module", "func")
+      |       ^
+    """
+
+    """
+    @ComponentExportInterface
+    object NotATrait {
+      @ComponentExport("test:module", "func")
+      def func(): Unit = ???
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:8: error: @ComponentExport can only be used in @ComponentExportInterface traits.
+      |      @ComponentExport("test:module", "func")
+      |       ^
+    """
+  }
+
+  @Test def exportInterfaceCannotHaveConcreteMethod: Unit = {
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      @ComponentExport("test:module", "concrete")
+      def concreteMethod(): Unit = {
+        println("concrete")
+      }
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:9: error: @ComponentExportInterface trait cannot contain concrete method implementations. Method 'concreteMethod' must be abstract.
+      |      def concreteMethod(): Unit = {
+      |          ^
+    """
+  }
+
+  @Test def exportInterfaceMethodsMustHaveAnnotation: Unit = {
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      @ComponentExport("test:module", "annotated")
+      def annotated(): Unit
+
+      def unannotated(): Unit
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:11: error: All methods in @ComponentExportInterface trait must be annotated with @ComponentExport. Method 'unannotated' is missing the annotation.
+      |      def unannotated(): Unit
+      |          ^
+    """
+  }
+
+  @Test def exportInterfaceCannotHaveNonMethodMembers: Unit = {
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      @ComponentExport("test:module", "method")
+      def method(): Unit
+
+      val value: Int = 42
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:11: error: @ComponentExportInterface trait cannot contain concrete method implementations. Method 'value' must be abstract.
+      |      val value: Int = 42
+      |          ^
+    """
+
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      var mutableValue: String = "foo"
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:8: error: @ComponentExportInterface trait cannot contain concrete method implementations. Method 'mutableValue' must be abstract.
+      |      var mutableValue: String = "foo"
+      |          ^
+    """
+  }
+
+  @Test def exportInterfaceExtendedByClassOrTrait: Unit = {
+
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      @ComponentExport("test:module", "method")
+      def method(): Unit
+    }
+
+    @ComponentImplementation
+    class MyClass extends MyExport {
+      override def method(): Unit = ???
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:13: error: @ComponentExportInterface trait MyExport cannot be extended by a class. Use an object annotated with @ComponentImplementation instead.
+      |    class MyClass extends MyExport {
+      |          ^
+    """
+
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      @ComponentExport("test:module", "method")
+      def method(): Unit
+    }
+
+    @ComponentImplementation
+    trait AnotherTrait extends MyExport {
+      override def method(): Unit = ???
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:13: error: @ComponentExportInterface trait MyExport cannot be extended by another trait. Use an object annotated with @ComponentImplementation instead.
+      |    trait AnotherTrait extends MyExport {
+      |          ^
+    """
+
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      @ComponentExport("test:module", "method")
+      def method(): Unit
+    }
+
+    object MyObjectWithoutAnnotation extends MyExport {
+      override def method(): Unit = ???
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:12: error: Object MyObjectWithoutAnnotation extends @ComponentExportInterface trait MyExport but is not annotated with @ComponentImplementation. Add @ComponentImplementation annotation to the object.
+      |    object MyObjectWithoutAnnotation extends MyExport {
+      |           ^
+    """
+  }
+
+  // --- Component Implementation Tests ---
+
+  @Test def componentImplementationMustExtendExportInterface: Unit = {
+    """
+    trait PlainTrait {
+      def method(): Unit
+    }
+
+    @ComponentImplementation
+    object MyImpl extends PlainTrait {
+      override def method(): Unit = ???
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:11: error: @ComponentImplementation object must extend a trait annotated with @ComponentExportInterface
+      |    object MyImpl extends PlainTrait {
+      |           ^
+      |newSource1.scala:12: error: @ComponentImplementation object MyImpl must extend a trait annotated with @ComponentExportInterface
+      |      override def method(): Unit = ???
+      |                   ^
+    """
+
+    """
+    @ComponentImplementation
+    object StandaloneImpl {
+      def method(): Unit = ???
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:7: error: @ComponentImplementation object must extend a trait annotated with @ComponentExportInterface
+      |    object StandaloneImpl {
+      |           ^
+      |newSource1.scala:8: error: @ComponentImplementation object StandaloneImpl must extend a trait annotated with @ComponentExportInterface
+      |      def method(): Unit = ???
+      |          ^
+    """
+  }
+
+  @Test def componentImplementationMustImplementAllMethods: Unit = {
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      @ComponentExport("test:module", "method1")
+      def method1(): Unit
+
+      @ComponentExport("test:module", "method2")
+      def method2(x: Int): String
+    }
+
+    @ComponentImplementation
+    object IncompleteImpl extends MyExport {
+      override def method1(): Unit = ???
+      // missing method2
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:16: error: Must implement method method2 from trait MyExport
+      |    object IncompleteImpl extends MyExport {
+      |           ^
+    """
+  }
+
+  @Test def componentImplementationMethodSignatureMustMatch: Unit = {
+    """
+    @ComponentExportInterface
+    trait MyExport {
+      @ComponentExport("test:module", "method")
+      def method(x: Int): String
+    }
+
+    @ComponentImplementation
+    object WrongSignature extends MyExport {
+      override def method(x: Int): Int = 42  // Wrong return type
+    }
+    """ hasErrors
+    """
+      |newSource1.scala:14: error: overriding method method in trait MyExport of type (x: Int)String;
+      | method method has incompatible type
+      |      override def method(x: Int): Int = 42  // Wrong return type
+      |                   ^
+    """
+  }
+
+  @Test def validComponentExportExamples: Unit = {
+    """
+    @ComponentExportInterface
+    trait Run {
+      @ComponentExport("wasi:cli/run@0.2.0", "run")
+      def run(): cm.Result[Unit, Unit]
+    }
+
+    @ComponentImplementation
+    object RunImpl extends Run {
+      override def run(): cm.Result[Unit, Unit] = {
+        println("Hello!")
+        new cm.Ok(())
+      }
+    }
+
+    @ComponentExportInterface
+    trait MyAPI {
+      @ComponentExport("test:api", "get-data")
+      def getData(id: Int): cm.Result[String, String]
+
+      @ComponentExport("test:api", "process")
+      def process(data: Array[UByte]): Unit
+    }
+
+    @ComponentImplementation
+    object MyAPIImpl extends MyAPI {
+      override def getData(id: Int): cm.Result[String, String] =
+        new cm.Ok(s"data-$id")
+
+      override def process(data: Array[UByte]): Unit = {
+        // Process data
+      }
+    }
+    """.hasNoWarns()
+  }
 }

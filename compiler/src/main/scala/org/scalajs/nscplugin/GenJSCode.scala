@@ -694,11 +694,11 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           componentNativeMembersBuilder ++= genComponentResourceConstructor(dd)
         } else if (dd.symbol.hasAnnotation(JSNativeAnnotation)) {
           jsNativeMembersBuilder += genJSNativeMemberDef(dd)
-        } else if (dd.symbol.hasAnnotation(ComponentExportAnnotation)) {
-          for {
-            method <- genMethod(dd)
-            info <- jsInterop.wasmComponentExportOf(dd.symbol)
-          } {
+        } else if (cd.symbol.hasAnnotation(ComponentImplementationAnnotation) &&
+            jsInterop.wasmComponentExportOf(dd.symbol).isDefined) {
+          val info = jsInterop.wasmComponentExportOf(dd.symbol).get
+          for (method <- genMethod(dd)) {
+            methodsBuilder += method
             wasmComponentExportDefsBuilder += genWasmComponentExportDef(info, method)
           }
         } else {

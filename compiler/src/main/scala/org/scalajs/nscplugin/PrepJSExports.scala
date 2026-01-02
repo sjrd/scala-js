@@ -62,6 +62,20 @@ trait PrepJSExports[G <: Global with Singleton] { this: PrepJSInterop[G] =>
    *  * Returns (non-static) exporters for this symbol.
    */
   def genExport(sym: Symbol): List[Tree] = {
+    if (sym.isModuleClass && sym.hasAnnotation(ComponentImplementationAnnotation)) {
+      validateComponentImplementation(sym)
+    }
+
+    // Check if this symbol extends a @ComponentExportInterface trait
+    if (sym.isClass || sym.isTrait || sym.isModuleClass) {
+      validateComponentExportInterfaceExtension(sym)
+    }
+
+    if (sym.isTrait && sym.hasAnnotation(ComponentExportInterfaceAnnotation)) {
+      validateComponentExportInterface(sym)
+      return Nil
+    }
+
     // Scala classes are never exported: Their constructors are.
     val isScalaClass = sym.isClass && !sym.isTrait && !sym.isModuleClass && !isJSAny(sym)
 
@@ -133,8 +147,20 @@ trait PrepJSExports[G <: Global with Singleton] { this: PrepJSInterop[G] =>
         jsInterop.WasmComponentExportInfo(moduleName, name, signature)(info.pos)
     }
 
-    if (sym.isMethod && wasmComponent.nonEmpty)
-      jsInterop.registerWasmComponentExport(sym, wasmComponent.head)
+    if (sym.isMethod && wasmComponent.nonEmpty) {
+      val ownerSym = sym.owner
+      // Only register actual exports (not trait method specs)
+      if (!(ownerSym.isTrait && sym.isDeferred)) {
+        jsInterop.registerWasmComponentExport(sym, wasmComponent.head)
+      } else {
+        // Validate that trait methods are in @ComponentExportInterface traits
+        if (!ownerSym.hasAnnotation(ComponentExportInterfaceAnnotation)) {
+          reporter.error(sym.pos,
+            s"Trait ${ownerSym.name} contains @ComponentExport methods but is not annotated with @ComponentExportInterface. " +
+            s"Add @ComponentExportInterface to the trait definition.")
+        }
+      }
+    }
   }
 
   /** retrieves the names a sym should be exported to from its annotations
@@ -154,6 +180,11 @@ trait PrepJSExports[G <: Global with Singleton] { this: PrepJSInterop[G] =>
     val symOwner =
       if (sym.isConstructor) sym.owner.owner
       else sym.owner
+
+    if (sym.isMethod && symOwner.isModuleClass &&
+        symOwner.hasAnnotation(ComponentImplementationAnnotation)) {
+      return exportsFromImplementationMethod(sym)
+    }
 
     // Annotations that are directly on the member
     val directAnnots = trgSym.annotations.filter(
@@ -330,10 +361,18 @@ trait PrepJSExports[G <: Global with Singleton] { this: PrepJSInterop[G] =>
             reporter.error(annot.pos,
                 "You may not export a lazy val to the Wasm Component")
           }
-          // Disallow non-static definitions.
-          if (!symOwner.isStatic || !symOwner.isModuleClass || !sym.isMethod) {
-            reporter.error(annot.pos,
-                "Only static objects may export their function to the Wasm Component")
+
+          // @ComponentExport can ONLY be used in @ComponentExportInterface traits
+          val isInExportInterface = symOwner.isTrait && symOwner.hasAnnotation(ComponentExportInterfaceAnnotation)
+          if (!isInExportInterface) {
+            if (symOwner.isTrait) {
+              reporter.error(annot.pos,
+                s"@ComponentExport can only be used in traits annotated with @ComponentExportInterface. " +
+                s"Trait ${symOwner.name} is missing the annotation.")
+            } else {
+              reporter.error(annot.pos,
+                s"@ComponentExport can only be used in @ComponentExportInterface traits.")
+            }
           }
 
         case ExportDestination.Static =>
@@ -413,6 +452,49 @@ trait PrepJSExports[G <: Global with Singleton] { this: PrepJSInterop[G] =>
     }
 
     allExportInfos.distinct
+  }
+
+  /** Collects exports for a method in a @ComponentImplementation object
+   *  by finding the corresponding trait method's @ComponentExport annotations.
+   */
+  private def exportsFromImplementationMethod(implMethod: Symbol): List[ExportInfo] = {
+    val implOwner = implMethod.owner
+    implicit val pos = implMethod.pos
+
+    // Find the trait with @ComponentExportInterface
+    val exportTrait = implOwner.ancestors.find { ancestor =>
+      ancestor.isTrait && ancestor.hasAnnotation(ComponentExportInterfaceAnnotation)
+    }
+
+    exportTrait match {
+      case None =>
+        reporter.error(pos,
+          s"@ComponentImplementation object ${implOwner.name} must extend a trait " +
+          s"annotated with @ComponentExportInterface")
+        Nil
+
+      case Some(traitSym) =>
+        // Find the corresponding trait method
+        val traitMethod = traitSym.info.member(implMethod.name).suchThat(m =>
+          m.isMethod && m.isDeferred
+        )
+
+        if (traitMethod == NoSymbol) {
+          reporter.error(pos,
+            s"Method ${implMethod.name} does not override any method in trait ${traitSym.name}")
+          Nil
+        } else {
+          // Get exports from the trait method
+          // Call exportsOf recursively on the trait method to get its @ComponentExport
+          val traitExports = exportsOf(traitMethod)
+
+          // Filter to only WasmComponent exports
+          traitExports.filter {
+            case ExportInfo(_, _: ExportDestination.WasmComponent) => true
+            case _ => false
+          }
+        }
+    }
   }
 
   /** Checks whether the given target is suitable for export and exporting
@@ -604,5 +686,129 @@ trait PrepJSExports[G <: Global with Singleton] { this: PrepJSInterop[G] =>
       JSExportStaticAnnotation,
       ComponentExportAnnotation
   )
+
+  /** Validates that a @ComponentExportInterface trait follows the rules.
+   *
+   *  1. All methods must be abstract (no concrete implementations)
+   *  2. All methods must have @ComponentExport annotation
+   *  3. No non-method members allowed (vals, vars, etc.)
+   */
+  private def validateComponentExportInterface(traitSym: Symbol): Unit = {
+    implicit val pos = traitSym.pos
+
+    // Check all members of the trait
+    val methods = traitSym.info.decls.filter(m =>
+      m.isMethod && !m.isConstructor && !m.isSynthetic
+    )
+
+    for (method <- methods) {
+      // All methods must be abstract
+      if (!method.isDeferred) {
+        reporter.error(method.pos,
+          s"@ComponentExportInterface trait cannot contain concrete method implementations. " +
+          s"Method '${method.name}' must be abstract.")
+      }
+
+      // All methods must have @ComponentExport
+      if (!method.hasAnnotation(ComponentExportAnnotation)) {
+        reporter.error(method.pos,
+          s"All methods in @ComponentExportInterface trait must be annotated with @ComponentExport. " +
+          s"Method '${method.name}' is missing the annotation.")
+      }
+    }
+
+    // Check for non-method members (vals, vars, etc.)
+    val nonMethodMembers = traitSym.info.decls.filter { m =>
+      !m.isMethod && !m.isType && !m.isConstructor && !m.isSynthetic
+    }
+    for (member <- nonMethodMembers) {
+      reporter.error(member.pos,
+        s"@ComponentExportInterface trait cannot contain non-method members. " +
+        s"Member '${member.name}' is not allowed.")
+    }
+  }
+
+  /** Validates that a symbol properly extends @ComponentExportInterface traits.
+   *
+   *  A @ComponentExportInterface trait can ONLY be extended by:
+   *  - An object annotated with @ComponentImplementation
+   *
+   *  It CANNOT be extended by:
+   *  - A class (even with @ComponentImplementation)
+   *  - A trait (even with @ComponentImplementation)
+   *  - An object without @ComponentImplementation
+   */
+  private def validateComponentExportInterfaceExtension(sym: Symbol): Unit = {
+    val exportInterfaceTraits = sym.ancestors.filter { ancestor =>
+      ancestor.isTrait &&
+      ancestor != sym && // Don't check itself if it's a ComponentExportInterface
+      ancestor.hasAnnotation(ComponentExportInterfaceAnnotation)
+    }
+
+    if (exportInterfaceTraits.nonEmpty) {
+      val exportTrait = exportInterfaceTraits.head
+
+      // Case 1: Regular class (not module class) extending ComponentExportInterface
+      if (sym.isClass && !sym.isTrait && !sym.isModuleClass) {
+        reporter.error(sym.pos,
+          s"@ComponentExportInterface trait ${exportTrait.name} cannot be extended by a class. " +
+          s"Use an object annotated with @ComponentImplementation instead.")
+      }
+      // Case 2: Trait extending ComponentExportInterface
+      else if (sym.isTrait && !sym.hasAnnotation(ComponentExportInterfaceAnnotation)) {
+        reporter.error(sym.pos,
+          s"@ComponentExportInterface trait ${exportTrait.name} cannot be extended by another trait. " +
+          s"Use an object annotated with @ComponentImplementation instead.")
+      }
+      // Case 3: Object (module class) without @ComponentImplementation
+      else if (sym.isModuleClass && !sym.hasAnnotation(ComponentImplementationAnnotation)) {
+        reporter.error(sym.pos,
+          s"Object ${sym.name} extends @ComponentExportInterface trait ${exportTrait.name} " +
+          s"but is not annotated with @ComponentImplementation. " +
+          s"Add @ComponentImplementation annotation to the object.")
+      }
+    }
+  }
+
+  /** Validates a @ComponentImplementation object. */
+  private def validateComponentImplementation(implSym: Symbol): Unit = {
+    implicit val pos = implSym.pos
+
+    if (!implSym.isStatic || !implSym.isModuleClass) {
+      reporter.error(pos, "Only static objects may be annotated with @ComponentImplementation. Use object instead.")
+      return
+    }
+
+    // Find the trait with @ComponentExportInterface
+    val exportTrait = implSym.ancestors.find { ancestor =>
+      ancestor.isTrait && ancestor.hasAnnotation(ComponentExportInterfaceAnnotation)
+    }
+    if (exportTrait.isEmpty) {
+      reporter.error(pos,
+        s"@ComponentImplementation object must extend a trait annotated with @ComponentExportInterface")
+      return
+    }
+    for (traitSym <- exportTrait) {
+      val exportMethods = traitSym.info.decls.filter { m =>
+        m.isMethod && m.isDeferred && m.hasAnnotation(ComponentExportAnnotation)
+      }
+      for (abstractMethod <- exportMethods) {
+        val implMethod = implSym.info.member(abstractMethod.name)
+        if (implMethod == NoSymbol || implMethod.isDeferred) {
+          reporter.error(pos,
+            s"Must implement method ${abstractMethod.name} from trait ${traitSym.name}")
+        } else {
+          // Check signature compatibility
+          val implType = implMethod.tpe.asSeenFrom(implSym.tpe, implMethod.owner)
+          val abstractType = abstractMethod.tpe.asSeenFrom(traitSym.tpe, abstractMethod.owner)
+          if (!implType.matches(abstractType)) {
+            reporter.error(pos,
+              s"Method ${implMethod.name} has incompatible signature. " +
+              s"Expected: ${abstractType}, Found: ${implType}")
+          }
+        }
+      }
+    }
+  }
 
 }

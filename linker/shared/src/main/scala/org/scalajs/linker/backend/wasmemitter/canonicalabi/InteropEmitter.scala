@@ -1,6 +1,7 @@
 package org.scalajs.linker.backend.wasmemitter.canonicalabi
 
 import org.scalajs.ir.{
+  Names,
   OriginalName,
   Trees => js,
   WasmInterfaceTypes => wit,
@@ -143,20 +144,16 @@ object InteropEmitter {
 
 
   // Export
-  def genWasmComponentExportDef(exportDef: js.WasmComponentExportDef)(
+  def genWasmComponentExportDef(owningClass: Names.ClassName, exportDef: js.WasmComponentExportDef)(
       implicit ctx: WasmContext): Unit = {
     implicit val pos = exportDef.pos
-
-    // internal function generation
 
     // convention of wasm-tools
     // see: https://github.com/WebAssembly/component-model/issues/422
     val exportName = s"${exportDef.moduleName}#${toWasmImportExportName(exportDef.name)}"
-    val internalFunctionID = genFunctionID.forExport(exportName + "$internal")
     val method = exportDef.methodDef
-    FunctionEmitter.emitFunction(internalFunctionID,
-        OriginalName(exportName + "$internal"), None, None, None,
-        method.args, None, method.body.get, method.resultType)
+
+    val methodFunctionID = genFunctionID.forMethod(method.flags.namespace, owningClass, method.name.name)
 
     // gen export adapter func
     val exportFunctionID = genFunctionID.forExport(exportName)
@@ -189,6 +186,9 @@ object InteropEmitter {
           None
       }
 
+      // Load module instance for instance methods
+      fb += wa.Call(genFunctionID.loadModule(owningClass))
+
       flatFuncType.paramsOffset match {
         case Some(paramsOffset) => ??? // TODO read params from linear memory
         case None =>
@@ -200,7 +200,8 @@ object InteropEmitter {
             CABIToScalaJS.genLoadStack(fb, paramTy, iterator)
           }
       }
-      fb += wa.Call(internalFunctionID)
+
+      fb += wa.Call(methodFunctionID)
 
       returnOffsetOpt match {
         case Some(offset) =>

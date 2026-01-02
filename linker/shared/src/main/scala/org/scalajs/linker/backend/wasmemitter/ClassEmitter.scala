@@ -149,7 +149,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       implicit ctx: WasmContext): Unit = {
     topLevelExport.tree match {
       case d: WasmComponentExportDef if ctx.coreSpec.wasmFeatures.targetPureWasm =>
-        canonicalabi.InteropEmitter.genWasmComponentExportDef(d)
+        canonicalabi.InteropEmitter.genWasmComponentExportDef(topLevelExport.owningClass, d)
       case d: TopLevelMethodExportDef =>
         genTopLevelExportSetter(topLevelExport.exportName)
         genTopLevelMethodExportDef(d)
