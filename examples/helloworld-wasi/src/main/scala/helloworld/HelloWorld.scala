@@ -2,7 +2,7 @@ package helloworld
 
 import scala.scalajs.wit.annotation._
 import scala.scalajs.wit
-import helloworld.exports.wasi.cli.v0_2_0.Run
+import helloworld.exports.wasi.cli.Run
 
 @WitImplementation
 object HelloWorld extends Run {

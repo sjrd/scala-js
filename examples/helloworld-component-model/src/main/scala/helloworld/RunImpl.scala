@@ -1,7 +1,7 @@
 package helloworld
 
 import scala.scalajs.wit.annotation._
-import helloworld.exports.wasi.cli.v0_2_0.Run
+import helloworld.exports.wasi.cli.Run
 import scala.scalajs.wit
 import helloworld.scala_wasm.helloworld.greeter.greet
 
