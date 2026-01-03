@@ -49,7 +49,7 @@ final class LinkedClass(
     val jsConstructorDef: Option[JSConstructorDef],
     val exportedMembers: List[JSMethodPropDef],
     val jsNativeMembers: List[JSNativeMemberDef],
-    val componentNativeMembers: List[ComponentNativeMemberDef],
+    val witNativeMembers: List[WitNativeMemberDef],
     val optimizerHints: OptimizerHints,
     val pos: Position,
 

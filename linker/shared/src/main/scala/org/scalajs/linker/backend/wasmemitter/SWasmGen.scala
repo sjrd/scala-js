@@ -27,7 +27,7 @@ object SWasmGen {
 
   def genZeroOf(tpe: Type)(implicit ctx: WasmContext): List[Instr] = {
     tpe match {
-      case ComponentResourceType(className) =>
+      case WitResourceType(className) =>
         List(I32Const(0), StructNew(genTypeID.forResourceClass(className)))
       case _ =>
         List(genZeroOf0(tpe))
@@ -59,7 +59,7 @@ object SWasmGen {
         RefNull(Types.HeapType.None)
 
       case NothingType | VoidType | ClassType(_, false) | ArrayType(_, false) |
-          ClosureType(_, _, false) | AnyNotNullType | _:ComponentResourceType | _:RecordType =>
+          ClosureType(_, _, false) | AnyNotNullType | _:WitResourceType | _:RecordType =>
         throw new AssertionError(s"Unexpected type for field: ${tpe.show()}")
     }
   }

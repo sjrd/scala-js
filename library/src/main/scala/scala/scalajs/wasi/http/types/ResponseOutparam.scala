@@ -1,7 +1,7 @@
 package scala.scalajs.wasi.http.types
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
 
 /** Represents the ability to send an HTTP Response.
  *
@@ -9,13 +9,13 @@ import scala.scalajs.component.annotation._
  *  allow a Response to be sent corresponding to the Request provided as the
  *  other argument to `incoming-handler.handle`.
  */
-@ComponentResourceImport("wasi:http/types@0.2.0", "response-outparam")
+@WitResourceImport("wasi:http/types@0.2.0", "response-outparam")
 trait ResponseOutparam {
 }
 object ResponseOutparam {
-  @ComponentResourceStaticMethod("set")
+  @WitResourceStaticMethod("set")
   def set(
     param: ResponseOutparam,
-    response: cm.Result[OutgoingResponse, ErrorCode]
-  ): Unit = cm.native
+    response: wit.Result[OutgoingResponse, ErrorCode]
+  ): Unit = wit.native
 }

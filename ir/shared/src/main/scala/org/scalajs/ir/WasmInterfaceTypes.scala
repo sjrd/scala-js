@@ -90,7 +90,7 @@ object WasmInterfaceTypes {
   }
 
   final case class TupleType(ts: List[ValType]) extends SpecializedType {
-    def toIRType(): jstpe.Type = jstpe.ClassType(ClassName("scala.scalajs.component.Tuple" + ts.size), true)
+    def toIRType(): jstpe.Type = jstpe.ClassType(ClassName("scala.scalajs.wit.Tuple" + ts.size), true)
   }
 
   final case class CaseType(className: ClassName, tpe: Option[ValType]) {
@@ -115,7 +115,7 @@ object WasmInterfaceTypes {
   }
 
   final case class ResourceType(className: ClassName) extends FundamentalType {
-    def toIRType(): jstpe.Type = jstpe.ComponentResourceType(className)
+    def toIRType(): jstpe.Type = jstpe.WitResourceType(className)
   }
 
   // ExternTypes
@@ -136,13 +136,13 @@ object WasmInterfaceTypes {
     case ListType(elemType, length) =>
       jstpe.ArrayTypeRef.of(toTypeRef(elemType))
     case RecordType(className, fields) => jstpe.ClassRef(className)
-    case TupleType(ts) => jstpe.ClassRef(ClassName("scala.scalajs.component.Tuple" + ts.size))
+    case TupleType(ts) => jstpe.ClassRef(ClassName("scala.scalajs.wit.Tuple" + ts.size))
     case VariantType(className, cases) => jstpe.ClassRef(className)
     case ResultType(ok, err) => jstpe.ClassRef(ComponentResultClass)
     case EnumType(labels) => ???
     case OptionType(tpe) => jstpe.ClassRef(ClassName("java.util.Optional"))
     case FlagsType(className, _) => jstpe.ClassRef(className)
-    case ResourceType(className) => jstpe.ComponentResourceTypeRef(className)
+    case ResourceType(className) => jstpe.WitResourceTypeRef(className)
   }
 
   def makeCtorName(tpe: Option[ValType]): MethodName = {
@@ -161,7 +161,7 @@ object WasmInterfaceTypes {
     case st: SpecializedType => st match {
 
       case TupleType(ts) =>
-        val className = ClassName("scala.scalajs.component.Tuple" + ts.size)
+        val className = ClassName("scala.scalajs.wit.Tuple" + ts.size)
         RecordType(
           className,
           ts.zipWithIndex.map { case (t, i) =>

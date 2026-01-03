@@ -1,23 +1,23 @@
 package componentmodel
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
-import scala.scalajs.component.unsigned._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
+import scala.scalajs.wit.unsigned._
 
 import componentmodel.imports.Basics._
 import componentmodel.imports.Tests._
 import componentmodel.imports.Countable._
 import componentmodel.Tests._
 
-import scala.scalajs.ComponentUtils.toEither
+import scala.scalajs.WitUtils.toEither
 
 import java.util.Optional
 
-@ComponentImplementation
+@WitImplementation
 object WorldImpl extends World {
 
-  override def roundtripBasics1(a: cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char]):
-      cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char] = a
+  override def roundtripBasics1(a: wit.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char]):
+      wit.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char] = a
 
   override def roundtripListU16(a: Array[UShort]): Array[UShort] = a
 
@@ -37,17 +37,17 @@ object WorldImpl extends World {
 
   override def roundtripEnum(a: E1): E1 = a
 
-  override def roundtripTuple(a: cm.Tuple2[C1, Z1]): cm.Tuple2[C1, Z1] = a
+  override def roundtripTuple(a: wit.Tuple2[C1, Z1]): wit.Tuple2[C1, Z1] = a
 
   override def roundtripOption(a: Optional[String]): Optional[String] = a
 
   override def roundtripDoubleOption(a: Optional[Optional[String]]): Optional[Optional[String]] = a
 
-  override def roundtripResult(a: cm.Result[Unit, Unit]): cm.Result[Unit, Unit] = a
+  override def roundtripResult(a: wit.Result[Unit, Unit]): wit.Result[Unit, Unit] = a
 
-  override def roundtripStringError(a: cm.Result[Float, String]): cm.Result[Float, String] = a
+  override def roundtripStringError(a: wit.Result[Float, String]): wit.Result[Float, String] = a
 
-  override def roundtripEnumError(a: cm.Result[C1, E1]): cm.Result[C1, E1] = a
+  override def roundtripEnumError(a: wit.Result[C1, E1]): wit.Result[C1, E1] = a
 
   override def roundtripF1(a: F1): F1 = a
 
@@ -55,11 +55,11 @@ object WorldImpl extends World {
 
   override def roundtripF3(a: F3): F3 = a
 
-  override def roundtripFlags(a: cm.Tuple2[F1, F1]): cm.Tuple2[F1, F1] = a
+  override def roundtripFlags(a: wit.Tuple2[F1, F1]): wit.Tuple2[F1, F1] = a
 
-  override def roundtripTuple2(a: cm.Tuple2[Int, String]): cm.Tuple2[Int, String] = a
+  override def roundtripTuple2(a: wit.Tuple2[Int, String]): wit.Tuple2[Int, String] = a
 
-  override def roundtripTuple3(a: cm.Tuple3[Int, String, Boolean]): cm.Tuple3[Int, String, Boolean] = a
+  override def roundtripTuple3(a: wit.Tuple3[Int, String, Boolean]): wit.Tuple3[Int, String, Boolean] = a
 
   override def run(): Unit = {
 
@@ -128,23 +128,23 @@ object WorldImpl extends World {
     assert(Optional.of(Optional.of("foo")) == roundtripDoubleOption(Optional.of(Optional.of("foo"))))
     assert(Optional.of(Optional.empty) == roundtripDoubleOption(Optional.of(Optional.empty[String])))
     assert(Optional.empty == roundtripDoubleOption(Optional.empty[Optional[String]]))
-    // assert(new cm.Err("aaa") != new cm.Err("bbb"))
+    // assert(new wit.Err("aaa") != new wit.Err("bbb"))
 
-    assert(new cm.Ok(()) == roundtripResult(new cm.Ok(())))
-    assert(new cm.Err(()) == roundtripResult(new cm.Err(())))
-    assert(new cm.Ok(3.0f) == roundtripStringError(new cm.Ok(3.0f)))
-    assert(new cm.Err("err") == roundtripStringError(new cm.Err("err")))
-    assert(new cm.Ok(C1.A(432)) == roundtripEnumError(new cm.Ok(C1.A(432))))
-    assert(new cm.Ok(C1.B(0.0f)) == roundtripEnumError(new cm.Ok(C1.B(0.0f))))
-    assert(new cm.Err(E1.A) == roundtripEnumError(new cm.Err(E1.A)))
-    assert(new cm.Err(E1.B) == roundtripEnumError(new cm.Err(E1.B)))
-    assert(new cm.Err(E1.C) == roundtripEnumError(new cm.Err(E1.C)))
+    assert(new wit.Ok(()) == roundtripResult(new wit.Ok(())))
+    assert(new wit.Err(()) == roundtripResult(new wit.Err(())))
+    assert(new wit.Ok(3.0f) == roundtripStringError(new wit.Ok(3.0f)))
+    assert(new wit.Err("err") == roundtripStringError(new wit.Err("err")))
+    assert(new wit.Ok(C1.A(432)) == roundtripEnumError(new wit.Ok(C1.A(432))))
+    assert(new wit.Ok(C1.B(0.0f)) == roundtripEnumError(new wit.Ok(C1.B(0.0f))))
+    assert(new wit.Err(E1.A) == roundtripEnumError(new wit.Err(E1.A)))
+    assert(new wit.Err(E1.B) == roundtripEnumError(new wit.Err(E1.B)))
+    assert(new wit.Err(E1.C) == roundtripEnumError(new wit.Err(E1.C)))
 
     assert((F1.b3 | F1.b6 | F1.b7) == roundtripF1(F1.b3 | F1.b6 | F1.b7))
     assert((F2.b7 | F2.b8 | F2.b15) == roundtripF2(F2.b7 | F2.b8 | F2.b15))
     assert((F3.b7 | F3.b8 | F3.b15 | F3.b31) == roundtripF3(F3.b7 | F3.b8 | F3.b15 | F3.b31))
 
-    val flagsTuple = new cm.Tuple2(F1.b3 | F1.b6, F1.b2 | F1.b3 | F1.b7)
+    val flagsTuple = new wit.Tuple2(F1.b3 | F1.b6, F1.b2 | F1.b3 | F1.b7)
     val flagsResult = roundtripFlags(flagsTuple)
     assert(flagsResult._1 == (F1.b3 | F1.b6))
     assert(flagsResult._2 == (F1.b2 | F1.b3 | F1.b7))

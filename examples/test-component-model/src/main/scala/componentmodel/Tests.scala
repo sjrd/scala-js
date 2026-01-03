@@ -1,16 +1,16 @@
 package componentmodel
 
 import scala.scalajs.js
-import scala.scalajs.{component => cm}
-import scala.scalajs.component._
-import scala.scalajs.component.annotation._
-import scala.scalajs.component.unsigned._
+import scala.scalajs.wit
+import scala.scalajs.wit._
+import scala.scalajs.wit.annotation._
+import scala.scalajs.wit.unsigned._
 
 import java.util.Optional
 
 object Tests {
 
-  @ComponentFlags(8)
+  @WitFlags(8)
   final case class F1(value: Int) {
     def |(other: F1): F1 = F1(value | other.value)
     def &(other: F1): F1 = F1(value & other.value)
@@ -29,7 +29,7 @@ object Tests {
     val b7 = F1(1 << 7)
   }
 
-  @ComponentFlags(16)
+  @WitFlags(16)
   final case class F2(value: Int) {
     def |(other: F2): F2 = F2(value | other.value)
     def &(other: F2): F2 = F2(value & other.value)
@@ -56,7 +56,7 @@ object Tests {
     val b15 = F2(1 << 15)
   }
 
-  @ComponentFlags(32)
+  @WitFlags(32)
   final case class F3(value: Int) {
     def |(other: F3): F3 = F3(value | other.value)
     def &(other: F3): F3 = F3(value & other.value)
@@ -99,24 +99,24 @@ object Tests {
     val b31 = F3(1 << 31)
   }
 
-  @ComponentRecord
+  @WitRecord
   final case class Point(x: Int, y: Int)
 
-  @ComponentVariant
+  @WitVariant
   sealed trait C1
   object C1 {
     final case class A(value: Int) extends C1
     final case class B(value: Float) extends C1
   }
 
-  @ComponentVariant
+  @WitVariant
   sealed trait Z1
   object Z1 {
     final case class A(value: Int) extends Z1
     final case object B extends Z1
   }
 
-  @ComponentVariant
+  @WitVariant
   sealed trait E1
   object E1 {
     case object A extends E1

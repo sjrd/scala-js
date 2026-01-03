@@ -16,13 +16,13 @@ import scala.annotation.meta._
 
 /** Types, methods and values for interoperability with Wasm Component Model libraries.
  */
-package object component {
+package object wit {
 
   /** Denotes a method body as imported from Wasm Component. For use in facade types:
    *
    *  {{{
    *  class MyJSClass extends js.Object {
-   *    def myMethod(x: String): Int = component.native
+   *    def myMethod(x: String): Int = wit.native
    *  }
    *  }}}
    */

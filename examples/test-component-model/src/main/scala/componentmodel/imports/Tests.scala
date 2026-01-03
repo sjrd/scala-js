@@ -1,78 +1,78 @@
 package componentmodel.imports
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
-import scala.scalajs.component.unsigned._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
+import scala.scalajs.wit.unsigned._
 
 import java.util.Optional
 
 import componentmodel.Tests._
 
 object Tests {
-  @ComponentImport("component:testing/tests", "roundtrip-basics1")
-  def roundtripBasics1(a: cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char]):
-      cm.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-basics1")
+  def roundtripBasics1(a: wit.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char]):
+      wit.Tuple9[UByte, Byte, UShort, Short, UInt, Int, Float, Double, Char] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-list-u16")
-  def roundtripListU16(a: Array[UShort]): Array[UShort] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-list-u16")
+  def roundtripListU16(a: Array[UShort]): Array[UShort] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-list-point")
-  def roundtripListPoint(a: Array[Point]): Array[Point] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-list-point")
+  def roundtripListPoint(a: Array[Point]): Array[Point] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-list-variant")
-  def roundtripListVariant(a: Array[C1]): Array[C1] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-list-variant")
+  def roundtripListVariant(a: Array[C1]): Array[C1] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-string")
-  def roundtripString(a: String): String = cm.native
+  @WitImport("component:testing/tests", "roundtrip-string")
+  def roundtripString(a: String): String = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-point")
-  def roundtripPoint(a: Point): Point = cm.native
+  @WitImport("component:testing/tests", "roundtrip-point")
+  def roundtripPoint(a: Point): Point = wit.native
 
-  @ComponentImport("component:testing/tests", "test-c1")
-  def testC1(a: C1): Unit = cm.native
+  @WitImport("component:testing/tests", "test-c1")
+  def testC1(a: C1): Unit = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-c1")
-  def roundtripC1(a: C1): C1 = cm.native
+  @WitImport("component:testing/tests", "roundtrip-c1")
+  def roundtripC1(a: C1): C1 = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-z1")
-  def roundtripZ1(a: Z1): Z1 = cm.native
+  @WitImport("component:testing/tests", "roundtrip-z1")
+  def roundtripZ1(a: Z1): Z1 = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-enum")
-  def roundtripEnum(a: E1): E1 = cm.native
+  @WitImport("component:testing/tests", "roundtrip-enum")
+  def roundtripEnum(a: E1): E1 = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-tuple")
-  def roundtripTuple(a: cm.Tuple2[C1, Z1]): cm.Tuple2[C1, Z1] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-tuple")
+  def roundtripTuple(a: wit.Tuple2[C1, Z1]): wit.Tuple2[C1, Z1] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-option")
-  def roundtripOption(a: Optional[String]): Optional[String] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-option")
+  def roundtripOption(a: Optional[String]): Optional[String] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-double-option")
-  def roundtripDoubleOption(a: Optional[Optional[String]]): Optional[Optional[String]] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-double-option")
+  def roundtripDoubleOption(a: Optional[Optional[String]]): Optional[Optional[String]] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-result")
-  def roundtripResult(a: cm.Result[Unit, Unit]): cm.Result[Unit, Unit] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-result")
+  def roundtripResult(a: wit.Result[Unit, Unit]): wit.Result[Unit, Unit] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-string-error")
-  def roundtripStringError(a: cm.Result[Float, String]): cm.Result[Float, String] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-string-error")
+  def roundtripStringError(a: wit.Result[Float, String]): wit.Result[Float, String] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-enum-error")
-  def roundtripEnumError(a: cm.Result[C1, E1]): cm.Result[C1, E1] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-enum-error")
+  def roundtripEnumError(a: wit.Result[C1, E1]): wit.Result[C1, E1] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-f1")
-  def roundtripF1(a: F1): F1 = cm.native
+  @WitImport("component:testing/tests", "roundtrip-f1")
+  def roundtripF1(a: F1): F1 = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-f2")
-  def roundtripF2(a: F2): F2 = cm.native
+  @WitImport("component:testing/tests", "roundtrip-f2")
+  def roundtripF2(a: F2): F2 = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-f3")
-  def roundtripF3(a: F3): F3 = cm.native
+  @WitImport("component:testing/tests", "roundtrip-f3")
+  def roundtripF3(a: F3): F3 = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-flags")
-  def roundtripFlags(a: cm.Tuple2[F1, F1]): cm.Tuple2[F1, F1] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-flags")
+  def roundtripFlags(a: wit.Tuple2[F1, F1]): wit.Tuple2[F1, F1] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-tuple2")
-  def roundtripTuple2(a: cm.Tuple2[Int, String]): cm.Tuple2[Int, String] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-tuple2")
+  def roundtripTuple2(a: wit.Tuple2[Int, String]): wit.Tuple2[Int, String] = wit.native
 
-  @ComponentImport("component:testing/tests", "roundtrip-tuple3")
-  def roundtripTuple3(a: cm.Tuple3[Int, String, Boolean]): cm.Tuple3[Int, String, Boolean] = cm.native
+  @WitImport("component:testing/tests", "roundtrip-tuple3")
+  def roundtripTuple3(a: wit.Tuple3[Int, String, Boolean]): wit.Tuple3[Int, String, Boolean] = wit.native
 }

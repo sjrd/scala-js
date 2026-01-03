@@ -1,36 +1,36 @@
 package componentmodel.imports
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
 
 import java.util.Optional
 
 object Countable {
-  @ComponentResourceImport("component:testing/countable", "counter")
+  @WitResourceImport("component:testing/countable", "counter")
   trait Counter {
-    @ComponentResourceMethod("up")
-    def up(): Unit = cm.native
+    @WitResourceMethod("up")
+    def up(): Unit = wit.native
 
-    @ComponentResourceMethod("down")
-    def down(): Unit = cm.native
+    @WitResourceMethod("down")
+    def down(): Unit = wit.native
 
-    @ComponentResourceMethod("value-of")
-    def valueOf(): Int = cm.native
+    @WitResourceMethod("value-of")
+    def valueOf(): Int = wit.native
 
-    @ComponentResourceDrop
-    def close(): Unit = cm.native
+    @WitResourceDrop
+    def close(): Unit = wit.native
   }
   object Counter {
-    @ComponentResourceConstructor
-    def apply(i: Int): Counter = cm.native
+    @WitResourceConstructor
+    def apply(i: Int): Counter = wit.native
 
-    @ComponentResourceStaticMethod("sum")
-    def sum(a: Counter, b: Counter): Counter = cm.native
+    @WitResourceStaticMethod("sum")
+    def sum(a: Counter, b: Counter): Counter = wit.native
   }
 
-  @ComponentImport("component:testing/countable", "try-create-counter")
-  def tryCreateCounter(value: Int): cm.Result[Counter, String] = cm.native
+  @WitImport("component:testing/countable", "try-create-counter")
+  def tryCreateCounter(value: Int): wit.Result[Counter, String] = wit.native
 
-  @ComponentImport("component:testing/countable", "maybe-get-counter")
-  def maybeGetCounter(): Optional[Counter] = cm.native
+  @WitImport("component:testing/countable", "maybe-get-counter")
+  def maybeGetCounter(): Optional[Counter] = wit.native
 }

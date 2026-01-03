@@ -80,7 +80,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
 
     if (coreSpec.wasmFeatures.targetPureWasm &&
         coreSpec.wasmFeatures.componentModel) {
-      for (member <- clazz.componentNativeMembers) {
+      for (member <- clazz.witNativeMembers) {
         canonicalabi.InteropEmitter.genComponentNativeInterop(clazz, member)
       }
     }
@@ -148,8 +148,8 @@ class ClassEmitter(coreSpec: CoreSpec) {
   def genTopLevelExport(topLevelExport: LinkedTopLevelExport)(
       implicit ctx: WasmContext): Unit = {
     topLevelExport.tree match {
-      case d: WasmComponentExportDef if ctx.coreSpec.wasmFeatures.targetPureWasm =>
-        canonicalabi.InteropEmitter.genWasmComponentExportDef(topLevelExport.owningClass, d)
+      case d: WitExportDef if ctx.coreSpec.wasmFeatures.targetPureWasm =>
+        canonicalabi.InteropEmitter.genWitExportDef(topLevelExport.owningClass, d)
       case d: TopLevelMethodExportDef =>
         genTopLevelExportSetter(topLevelExport.exportName)
         genTopLevelMethodExportDef(d)
@@ -573,7 +573,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       val nameStr = baseTypeRef match {
         case baseTypeRef: PrimRef => "[" + baseTypeRef.charCode.toString()
         case ClassRef(className)  => "[L" + runtimeClassNameOf(className) + ";"
-        case ComponentResourceTypeRef(className) => "[W" + runtimeClassNameOf(className) + ";"
+        case WitResourceTypeRef(className) => "[W" + runtimeClassNameOf(className) + ";"
       }
       val nameValue =
         if (targetPureWasm)
@@ -1623,11 +1623,11 @@ class ClassEmitter(coreSpec: CoreSpec) {
    */
   private def genResourceCastFunction(clazz: LinkedClass)(implicit ctx: WasmContext): Unit = {
     val className = clazz.className
-    val resourceStructType = TypeTransformer.transformComponentResourceType(className)
+    val resourceStructType = TypeTransformer.transformWitResourceType(className)
 
     val fb = new FunctionBuilder(
       ctx.moduleBuilder,
-      genFunctionID.asInstance(ComponentResourceType(className)),
+      genFunctionID.asInstance(WitResourceType(className)),
       makeDebugName(ns.AsInstance, className),
       clazz.pos
     )
@@ -1727,7 +1727,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val encoded = typeRef match {
       case typeRef: PrimRef    => UTF8String(typeRef.charCode.toString())
       case ClassRef(className) => className.encoded
-      case ComponentResourceTypeRef(className) => UTF8String("W") ++ className.encoded
+      case WitResourceTypeRef(className) => UTF8String("W") ++ className.encoded
     }
     OriginalName(namespace ++ encoded)
   }

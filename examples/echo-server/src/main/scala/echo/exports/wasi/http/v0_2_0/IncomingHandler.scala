@@ -1,10 +1,10 @@
 package echo.exports.wasi.http.v0_2_0
 
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit.annotation._
 import scala.scalajs.wasi.http.types._
 
 /** Export interface for wasi:http/incoming-handler@0.2.0 */
-@ComponentExportInterface
+@WitExportInterface
 trait IncomingHandler {
   /**
    * This function is invoked with an incoming HTTP Request, and a resource
@@ -18,6 +18,6 @@ trait IncomingHandler {
    * `response-outparam` before returning, or else the caller will respond
    * with an error on its behalf.
    */
-  @ComponentExport("wasi:http/incoming-handler@0.2.0", "handle")
+  @WitExport("wasi:http/incoming-handler@0.2.0", "handle")
   def handle(request: IncomingRequest, responseOut: ResponseOutparam): Unit
 }

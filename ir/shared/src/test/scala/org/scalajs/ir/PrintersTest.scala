@@ -1355,7 +1355,7 @@ class PrintersTest {
             List(JSNativeMemberDef(MemberFlags.empty.withNamespace(Static), MethodName("p", Nil, O),
                 JSNativeLoadSpec.Global("foo", Nil))),
             Nil,
-            // List(ComponentNativeMemberDef(MemberFlags.empty.withNamespace(Static), MethodName("getStdout", Nil, I),
+            // List(WitNativeMemberDef(MemberFlags.empty.withNamespace(Static), MethodName("getStdout", Nil, I),
             //     "wasi:io/streams", "get-stdout")),
             List(TopLevelModuleExportDef("main", "Foo")))(
             NoOptHints))

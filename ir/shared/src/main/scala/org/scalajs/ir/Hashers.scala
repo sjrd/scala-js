@@ -114,8 +114,8 @@ object Hashers {
     case TopLevelMethodExportDef(moduleID, methodDef) =>
       TopLevelMethodExportDef(moduleID, hashJSMethodDef(methodDef))(tle.pos)
 
-    case WasmComponentExportDef(moduleName, name, methodDef, signature) =>
-      WasmComponentExportDef(moduleName, name, hashMethodDef(methodDef), signature)(tle.pos)
+    case WitExportDef(moduleName, name, methodDef, signature) =>
+      WitExportDef(moduleName, name, hashMethodDef(methodDef), signature)(tle.pos)
 
     case _:TopLevelFieldExportDef | _:TopLevelModuleExportDef |
         _:TopLevelJSClassExportDef =>
@@ -134,7 +134,7 @@ object Hashers {
     val newTopLevelExportDefs = topLevelExportDefs.map(hashTopLevelExportDef(_))
     ClassDef(name, originalName, kind, jsClassCaptures, superClass, interfaces,
         jsSuperClass, jsNativeLoadSpec, fields, newMethods, newJSConstructorDef,
-        newExportedMembers, jsNativeMembers, componentNativeMembers, newTopLevelExportDefs)(
+        newExportedMembers, jsNativeMembers, witNativeMembers, newTopLevelExportDefs)(
         optimizerHints)
   }
 
@@ -565,8 +565,8 @@ object Hashers {
           mixString(name)
           mixType(tree.tpe)
 
-        case ComponentFunctionApply(receiver, className, method, args) =>
-          mixTag(TagComponentFunctionApply)
+        case WitFunctionApply(receiver, className, method, args) =>
+          mixTag(TagWitFunctionApply)
           mixOptTree(receiver)
           mixName(className)
           mixMethodIdent(method)
@@ -617,8 +617,8 @@ object Hashers {
       case ClassRef(className) =>
         mixTag(TagClassRef)
         mixName(className)
-      case ComponentResourceTypeRef(className) =>
-        mixTag(TagComponentResourceTypeRef)
+      case WitResourceTypeRef(className) =>
+        mixTag(TagWitResourceTypeRef)
         mixName(className)
       case typeRef: ArrayTypeRef =>
         mixTag(TagArrayTypeRef)
@@ -655,8 +655,8 @@ object Hashers {
         mixTag(if (nullable) TagClassType else TagNonNullClassType)
         mixName(className)
 
-      case ComponentResourceType(className) =>
-        mixTag(TagComponentResourceType)
+      case WitResourceType(className) =>
+        mixTag(TagWitResourceType)
         mixName(className)
 
       case ArrayType(arrayTypeRef, nullable) =>

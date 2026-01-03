@@ -1,25 +1,25 @@
 package scala.scalajs.wasi.http.types
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
 
 /** Represents an outgoing HTTP Response. */
-@ComponentResourceImport("wasi:http/types@0.2.0", "outgoing-response")
+@WitResourceImport("wasi:http/types@0.2.0", "outgoing-response")
 trait OutgoingResponse {
-  @ComponentResourceMethod("status-code")
-  def statusCode(): StatusCode = cm.native
+  @WitResourceMethod("status-code")
+  def statusCode(): StatusCode = wit.native
 
-  @ComponentResourceMethod("set-status-code")
-  def setStatusCode(statusCode: StatusCode): Unit = cm.native
+  @WitResourceMethod("set-status-code")
+  def setStatusCode(statusCode: StatusCode): Unit = wit.native
 
-  @ComponentResourceMethod("headers")
-  def headers(): Headers = cm.native
+  @WitResourceMethod("headers")
+  def headers(): Headers = wit.native
 
   // body: func() -> result<outgoing-body>;
-  @ComponentResourceMethod("body")
-  def body(): cm.Result[OutgoingBody, Unit] = cm.native
+  @WitResourceMethod("body")
+  def body(): wit.Result[OutgoingBody, Unit] = wit.native
 }
 object OutgoingResponse {
-  @ComponentResourceConstructor
-  def apply(headers: Headers): OutgoingResponse = cm.native
+  @WitResourceConstructor
+  def apply(headers: Headers): OutgoingResponse = wit.native
 }

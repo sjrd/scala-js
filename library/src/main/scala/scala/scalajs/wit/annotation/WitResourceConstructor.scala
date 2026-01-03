@@ -10,11 +10,9 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component.annotation
+package scala.scalajs.wit.annotation
 
 import scala.annotation.meta._
 
 @field @getter @setter
-class ComponentResourceMethod private () extends scala.annotation.StaticAnnotation {
-  def this(name: String) = this()
-}
+class WitResourceConstructor() extends scala.annotation.StaticAnnotation

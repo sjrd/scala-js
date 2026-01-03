@@ -280,7 +280,7 @@ object Preprocessor {
       tle.tree match {
         case TopLevelMethodExportDef(_, jsMethodDef) =>
           traverseJSMethodPropDef(jsMethodDef)
-        case WasmComponentExportDef(_, _, methodDef, _) =>
+        case WitExportDef(_, _, methodDef, _) =>
           methodDef.body.foreach(traverse)
         case _ =>
           ()

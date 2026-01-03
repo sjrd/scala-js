@@ -86,23 +86,23 @@ trait TypeConversions[G <: Global with Singleton] extends SubComponent {
     Types.ClassType(ClassName("java.lang.String"), true) -> wit.StringType
   )
 
-  private lazy val ScalaJSComponentUnsignedPackageModule = rootMirror.getPackageObject("scala.scalajs.component.unsigned")
-    private lazy val ComponentUnsigned_UByte = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("UByte"))
-    private lazy val ComponentUnsigned_UShort = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("UShort"))
-    private lazy val ComponentUnsigned_UInt = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("UInt"))
-    private lazy val ComponentUnsigned_ULong = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("ULong"))
+  private lazy val ScalaJSWitUnsignedPackageModule = rootMirror.getPackageObject("scala.scalajs.wit.unsigned")
+    private lazy val WitUnsigned_UByte = getTypeMember(ScalaJSWitUnsignedPackageModule, newTermName("UByte"))
+    private lazy val WitUnsigned_UShort = getTypeMember(ScalaJSWitUnsignedPackageModule, newTermName("UShort"))
+    private lazy val WitUnsigned_UInt = getTypeMember(ScalaJSWitUnsignedPackageModule, newTermName("UInt"))
+    private lazy val WitUnsigned_ULong = getTypeMember(ScalaJSWitUnsignedPackageModule, newTermName("ULong"))
 
   private lazy val unsigned2WIT: Map[Symbol, wit.ValType] = Map(
-    ComponentUnsigned_UByte -> wit.U8Type,
-    ComponentUnsigned_UShort -> wit.U16Type,
-    ComponentUnsigned_UInt -> wit.U32Type,
-    ComponentUnsigned_ULong -> wit.U64Type
+    WitUnsigned_UByte -> wit.U8Type,
+    WitUnsigned_UShort -> wit.U16Type,
+    WitUnsigned_UInt -> wit.U32Type,
+    WitUnsigned_ULong -> wit.U64Type
   )
 
   private def makeNonArrayTypeRef(sym: Symbol): Types.NonArrayTypeRef =
     primitiveRefMap.getOrElse(sym, {
-      if (isWasmComponentResourceType(sym))
-        Types.ComponentResourceTypeRef(encodeClassName(sym))
+      if (isWasmWitResourceType(sym))
+        Types.WitResourceTypeRef(encodeClassName(sym))
       else
         Types.ClassRef(encodeClassName(sym))
     })

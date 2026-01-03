@@ -1,8 +1,8 @@
 package scala.scalajs.wasi.io
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
-import scala.scalajs.component.unsigned._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
+import scala.scalajs.wit.unsigned._
 
 import scala.scalajs.wasi.io.Error.{Error => WasiIOError}
 
@@ -23,7 +23,7 @@ object Streams {
    *  use the `subscribe` function to obtain a `pollable` which can be polled
    *  for using `wasi:io/poll`.
    */
-  @ComponentResourceImport("wasi:io/streams@0.2.0", "input-stream")
+  @WitResourceImport("wasi:io/streams@0.2.0", "input-stream")
   trait InputStream {
     // /// Read bytes from a stream, after blocking until at least one byte can
     // /// be read. Except for blocking, behavior is identical to `read`.
@@ -32,8 +32,8 @@ object Streams {
     //     /// The maximum number of bytes to read
     //     len: u64
     // ) -> result<list<u8>, stream-error>;
-    @ComponentResourceMethod("blocking-read")
-    def blockingRead(len: ULong): cm.Result[Array[UByte], StreamError] = cm.native
+    @WitResourceMethod("blocking-read")
+    def blockingRead(len: ULong): wit.Result[Array[UByte], StreamError] = wit.native
   }
 
   /** An output bytestream.
@@ -49,17 +49,17 @@ object Streams {
    *  progress may result in the data being lost. Before dropping the stream,
    *  be sure to fully flush your writes.
    */
-  @ComponentResourceImport("wasi:io/streams@0.2.0", "output-stream")
+  @WitResourceImport("wasi:io/streams@0.2.0", "output-stream")
   trait OutputStream {
 
-    @ComponentResourceMethod("blocking-write-and-flush")
-    def blockingWriteAndFlush(contents: Array[UByte]): cm.Result[Unit, StreamError]
+    @WitResourceMethod("blocking-write-and-flush")
+    def blockingWriteAndFlush(contents: Array[UByte]): wit.Result[Unit, StreamError]
 
-    @ComponentResourceDrop
-    def close(): Unit = cm.native
+    @WitResourceDrop
+    def close(): Unit = wit.native
   }
 
-  @ComponentVariant
+  @WitVariant
   sealed trait StreamError
   object StreamError {
     final case class LastOperationFailed(value: WasiIOError) extends StreamError

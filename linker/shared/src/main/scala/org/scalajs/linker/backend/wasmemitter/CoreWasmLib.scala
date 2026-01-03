@@ -75,7 +75,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   private def charCodeForOriginalName(baseRef: NonArrayTypeRef): Char = baseRef match {
     case baseRef: PrimRef            => baseRef.charCode
     case _: ClassRef                 => 'O'
-    case ComponentResourceTypeRef(_) => 'O'
+    case WitResourceTypeRef(_) => 'O'
   }
 
   /** Fields of the `typeData` struct definition.
@@ -2536,7 +2536,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val elemWasmType = baseRef match {
       case PrimRef(tpe) => transformSingleType(tpe)
       case ClassRef(_)  => anyref
-      case ComponentResourceTypeRef(_) => anyref
+      case WitResourceTypeRef(_) => anyref
     }
 
     val fb = newFunctionBuilder(genFunctionID.arrayGet(baseRef), origName)
@@ -2596,7 +2596,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val elemWasmType = baseRef match {
       case PrimRef(tpe)                => transformSingleType(tpe)
       case ClassRef(_)                 => anyref
-      case ComponentResourceTypeRef(_) => anyref
+      case WitResourceTypeRef(_) => anyref
     }
 
     val fb = newFunctionBuilder(genFunctionID.arraySet(baseRef), origName)

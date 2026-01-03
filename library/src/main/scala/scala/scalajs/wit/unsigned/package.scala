@@ -1,4 +1,4 @@
-package scala.scalajs.component
+package scala.scalajs.wit
 
 package object unsigned {
   type UByte = Byte

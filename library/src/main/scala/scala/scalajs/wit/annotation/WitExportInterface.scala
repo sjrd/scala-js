@@ -10,7 +10,7 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component.annotation
+package scala.scalajs.wit.annotation
 
 import scala.annotation.meta._
 
@@ -18,18 +18,18 @@ import scala.annotation.meta._
  *
  *  Traits annotated with this annotation must:
  *  - Only contain abstract methods (no concrete implementations)
- *  - All methods must be annotated with @ComponentExport
- *  - Be implemented in objects marked with @ComponentImplementation.
+ *  - All methods must be annotated with @WitExport
+ *  - Be implemented in objects marked with @WitImplementation.
  *
  *  Example:
  *  {{{
- *  @ComponentExportInterface
+ *  @WitExportInterface
  *  trait Run {
- *    @ComponentExport("wasi:cli/run@0.2.0", "run")
+ *    @WitExport("wasi:cli/run@0.2.0", "run")
  *    def run(): Result[Unit, Unit]
  *  }
  *
- *  @ComponentImplementation
+ *  @WitImplementation
  *  object RunImpl extends Run {
  *    def run(): Result[Unit, Unit] = {
  *      println("Hello!")
@@ -39,4 +39,4 @@ import scala.annotation.meta._
  *  }}}
  */
 @getter
-class ComponentExportInterface extends scala.annotation.StaticAnnotation
+class WitExportInterface extends scala.annotation.StaticAnnotation

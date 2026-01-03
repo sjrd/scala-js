@@ -1,9 +1,9 @@
 package scala.scalajs.wasi.http.types
 
 import java.util.Optional
-import scala.scalajs.{component => cm}
-import cm.annotation._
-import cm.unsigned._
+import scala.scalajs.wit
+import wit.annotation._
+import wit.unsigned._
 
 // variant error-code {
 //   DNS-timeout,
@@ -51,7 +51,7 @@ import cm.unsigned._
 //   /// between implementations.
 //   internal-error(option<string>)
 // }
-@ComponentVariant
+@WitVariant
 sealed trait ErrorCode
 object ErrorCode {
   case object DNS_timeout extends ErrorCode
@@ -105,11 +105,11 @@ object ErrorCode {
 
 }
 
-@ComponentRecord
+@WitRecord
 final case class DNSErrorPayload(rcode: Optional[String], infoCode: Optional[UShort])
 
-@ComponentRecord
+@WitRecord
 final case class TLSAlertReceivedPayload(alertId: Optional[UByte], alertMessage: Optional[String])
 
-@ComponentRecord
+@WitRecord
 final case class FieldSizePayload(fieldName: Optional[String], fieldSize: Optional[UInt])

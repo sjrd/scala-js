@@ -10,7 +10,7 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component
+package scala.scalajs.wit
 
 import scala.language.implicitConversions
 

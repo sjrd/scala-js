@@ -120,8 +120,8 @@ final class WasmContext(
         AnyType
       else
         ClassType(className, nullable = true)
-    case ComponentResourceTypeRef(className) =>
-      ComponentResourceType(className)
+    case WitResourceTypeRef(className) =>
+      WitResourceType(className)
     case typeRef: ArrayTypeRef =>
       ArrayType(typeRef, nullable = true)
     case typeRef: TransientTypeRef =>

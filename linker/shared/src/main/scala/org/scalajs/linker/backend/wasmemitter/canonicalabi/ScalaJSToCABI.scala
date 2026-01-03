@@ -93,7 +93,7 @@ object ScalaJSToCABI {
         fb += wa.I32Store()
 
       case wit.TupleType(fields) =>
-        val className = ClassName("scala.scalajs.component.Tuple" + fields.size)
+        val className = ClassName("scala.scalajs.wit.Tuple" + fields.size)
         val ptr = fb.addLocal(NoOriginalName, watpe.Int32)
         val tuple = fb.addLocal(NoOriginalName, watpe.RefType.nullable(genTypeID.forClass(className)))
         fb += wa.RefCast(watpe.RefType.nullable(genTypeID.forClass(className)))
@@ -250,7 +250,7 @@ object ScalaJSToCABI {
         )
 
       case wit.TupleType(fields) =>
-        val className = ClassName("scala.scalajs.component.Tuple" + fields.size)
+        val className = ClassName("scala.scalajs.wit.Tuple" + fields.size)
         val tuple = fb.addLocal(NoOriginalName, watpe.RefType.nullable(genTypeID.forClass(className)))
         fb += wa.RefCast(watpe.RefType.nullable(genTypeID.forClass(className)))
         fb += wa.LocalSet(tuple)

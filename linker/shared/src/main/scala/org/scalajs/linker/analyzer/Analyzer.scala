@@ -689,10 +689,10 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
     private[this] val _jsNativeMembersUsed: mutable.Map[MethodName, Unit] = emptyThreadSafeMap
     def jsNativeMembersUsed: scala.collection.Set[MethodName] = _jsNativeMembersUsed.keySet
 
-    private[this] val _wasmComponentNativeMembersUsed: mutable.Map[MethodName, Unit] =
+    private[this] val _wasmwitNativeMembersUsed: mutable.Map[MethodName, Unit] =
         emptyThreadSafeMap
-    def wasmComponentNativeMembersUsed: scala.collection.Set[MethodName] =
-        _wasmComponentNativeMembersUsed.keySet
+    def wasmwitNativeMembersUsed: scala.collection.Set[MethodName] =
+        _wasmwitNativeMembersUsed.keySet
 
     val jsNativeLoadSpec: Option[JSNativeLoadSpec] = data.jsNativeLoadSpec
 
@@ -1195,7 +1195,7 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
             followReachabilityInfo(reachabilityInfo, this)(FromExports)
 
           // TODO: don't reach from the unreachable component native members
-          // for (reachabilityInfo <- data.componentNativeMembers)
+          // for (reachabilityInfo <- data.witNativeMembers)
           //   followReachabilityInfo(reachabilityInfo, this)
         }
       }
@@ -1314,13 +1314,13 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
       maybeJSNativeLoadSpec
     }
 
-    def useWasmComponentNativeMember(name: MethodName)(
+    def useWasmWitNativeMember(name: MethodName)(
         implicit from: From): Unit = {
-      val maybeReachabilityInfo = data.componentNativeMembers.get(name)
-      if (_wasmComponentNativeMembersUsed.put(name, ()).isEmpty) {
+      val maybeReachabilityInfo = data.witNativeMembers.get(name)
+      if (_wasmwitNativeMembersUsed.put(name, ()).isEmpty) {
         maybeReachabilityInfo match {
           case None =>
-            _errors ::= MissingWasmComponentNativeMember(this, name, from)
+            _errors ::= MissingWasmWitNativeMember(this, name, from)
           case Some(reachabilityInfo) =>
             // reachabilityInfo.byClass.foreach { c =>
             //   println(s"===${c.className}===")
@@ -1561,8 +1561,8 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
             case Infos.JSNativeMemberReachable(methodName) =>
               clazz.useJSNativeMember(methodName).foreach(addLoadSpec(moduleUnit, _))
 
-            case Infos.WasmComponentNativeMemberReachable(methodName) =>
-              clazz.useWasmComponentNativeMember(methodName)
+            case Infos.WasmWitNativeMemberReachable(methodName) =>
+              clazz.useWasmWitNativeMember(methodName)
           }
         }
       }
@@ -1665,7 +1665,7 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
     new Infos.ClassInfo(className, ClassKind.Class, syntheticKind = None, nonExistent = true,
         superClass = superClass, interfaces = Nil, jsNativeLoadSpec = None,
         referencedFieldClasses = Map.empty, methods = methods,
-        jsNativeMembers = Map.empty, componentNativeMembers = Map.empty,
+        jsNativeMembers = Map.empty, witNativeMembers = Map.empty,
         jsMethodProps = Nil, topLevelExports = Nil)
   }
 
