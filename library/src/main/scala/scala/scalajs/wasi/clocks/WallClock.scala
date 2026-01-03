@@ -1,19 +1,19 @@
 package scala.scalajs.wasi.clocks
 
-import scala.scalajs.component.annotation._
-import scala.scalajs.component.unsigned._
-import scala.scalajs.{component => cm}
+import scala.scalajs.wit.annotation._
+import scala.scalajs.wit.unsigned._
+import scala.scalajs.wit
 
 /** https://github.com/WebAssembly/WASI/blob/main/wasip2/clocks/wall-clock.wit */
 object WallClock {
 
-  @ComponentImport("wasi:clocks/wall-clock@0.2.0", "now")
-  def now(): Datetime = cm.native
+  @WitImport("wasi:clocks/wall-clock@0.2.0", "now")
+  def now(): Datetime = wit.native
 
-  @ComponentImport("wasi:clocks/wall-clock", "resolution")
-  def resolution(): Datetime = cm.native
+  @WitImport("wasi:clocks/wall-clock", "resolution")
+  def resolution(): Datetime = wit.native
 
-  @ComponentRecord
+  @WitRecord
   final case class Datetime(seconds: ULong, nanoseconds: UInt)
 
 }

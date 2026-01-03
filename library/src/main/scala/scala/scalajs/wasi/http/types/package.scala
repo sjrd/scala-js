@@ -1,6 +1,6 @@
 package scala.scalajs.wasi.http
 
-import scala.scalajs.component.unsigned._
+import scala.scalajs.wit.unsigned._
 
 package object types {
   /** Field values should always be ASCII strings. However, in

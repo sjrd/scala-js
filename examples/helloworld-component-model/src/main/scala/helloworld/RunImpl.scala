@@ -1,18 +1,18 @@
 package helloworld
 
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit.annotation._
 import helloworld.exports.wasi.cli.v0_2_0.Run
-import scala.scalajs.{component => cm}
+import scala.scalajs.wit
 import helloworld.scala_wasm.helloworld.greeter.greet
 
-/** Implementation using the new @ComponentImplementation pattern */
-@ComponentImplementation
+/** Implementation using the new @WitImplementation pattern */
+@WitImplementation
 object RunImpl extends Run {
 
-  override def run(): cm.Result[Unit,Unit] = {
+  override def run(): wit.Result[Unit,Unit] = {
     val greeting = greet("Scala")
     println(greeting)
-    new cm.Ok(())
+    new wit.Ok(())
   }
 
 }

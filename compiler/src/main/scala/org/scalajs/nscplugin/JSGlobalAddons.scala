@@ -96,17 +96,17 @@ trait JSGlobalAddons extends JSDefinitions
       mutable.Map.empty[Symbol, List[StaticExportInfo]]
 
     /** Wasm Components exports, by method */
-    private val wasmComponentExports =
-      mutable.Map.empty[Symbol, WasmComponentExportInfo]
+    private val witExports =
+      mutable.Map.empty[Symbol, WitExportInfo]
 
     /** JS native load specs of the symbols in the current compilation run. */
     private val jsNativeLoadSpecs =
       mutable.Map.empty[Symbol, JSNativeLoadSpec]
 
     private val componentFunctionTypes =
-      mutable.Map.empty[Symbol, ComponentFunctionType]
+      mutable.Map.empty[Symbol, WitFunctionType]
 
-    private val componentVariantValueTypes =
+    private val WitVariantValueTypes =
       mutable.Map.empty[Symbol, Type]
 
     private val exportPrefix = "$js$exported$"
@@ -125,10 +125,10 @@ trait JSGlobalAddons extends JSDefinitions
         val pos: Position) extends ExportInfo
     case class StaticExportInfo(jsName: String)(val pos: Position)
         extends ExportInfo
-    case class WasmComponentExportInfo(moduleName: String, name: String,
-        signature: ComponentFunctionType)(
+    case class WitExportInfo(moduleName: String, name: String,
+        signature: WitFunctionType)(
         val pos: Position) extends ExportInfo
-    case class ComponentFunctionType(
+    case class WitFunctionType(
       params: List[Type],
       resultType: Type
     )
@@ -291,12 +291,12 @@ trait JSGlobalAddons extends JSDefinitions
       staticExports.put(sym, infos)
     }
 
-    def wasmComponentExportOf(sym: Symbol): Option[WasmComponentExportInfo] =
-      wasmComponentExports.get(sym)
+    def witExportOf(sym: Symbol): Option[WitExportInfo] =
+      witExports.get(sym)
 
-    def registerWasmComponentExport(sym: Symbol, info: WasmComponentExportInfo): Unit = {
-      assert(!wasmComponentExports.contains(sym), s"symbol exported twice: $sym")
-      wasmComponentExports.put(sym, info)
+    def registerWitExport(sym: Symbol, info: WitExportInfo): Unit = {
+      assert(!witExports.contains(sym), s"symbol exported twice: $sym")
+      witExports.put(sym, info)
     }
 
     def topLevelExportsOf(sym: Symbol): List[TopLevelExportInfo] =
@@ -417,16 +417,16 @@ trait JSGlobalAddons extends JSDefinitions
     def jsNativeLoadSpecOfOption(sym: Symbol): Option[JSNativeLoadSpec] =
       jsNativeLoadSpecs.get(sym)
 
-    def storeComponentVariantValueType(sym: Symbol, valueType: Type): Unit =
-      componentVariantValueTypes(sym) = valueType
+    def storeWitVariantValueType(sym: Symbol, valueType: Type): Unit =
+      WitVariantValueTypes(sym) = valueType
 
-    def componentVariantValueTypeOf(sym: Symbol): Type =
-      componentVariantValueTypes(sym)
+    def witVariantValueTypeOf(sym: Symbol): Type =
+      WitVariantValueTypes(sym)
 
-    def storeComponentFunctionType(sym: Symbol, funcType: ComponentFunctionType): Unit =
+    def storeWitFunctionType(sym: Symbol, funcType: WitFunctionType): Unit =
       componentFunctionTypes(sym) = funcType
 
-    def componentFunctionTypeOf(sym: Symbol): ComponentFunctionType =
+    def witFunctionTypeOf(sym: Symbol): WitFunctionType =
       componentFunctionTypes(sym)
   }
 

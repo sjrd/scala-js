@@ -25,7 +25,7 @@ import org.scalajs.ir.{
   Position,
 }
 
-trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubComponent {
+trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
   this: GenJSCode[G] =>
 
   import global._
@@ -33,36 +33,36 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
   import jsAddons._
   import jsDefinitions._
 
-  // - annotated with @ComponentResourceMethod
-  // - owner is a companion object of @ComponentResourceImport annotated trait
-  def isWasmComponentResourceStaticMethod(sym: Symbol): Boolean =
-    sym.hasAnnotation(ComponentResourceStaticMethodAnnotation) &&
+  // - annotated with @WitResourceMethod
+  // - owner is a companion object of @WitResourceImport annotated trait
+  def isWasmWitResourceStaticMethod(sym: Symbol): Boolean =
+    sym.hasAnnotation(WitResourceStaticMethodAnnotation) &&
         sym.owner.isModuleClass &&
-        sym.owner.companionClass.hasAnnotation(ComponentResourceImportAnnotation)
+        sym.owner.companionClass.hasAnnotation(WitResourceImportAnnotation)
 
-  def isWasmComponentResourceConstructor(sym: Symbol): Boolean =
-    sym.hasAnnotation(ComponentResourceConstructorAnnotation) &&
+  def isWasmWitResourceConstructor(sym: Symbol): Boolean =
+    sym.hasAnnotation(WitResourceConstructorAnnotation) &&
         sym.owner.isModuleClass &&
-        sym.owner.companionClass.hasAnnotation(ComponentResourceImportAnnotation)
+        sym.owner.companionClass.hasAnnotation(WitResourceImportAnnotation)
 
-  def isWasmComponentRecordClass(sym: Symbol): Boolean =
-    sym.hasAnnotation(ComponentRecordAnnotation) && sym.isFinal
+  def isWasmWitRecordClass(sym: Symbol): Boolean =
+    sym.hasAnnotation(WitRecordAnnotation) && sym.isFinal
 
   def isWasmComponentTupleClass(sym: Symbol): Boolean =
-    sym.fullName.startsWith("scala.scalajs.component.Tuple")
+    sym.fullName.startsWith("scala.scalajs.wit.Tuple")
 
-  def isWasmComponentFlags(sym: Symbol): Boolean =
-    sym.hasAnnotation(ComponentFlagsAnnotation)
+  def isWasmWitFlags(sym: Symbol): Boolean =
+    sym.hasAnnotation(WitFlagsAnnotation)
 
-  def isWasmComponentResourceType(tpe: Type): Boolean =
-    isWasmComponentResourceType(tpe.typeSymbol)
+  def isWasmWitResourceType(tpe: Type): Boolean =
+    isWasmWitResourceType(tpe.typeSymbol)
 
-  def isWasmComponentResourceType(sym: Symbol): Boolean =
-    sym.hasAnnotation(ComponentResourceImportAnnotation)
+  def isWasmWitResourceType(sym: Symbol): Boolean =
+    sym.hasAnnotation(WitResourceImportAnnotation)
 
   trait WasmComponentModelInteropPhase { this: JSCodePhase =>
 
-    def genComponentNativeMemberCall(method: Symbol, tree: Apply,
+    def genWitNativeMemberCall(method: Symbol, tree: Apply,
         receiver: Option[Tree], isStat: Boolean): js.Tree = {
       val sym = tree.symbol
       val Apply(Select(qual, _), args) = tree
@@ -76,7 +76,7 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
       // val className = encodeClassName(qual.symbol.tpe.typeSymbol)
 
       val className = encodeClassName(method.owner)
-      js.ComponentFunctionApply(
+      js.WitFunctionApply(
         receiver.map(genExpr(_)),
         className,
         methodIdent,
@@ -91,123 +91,123 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
       val classIdent = encodeClassNameIdent(sym)
       val kind = ClassKind.NativeWasmComponentResourceClass
 
-      val annot = sym.getAnnotation(ComponentResourceImportAnnotation).get
+      val annot = sym.getAnnotation(WitResourceImportAnnotation).get
       val moduleName = annot.stringArg(0).get
       val resourceName = annot.stringArg(1).get
 
       val flags = js.MemberFlags.empty.withNamespace(js.MemberNamespace.Public)
-      val componentNativeMembersBuilder = List.newBuilder[js.ComponentNativeMemberDef]
+      val witNativeMembersBuilder = List.newBuilder[js.WitNativeMemberDef]
       for (stat <- cd.impl.body) {
         stat match {
-          case dd: DefDef if dd.symbol.hasAnnotation(ComponentResourceMethodAnnotation) =>
+          case dd: DefDef if dd.symbol.hasAnnotation(WitResourceMethodAnnotation) =>
             for {
-              annot <- dd.symbol.getAnnotation(ComponentResourceMethodAnnotation)
+              annot <- dd.symbol.getAnnotation(WitResourceMethodAnnotation)
               functionName <- annot.stringArg(0)
             } {
-              componentNativeMembersBuilder +=
-                genComponentNativeMemberDef(flags, dd, moduleName,
-                    js.WasmComponentFunctionName.ResourceMethod(functionName, resourceName))
+              witNativeMembersBuilder +=
+                genWitNativeMemberDef(flags, dd, moduleName,
+                    js.WitFunctionName.ResourceMethod(functionName, resourceName))
             }
 
-          case dd: DefDef if dd.symbol.hasAnnotation(ComponentResourceDropAnnotation) =>
+          case dd: DefDef if dd.symbol.hasAnnotation(WitResourceDropAnnotation) =>
             for {
-              annot <- dd.symbol.getAnnotation(ComponentResourceDropAnnotation)
+              annot <- dd.symbol.getAnnotation(WitResourceDropAnnotation)
             } {
-              componentNativeMembersBuilder +=
-                genComponentNativeMemberDef(flags, dd, moduleName,
-                    js.WasmComponentFunctionName.ResourceDrop(resourceName))
+              witNativeMembersBuilder +=
+                genWitNativeMemberDef(flags, dd, moduleName,
+                    js.WitFunctionName.ResourceDrop(resourceName))
             }
           case _ =>
         }
       }
       js.ClassDef(classIdent, originalNameOfClass(sym), kind, None, superClass= None,
           interfaces = Nil, None, None,
-          Nil, Nil, None, Nil, Nil, componentNativeMembersBuilder.result(), Nil)(
+          Nil, Nil, None, Nil, Nil, witNativeMembersBuilder.result(), Nil)(
           js.OptimizerHints.empty)
     }
   }
 
-  def genComponentNativeMemberDef(flags: js.MemberFlags, tree: DefDef, moduleName: String,
-      name: js.WasmComponentFunctionName): js.ComponentNativeMemberDef = {
+  def genWitNativeMemberDef(flags: js.MemberFlags, tree: DefDef, moduleName: String,
+      name: js.WitFunctionName): js.WitNativeMemberDef = {
     implicit val pos = tree.pos
     val sym = tree.symbol
     withNewLocalNameScope {
-      val funcType = jsInterop.componentFunctionTypeOf(sym)
+      val funcType = jsInterop.witFunctionTypeOf(sym)
       val baseParams = funcType.params.map(toWIT(_))
       val params = name match {
-        case _:js.WasmComponentFunctionName.Function |
-             _:js.WasmComponentFunctionName.ResourceConstructor |
-             _:js.WasmComponentFunctionName.ResourceStaticMethod => baseParams
-        case _:js.WasmComponentFunctionName.ResourceMethod |
-             _:js.WasmComponentFunctionName.ResourceDrop =>
+        case _:js.WitFunctionName.Function |
+             _:js.WitFunctionName.ResourceConstructor |
+             _:js.WitFunctionName.ResourceStaticMethod => baseParams
+        case _:js.WitFunctionName.ResourceMethod |
+             _:js.WitFunctionName.ResourceDrop =>
           wit.ResourceType(encodeClassName(sym.owner)) +: baseParams
       }
       val witFuncType = wit.FuncType(
         params,
         toResultWIT(funcType.resultType)
       )
-      js.ComponentNativeMemberDef(flags, moduleName, name,
+      js.WitNativeMemberDef(flags, moduleName, name,
           encodeMethodSym(sym), witFuncType)
     }
   }
 
-  def genComponentResourceStaticMethodDef(tree: DefDef): Option[js.ComponentNativeMemberDef] = {
+  def genWitResourceStaticMethodDef(tree: DefDef): Option[js.WitNativeMemberDef] = {
     implicit val pos = tree.pos
     val sym = tree.symbol
 
     val flags = js.MemberFlags.empty.withNamespace(js.MemberNamespace.PublicStatic)
-    val funcType = jsInterop.componentFunctionTypeOf(sym)
+    val funcType = jsInterop.witFunctionTypeOf(sym)
 
     for {
-      methodAnnot <- sym.getAnnotation(ComponentResourceStaticMethodAnnotation)
-      resourceAnnot <- sym.owner.companionClass.getAnnotation(ComponentResourceImportAnnotation)
+      methodAnnot <- sym.getAnnotation(WitResourceStaticMethodAnnotation)
+      resourceAnnot <- sym.owner.companionClass.getAnnotation(WitResourceImportAnnotation)
       methodName <- methodAnnot.stringArg(0)
       moduleName <- resourceAnnot.stringArg(0)
       resourceName <- resourceAnnot.stringArg(1)
     } yield {
-      val name = js.WasmComponentFunctionName.ResourceStaticMethod(
+      val name = js.WitFunctionName.ResourceStaticMethod(
           func = methodName, resource = resourceName)
       withNewLocalNameScope {
         val params = funcType.params.map { p => toWIT(p) }
         val ft = wit.FuncType(params, toResultWIT(funcType.resultType))
-        js.ComponentNativeMemberDef(flags, moduleName, name, encodeMethodSym(sym), ft)
+        js.WitNativeMemberDef(flags, moduleName, name, encodeMethodSym(sym), ft)
       }
     }
   }
 
-  def genComponentResourceConstructor(tree: DefDef): Option[js.ComponentNativeMemberDef] = {
+  def genWitResourceConstructor(tree: DefDef): Option[js.WitNativeMemberDef] = {
     implicit val pos = tree.pos
     val sym = tree.symbol
 
     val flags = js.MemberFlags.empty.withNamespace(js.MemberNamespace.PublicStatic)
-    val funcType = jsInterop.componentFunctionTypeOf(sym)
+    val funcType = jsInterop.witFunctionTypeOf(sym)
 
     for {
-      methodAnnot <- sym.getAnnotation(ComponentResourceConstructorAnnotation)
-      resourceAnnot <- sym.owner.companionClass.getAnnotation(ComponentResourceImportAnnotation)
+      methodAnnot <- sym.getAnnotation(WitResourceConstructorAnnotation)
+      resourceAnnot <- sym.owner.companionClass.getAnnotation(WitResourceImportAnnotation)
       moduleName <- resourceAnnot.stringArg(0)
       resourceName <- resourceAnnot.stringArg(1)
     } yield {
-      val name = js.WasmComponentFunctionName.ResourceConstructor(resourceName)
+      val name = js.WitFunctionName.ResourceConstructor(resourceName)
       withNewLocalNameScope {
         val params = funcType.params.map { p => toWIT(p) }
         val ft = wit.FuncType(params, toResultWIT(funcType.resultType))
-        js.ComponentNativeMemberDef(flags, moduleName, name, encodeMethodSym(sym), ft)
+        js.WitNativeMemberDef(flags, moduleName, name, encodeMethodSym(sym), ft)
       }
     }
   }
 
 
-  def genWasmComponentExportDef(info: jsInterop.WasmComponentExportInfo,
-      methodDef: js.MethodDef): js.WasmComponentExportDef = {
+  def genWitExportDef(info: jsInterop.WitExportInfo,
+      methodDef: js.MethodDef): js.WitExportDef = {
     withNewLocalNameScope {
       val signature = wit.FuncType(
         info.signature.params.map(toWIT(_)),
         toResultWIT(info.signature.resultType)
       )
-      js.WasmComponentExportDef(
+      js.WitExportDef(
         info.moduleName,
-        js.WasmComponentFunctionName.Function(info.name),
+        js.WitFunctionName.Function(info.name),
         methodDef,
         signature
       )(methodDef.pos)
@@ -224,29 +224,29 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
         case tsym if isWasmComponentTupleClass(tsym) =>
           wit.TupleType(tpe.typeArgs.map(toWIT(_)))
 
-        case tsym if tsym.hasAnnotation(ComponentFlagsAnnotation) =>
+        case tsym if tsym.hasAnnotation(WitFlagsAnnotation) =>
           // Read numFlags from annotation parameter
-          val numFlags = tsym.getAnnotation(ComponentFlagsAnnotation)
+          val numFlags = tsym.getAnnotation(WitFlagsAnnotation)
             .flatMap(_.intArg(0))
             .getOrElse {
-              throw new AssertionError(s"@ComponentFlags on $tsym missing numFlags parameter")
+              throw new AssertionError(s"@WitFlags on $tsym missing numFlags parameter")
             }
           val className = encodeClassName(tsym)
           wit.FlagsType(className, numFlags)
 
-        case tsym if isWasmComponentRecordClass(tsym) =>
+        case tsym if isWasmWitRecordClass(tsym) =>
           // TODO: it needs to be sorted by the order of record in wit definition
           val className = encodeClassName(tsym)
           val fields: List[wit.FieldType] = tsym.info.decls.collect {
             case f if f.isField =>
               val label = encodeFieldSym(f)(f.pos).name
-              val fieldType = jsInterop.componentVariantValueTypeOf(f)
+              val fieldType = jsInterop.witVariantValueTypeOf(f)
               val valueType = toWIT(fieldType)
               wit.FieldType(label, valueType)
           }.toList
           wit.RecordType(className, fields)
 
-        case tsym if isWasmComponentResourceType(tsym) =>
+        case tsym if isWasmWitResourceType(tsym) =>
           wit.ResourceType(encodeClassName(tsym))
 
         case tsym if tsym.isSubClass(ComponentResultClass) && tsym.isSealed =>
@@ -257,7 +257,7 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
           val List(t) = tpe.dealiasWiden.typeArgs
           wit.OptionType(toWIT(t))
 
-        case tsym if tsym.hasAnnotation(ComponentVariantAnnotation) && tsym.isSealed =>
+        case tsym if tsym.hasAnnotation(WitVariantAnnotation) && tsym.isSealed =>
           // Sort by declaration order, we need to know which index
           // corresponds to which type.
           // Make sure code generator declare children by index order.
@@ -265,7 +265,7 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
           val cases = tsym.sealedChildren.toList.sortBy(_.pos.line) map { child =>
             // assert(child.isFinal)
             // assert(child.isClass)
-            val valueType = jsInterop.componentVariantValueTypeOf(child)
+            val valueType = jsInterop.witVariantValueTypeOf(child)
             val caseTyp = if (toIRType(valueType) == jstpe.VoidType) {
               None
             } else {
@@ -298,17 +298,17 @@ trait GenWasmComponentModelInterop[G <: Global with Singleton] extends SubCompon
     }
   }
 
-  private lazy val ScalaJSComponentUnsignedPackageModule = rootMirror.getPackageObject("scala.scalajs.component.unsigned")
-    private lazy val ComponentUnsigned_UByte = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("UByte"))
-    private lazy val ComponentUnsigned_UShort = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("UShort"))
-    private lazy val ComponentUnsigned_UInt = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("UInt"))
-    private lazy val ComponentUnsigned_ULong = getTypeMember(ScalaJSComponentUnsignedPackageModule, newTermName("ULong"))
+  private lazy val ScalaJSWitUnsignedPackageModule = rootMirror.getPackageObject("scala.scalajs.wit.unsigned")
+    private lazy val WitUnsigned_UByte = getTypeMember(ScalaJSWitUnsignedPackageModule, newTermName("UByte"))
+    private lazy val WitUnsigned_UShort = getTypeMember(ScalaJSWitUnsignedPackageModule, newTermName("UShort"))
+    private lazy val WitUnsigned_UInt = getTypeMember(ScalaJSWitUnsignedPackageModule, newTermName("UInt"))
+    private lazy val WitUnsigned_ULong = getTypeMember(ScalaJSWitUnsignedPackageModule, newTermName("ULong"))
 
   private lazy val unsigned2WIT: Map[Symbol, wit.ValType] = Map(
-    ComponentUnsigned_UByte  -> wit.U8Type,
-    ComponentUnsigned_UShort -> wit.U16Type,
-    ComponentUnsigned_UInt   -> wit.U32Type,
-    ComponentUnsigned_ULong  -> wit.U64Type
+    WitUnsigned_UByte  -> wit.U8Type,
+    WitUnsigned_UShort -> wit.U16Type,
+    WitUnsigned_UInt   -> wit.U32Type,
+    WitUnsigned_ULong  -> wit.U64Type
   )
 
   private lazy val primitiveIRWIT: Map[jstpe.Type, wit.ValType] = Map(

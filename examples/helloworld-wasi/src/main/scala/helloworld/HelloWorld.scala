@@ -1,13 +1,13 @@
 package helloworld
 
-import scala.scalajs.component.annotation._
-import scala.scalajs.{component => cm}
+import scala.scalajs.wit.annotation._
+import scala.scalajs.wit
 import helloworld.exports.wasi.cli.v0_2_0.Run
 
-@ComponentImplementation
+@WitImplementation
 object HelloWorld extends Run {
-  override def run(): cm.Result[Unit, Unit] = {
+  override def run(): wit.Result[Unit, Unit] = {
     println("Hello world!")
-    new cm.Ok(())
+    new wit.Ok(())
   }
 }

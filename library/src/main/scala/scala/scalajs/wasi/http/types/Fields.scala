@@ -1,7 +1,7 @@
 package scala.scalajs.wasi.http.types
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
 
 /** This following block defines the `fields` resource which corresponds to
  *  HTTP standard Fields. Fields are a common representation used for both
@@ -14,37 +14,37 @@ import scala.scalajs.component.annotation._
  *  immutable. In an immutable fields, the `set`, `append`, and `delete`
  *  operations will fail with `header-error.immutable`.
  */
-@ComponentResourceImport("wasi:http/types@0.2.0", "fields")
+@WitResourceImport("wasi:http/types@0.2.0", "fields")
 trait Fields {
 
   // get: func(name: field-name) -> list<field-value>;
-  @ComponentResourceMethod("get")
-  def get(name: FieldName): Array[FieldValue] = cm.native
+  @WitResourceMethod("get")
+  def get(name: FieldName): Array[FieldValue] = wit.native
 
   // has: func(name: field-name) -> bool;
-  @ComponentResourceMethod("has")
-  def has(name: FieldName): Boolean = cm.native
+  @WitResourceMethod("has")
+  def has(name: FieldName): Boolean = wit.native
 
   // set: func(name: field-name, value: list<field-value>) -> result<_, header-error>;
-  @ComponentResourceMethod("set")
-  def set(name: FieldName, value: Array[FieldValue]): cm.Result[Unit, HeaderError] = cm.native
+  @WitResourceMethod("set")
+  def set(name: FieldName, value: Array[FieldValue]): wit.Result[Unit, HeaderError] = wit.native
 
   // append: func(name: field-name, value: field-value) -> result<_, header-error>;
-  @ComponentResourceMethod("append")
-  def append(name: FieldName, value: FieldValue): cm.Result[Unit, HeaderError] = cm.native
+  @WitResourceMethod("append")
+  def append(name: FieldName, value: FieldValue): wit.Result[Unit, HeaderError] = wit.native
 
   // entries: func() -> list<tuple<field-name,field-value>>;
-  @ComponentResourceMethod("entries")
-  def entries(): Array[cm.Tuple2[FieldName, FieldValue]] = cm.native
+  @WitResourceMethod("entries")
+  def entries(): Array[wit.Tuple2[FieldName, FieldValue]] = wit.native
 
   // clone: func() -> fields;
-  @ComponentResourceMethod("clone")
-  def cloneFields(): Fields = cm.native
+  @WitResourceMethod("clone")
+  def cloneFields(): Fields = wit.native
 }
 object Fields {
-  @ComponentResourceConstructor
-  def apply(): Fields = cm.native
+  @WitResourceConstructor
+  def apply(): Fields = wit.native
 
-  @ComponentResourceStaticMethod("from-list")
-  def fromList(entries: Array[cm.Tuple2[FieldName, FieldValue]]): Fields = cm.native
+  @WitResourceStaticMethod("from-list")
+  def fromList(entries: Array[wit.Tuple2[FieldName, FieldValue]]): Fields = wit.native
 }

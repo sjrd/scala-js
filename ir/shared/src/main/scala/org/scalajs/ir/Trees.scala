@@ -796,7 +796,7 @@ object Trees {
     val tpe = AnyType
   }
 
-  sealed case class ComponentFunctionApply(receiver: Option[Tree], className: ClassName, method: MethodIdent,
+  sealed case class WitFunctionApply(receiver: Option[Tree], className: ClassName, method: MethodIdent,
       args: List[Tree])(   val tpe: Type)(implicit val pos: Position) extends Tree
 
 
@@ -1431,7 +1431,7 @@ object Trees {
       val jsConstructor: Option[JSConstructorDef],
       val jsMethodProps: List[JSMethodPropDef],
       val jsNativeMembers: List[JSNativeMemberDef],
-      val componentNativeMembers: List[ComponentNativeMemberDef],
+      val witNativeMembers: List[WitNativeMemberDef],
       val topLevelExportDefs: List[TopLevelExportDef]
   )(
       val optimizerHints: OptimizerHints
@@ -1454,7 +1454,7 @@ object Trees {
         jsConstructor: Option[JSConstructorDef],
         jsMethodProps: List[JSMethodPropDef],
         jsNativeMembers: List[JSNativeMemberDef],
-        componentNativeMembers: List[ComponentNativeMemberDef],
+        witNativeMembers: List[WitNativeMemberDef],
         topLevelExportDefs: List[TopLevelExportDef]
       )(
         optimizerHints: OptimizerHints)(
@@ -1462,7 +1462,7 @@ object Trees {
       new ClassDef(name, originalName, kind, jsClassCaptures, superClass,
           interfaces, jsSuperClass, jsNativeLoadSpec, fields, methods,
           jsConstructor, jsMethodProps, jsNativeMembers,
-          componentNativeMembers, topLevelExportDefs)(
+          witNativeMembers, topLevelExportDefs)(
           optimizerHints)
     }
   }
@@ -1534,20 +1534,20 @@ object Trees {
       implicit val pos: Position)
       extends MemberDef
 
-  sealed case class ComponentNativeMemberDef(flags: MemberFlags,
-      moduleName: String, name: WasmComponentFunctionName, method: MethodIdent,
+  sealed case class WitNativeMemberDef(flags: MemberFlags,
+      moduleName: String, name: WitFunctionName, method: MethodIdent,
       signature: WasmInterfaceTypes.FuncType)(
       implicit val pos: Position)
       extends MemberDef
 
-  sealed abstract class WasmComponentFunctionName {
+  sealed abstract class WitFunctionName {
   }
-  object WasmComponentFunctionName {
-    final case class Function(func: String) extends WasmComponentFunctionName
-    final case class ResourceMethod(func: String, resource: String) extends WasmComponentFunctionName
-    final case class ResourceStaticMethod(func: String, resource: String) extends WasmComponentFunctionName
-    final case class ResourceConstructor(resource: String) extends WasmComponentFunctionName
-    final case class ResourceDrop(resource: String) extends WasmComponentFunctionName
+  object WitFunctionName {
+    final case class Function(func: String) extends WitFunctionName
+    final case class ResourceMethod(func: String, resource: String) extends WitFunctionName
+    final case class ResourceStaticMethod(func: String, resource: String) extends WitFunctionName
+    final case class ResourceConstructor(resource: String) extends WitFunctionName
+    final case class ResourceDrop(resource: String) extends WitFunctionName
   }
 
   // Top-level export defs
@@ -1566,22 +1566,22 @@ object Trees {
         name
 
       case TopLevelFieldExportDef(_, name, _) => name
-      case WasmComponentExportDef(moduleName, name, _, _) => name match {
-        case WasmComponentFunctionName.Function(func) =>
+      case WitExportDef(moduleName, name, _, _) => name match {
+        case WitFunctionName.Function(func) =>
           s"$moduleName#$func"
-        case WasmComponentFunctionName.ResourceMethod(func, resource) =>
+        case WitFunctionName.ResourceMethod(func, resource) =>
           s"$moduleName#[method]$resource.$func"
-        case WasmComponentFunctionName.ResourceStaticMethod(func, resource) =>
+        case WitFunctionName.ResourceStaticMethod(func, resource) =>
           s"$moduleName#[static]$resource.$func"
-        case WasmComponentFunctionName.ResourceConstructor(resource) =>
+        case WitFunctionName.ResourceConstructor(resource) =>
           s"$moduleName#[constructor]$resource"
-        case WasmComponentFunctionName.ResourceDrop(resource) =>
+        case WitFunctionName.ResourceDrop(resource) =>
           s"$moduleName#[resource-drop]$resource"
       }
     }
 
-    val isWasmComponentExport = this.isInstanceOf[WasmComponentExportDef]
-    require(isWasmComponentExport || isValidTopLevelExportName(topLevelExportName),
+    val isWitExport = this.isInstanceOf[WitExportDef]
+    require(isWitExport || isValidTopLevelExportName(topLevelExportName),
         s"`$topLevelExportName` is not a valid top-level export name")
   }
 
@@ -1614,8 +1614,8 @@ object Trees {
    *  This is compiled to a static forwarder for component model export that contains
    *  Canonical ABI conversion and calls the method.
    */
-  sealed case class WasmComponentExportDef(moduleName: String,
-      name: WasmComponentFunctionName, methodDef: MethodDef,
+  sealed case class WitExportDef(moduleName: String,
+      name: WitFunctionName, methodDef: MethodDef,
       signature: WasmInterfaceTypes.FuncType)(
       implicit val pos: Position) extends TopLevelExportDef {
     override def moduleID = DefaultModuleID

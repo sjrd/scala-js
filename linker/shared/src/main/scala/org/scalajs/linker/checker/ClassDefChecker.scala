@@ -464,9 +464,9 @@ private final class ClassDefChecker(classDef: ClassDef,
       case topLevelExportDef: TopLevelFieldExportDef =>
         checkTopLevelFieldExportDef(topLevelExportDef)
 
-      case wasmComponentExportDef: WasmComponentExportDef =>
+      case witExportDef: WitExportDef =>
         // TODO
-        // checkWasmComponentExportDef(wasmComponentExportDef)
+        // checkWitExportDef(WitExportDef)
     }
   }
 
@@ -1026,7 +1026,7 @@ private final class ClassDefChecker(classDef: ClassDef,
 
       case JSTypeOfGlobalRef(_) =>
 
-      case ComponentFunctionApply(receiver, _, _, args) =>
+      case WitFunctionApply(receiver, _, _, args) =>
         receiver.foreach { r => checkTree(r, env) }
         checkTrees(args, env)
 
@@ -1259,7 +1259,7 @@ object ClassDefChecker {
       jsConstructorDef,
       exportedMembers,
       jsNativeMembers,
-      componentNativeMembers,
+      witNativeMembers,
       topLevelExportDefs = Nil
     )(optimizerHints)
 

@@ -729,7 +729,7 @@ private class FunctionEmitter private (
       case t: Transient => genTransient(t)
 
       // Component Model
-      case t: ComponentFunctionApply => genComponentFunctionApply(t)
+      case t: WitFunctionApply => genWitFunctionApply(t)
 
       case _:JSSuperConstructorCall | _:LinkTimeProperty | _:LinkTimeIf |
           _:NewLambda =>
@@ -990,8 +990,8 @@ private class FunctionEmitter private (
           case AnyType | AnyNotNullType | ArrayType(_, _) =>
             ObjectClass
 
-          // ComponentResourceType should be compiled to WasmComponentFunctionApply in frontend
-          case tpe @ (_:ClosureType | _:RecordType | ComponentResourceType(_)) =>
+          // WitResourceType should be compiled to WasmWitFunctionApply in frontend
+          case tpe @ (_:ClosureType | _:RecordType | WitResourceType(_)) =>
             throw new AssertionError(s"Invalid receiver type $tpe")
         }
         val receiverClassInfo = ctx.getClassInfo(receiverClassName)
@@ -2370,7 +2370,7 @@ private class FunctionEmitter private (
       case ArrayType(_, _) =>
         genWithDispatch(isAncestorOfHijackedClass = false)
 
-      case tpe @ (_:ClosureType | _:RecordType | _:ComponentResourceType) =>
+      case tpe @ (_:ClosureType | _:RecordType | _:WitResourceType) =>
         throw new AssertionError(
             s"Invalid type ${tree.tpe} for String_+ at ${tree.pos}: $tree")
     }
@@ -2585,7 +2585,7 @@ private class FunctionEmitter private (
         }
 
       case AnyType | ClassType(_, true) | ArrayType(_, true) | _:ClosureType | _:RecordType |
-          _:ComponentResourceType =>
+          _:WitResourceType =>
         throw new AssertionError(s"Illegal type in IsInstanceOf: $testType")
     }
 
@@ -3904,8 +3904,8 @@ private class FunctionEmitter private (
     }
   }
 
-  private def genComponentFunctionApply(tree: ComponentFunctionApply): Type = {
-    val ComponentFunctionApply(optReceiver, className, method, args) = tree
+  private def genWitFunctionApply(tree: WitFunctionApply): Type = {
+    val WitFunctionApply(optReceiver, className, method, args) = tree
     val functionID = genFunctionID.forMethod(
       MemberNamespace.PublicStatic,
       className,

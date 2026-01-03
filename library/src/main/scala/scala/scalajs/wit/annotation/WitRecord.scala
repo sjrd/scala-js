@@ -10,11 +10,9 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component.annotation
+package scala.scalajs.wit.annotation
 
 import scala.annotation.meta._
 
 @field @getter @setter
-class ComponentImport private () extends scala.annotation.StaticAnnotation {
-  def this(moduleName: String, name: String) = this()
-}
+class WitRecord extends scala.annotation.StaticAnnotation

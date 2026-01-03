@@ -1,7 +1,7 @@
 package scala.scalajs.wasi.http.types
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
 
 import scala.scalajs.wasi.io.Streams.InputStream
 
@@ -14,11 +14,11 @@ import scala.scalajs.wasi.io.Streams.InputStream
  *  and ensures that the user of this interface may only be consuming either
  *  the body contents or waiting on trailers at any given time.
  */
-@ComponentResourceImport("wasi:http/types@0.2.0", "incoming-body")
+@WitResourceImport("wasi:http/types@0.2.0", "incoming-body")
 trait IncomingBody {
   // %stream: func() -> result<input-stream>;
-  @ComponentResourceMethod("stream")
-  def stream(): cm.Result[InputStream, Unit] = cm.native
+  @WitResourceMethod("stream")
+  def stream(): wit.Result[InputStream, Unit] = wit.native
 
   // finish: static func(this: incoming-body) -> future-trailers;
   // TODO

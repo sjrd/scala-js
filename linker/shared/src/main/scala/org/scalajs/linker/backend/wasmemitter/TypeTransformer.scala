@@ -92,7 +92,7 @@ object TypeTransformer {
       case ClassType(className, nullable) => transformClassType(className, nullable)
       case tpe: PrimType                  => transformPrimType(tpe)
 
-      case ComponentResourceType(className) => transformComponentResourceType(className)
+      case WitResourceType(className) => transformWitResourceType(className)
 
       case ArrayType(arrayTypeRef, nullable) =>
         watpe.RefType(nullable, genTypeID.forArrayClass(arrayTypeRef))
@@ -132,7 +132,7 @@ object TypeTransformer {
     watpe.RefType(nullable, heapType)
   }
 
-  def transformComponentResourceType(className: ClassName)(
+  def transformWitResourceType(className: ClassName)(
       implicit ctx: WasmContext): watpe.RefType = {
     /* Component resources are represented as simple wrapper structs containing
      * only an i32 handle field. They are converted to/from i32 handles at

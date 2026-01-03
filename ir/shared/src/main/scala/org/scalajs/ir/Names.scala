@@ -429,7 +429,7 @@ object Names {
           }
         case ClassRef(className) =>
           builder.append('L').append(className.nameString)
-        case ComponentResourceTypeRef(className) =>
+        case WitResourceTypeRef(className) =>
           builder.append('L').append(className.nameString)
         case ArrayTypeRef(base, dimensions) =>
           var i = 0

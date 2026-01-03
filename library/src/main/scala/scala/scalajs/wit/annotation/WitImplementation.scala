@@ -10,7 +10,7 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component.annotation
+package scala.scalajs.wit.annotation
 
 import scala.annotation.meta._
 
@@ -18,16 +18,16 @@ import scala.annotation.meta._
  *
  *  The annotated object must:
  *  - Be a static object (top-level or nested in another static object)
- *  - Extend a trait that is annotated with @ComponentExportInterface
+ *  - Extend a trait that is annotated with @WitExportInterface
  *
  *  Example:
  *  {{{
  *  trait Run {
- *    @ComponentExport("wasi:cli/run@0.2.0", "run")
+ *    @WitExport("wasi:cli/run@0.2.0", "run")
  *    def run(): Result[Unit, Unit]
  *  }
  *
- *  @ComponentImplementation
+ *  @WitImplementation
  *  object RunImpl extends Run {
  *    def run(): Result[Unit, Unit] = {
  *      println("Hello!")
@@ -37,4 +37,4 @@ import scala.annotation.meta._
  *  }}}
  */
 @getter
-class ComponentImplementation extends scala.annotation.StaticAnnotation
+class WitImplementation extends scala.annotation.StaticAnnotation

@@ -45,7 +45,7 @@ import org.scalajs.logging.Logger
 import SpecialNames._
 import VarGen._
 import org.scalajs.linker.backend.javascript.ByteArrayWriter
-import _root_.org.scalajs.ir.Trees.WasmComponentExportDef
+import _root_.org.scalajs.ir.Trees.WitExportDef
 
 final class Emitter(config: Emitter.Config) {
   import Emitter._
@@ -180,10 +180,10 @@ final class Emitter(config: Emitter.Config) {
            * opposed to the default `undefined` value of the JS `let`).
            */
           fb += wa.GlobalGet(genGlobalID.forStaticField(fieldIdent.name))
-        case _: WasmComponentExportDef =>
+        case _: WitExportDef =>
       }
 
-      if (!tle.tree.isWasmComponentExport)
+      if (!tle.tree.isWitExport)
         // Call the export setter
         fb += wa.Call(genFunctionID.forTopLevelExportSetter(tle.exportName))
     }
@@ -357,7 +357,7 @@ final class Emitter(config: Emitter.Config) {
 
     // Exports
     val jsTopLevelExports = module.topLevelExports.filterNot { t =>
-      t.tree.isWasmComponentExport
+      t.tree.isWitExport
     }
 
     val (exportDecls, exportSettersItems) = (for {
@@ -580,7 +580,7 @@ object Emitter {
       // instantiateClass(WasmComponentResultClass, NoArgConstructorName),
       // instantiateClass(WasmComponentOkClass, AnyArgConstructorName),
       // instantiateClass(WasmComponentErrClass, AnyArgConstructorName),
-      // instantiateClass(WasmComponentVariantClass, NoArgConstructorName),
+      // instantiateClass(WasmWitVariantClass, NoArgConstructorName),
 
       // See genIdentityHashCode in HelperFunctions
       callMethodStatically(BoxedDoubleClass, hashCodeMethodName),

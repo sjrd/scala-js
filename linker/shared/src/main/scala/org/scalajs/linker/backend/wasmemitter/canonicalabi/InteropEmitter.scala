@@ -7,7 +7,7 @@ import org.scalajs.ir.{
   WasmInterfaceTypes => wit,
 }
 import org.scalajs.ir.OriginalName.NoOriginalName
-import org.scalajs.ir.Trees.WasmComponentFunctionName._
+import org.scalajs.ir.Trees.WitFunctionName._
 
 import org.scalajs.linker.standard.LinkedClass
 
@@ -29,7 +29,7 @@ import org.scalajs.linker.backend.wasmemitter.canonicalabi.ValueIterators.ValueI
 
 object InteropEmitter {
   /** https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md#import-and-export-definitions */
-  private def toWasmImportExportName(name: js.WasmComponentFunctionName): String =
+  private def toWasmImportExportName(name: js.WitFunctionName): String =
     name match {
       case Function(func) => func
       case ResourceMethod(func, resource) => s"[method]$resource.$func"
@@ -38,7 +38,7 @@ object InteropEmitter {
       case ResourceDrop(resource) => s"[resource-drop]$resource"
     }
 
-  def genComponentNativeInterop(clazz: LinkedClass, member: js.ComponentNativeMemberDef)(
+  def genComponentNativeInterop(clazz: LinkedClass, member: js.WitNativeMemberDef)(
     implicit ctx: WasmContext
   ): Unit = {
     val importFunctionID = genFunctionID.forComponentFunction(
@@ -59,7 +59,7 @@ object InteropEmitter {
     )
   }
 
-  private def genComponentAdapterFunction(clazz: LinkedClass, member: js.ComponentNativeMemberDef,
+  private def genComponentAdapterFunction(clazz: LinkedClass, member: js.WitNativeMemberDef,
       importFunctionID: wanme.FunctionID)(
       implicit ctx: WasmContext): wanme.FunctionID = {
     val functionID = genFunctionID.forMethod(
@@ -144,7 +144,7 @@ object InteropEmitter {
 
 
   // Export
-  def genWasmComponentExportDef(owningClass: Names.ClassName, exportDef: js.WasmComponentExportDef)(
+  def genWitExportDef(owningClass: Names.ClassName, exportDef: js.WitExportDef)(
       implicit ctx: WasmContext): Unit = {
     implicit val pos = exportDef.pos
 

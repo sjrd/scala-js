@@ -1,15 +1,15 @@
 package scala.scalajs.wasi.cli
 
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit.annotation._
+import scala.scalajs.wit
 
 import scala.scalajs.wasi.io.Streams.OutputStream
-import scala.scalajs.{component => cm}
 
 /** https://github.com/WebAssembly/WASI/blob/main/wasip2/cli/stdio.wit */
 object Stdout {
-  @ComponentImport("wasi:cli/stdout@0.2.0", "get-stdout")
+  @WitImport("wasi:cli/stdout@0.2.0", "get-stdout")
   def getStdout(): OutputStream = {
-    cm.native
+    wit.native
   }
 }
 

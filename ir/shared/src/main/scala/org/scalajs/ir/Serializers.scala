@@ -158,7 +158,7 @@ object Serializers {
             // nothing to do
           case ClassRef(className) =>
             encodedNameToIndex(className.encoded)
-          case ComponentResourceTypeRef(className) =>
+          case WitResourceTypeRef(className) =>
             encodedNameToIndex(className.encoded)
           case ArrayTypeRef(base, _) =>
             reserveTypeRef(base)
@@ -228,8 +228,8 @@ object Serializers {
         case ClassRef(className) =>
           s.writeByte(TagClassRef)
           s.writeInt(encodedNameIndexMap(new EncodedNameKey(className.encoded)))
-        case ComponentResourceTypeRef(className) =>
-          s.writeByte(TagComponentResourceTypeRef)
+        case WitResourceTypeRef(className) =>
+          s.writeByte(TagWitResourceTypeRef)
           s.writeInt(encodedNameIndexMap(new EncodedNameKey(className.encoded)))
         case ArrayTypeRef(base, dimensions) =>
           s.writeByte(TagArrayTypeRef)
@@ -611,8 +611,8 @@ object Serializers {
           writeString(name)
           writeType(tree.tpe)
 
-        case ComponentFunctionApply(receiver, className, method, args) =>
-          writeTagAndPos(TagComponentFunctionApply)
+        case WitFunctionApply(receiver, className, method, args) =>
+          writeTagAndPos(TagWitFunctionApply)
           writeOptTree(receiver)
           writeName(className)
           writeMethodIdent(method)
@@ -670,7 +670,7 @@ object Serializers {
       writeOptTree(jsSuperClass)
       writeJSNativeLoadSpec(jsNativeLoadSpec)
       writeMemberDefs(fields ::: methods ::: jsConstructor.toList ::: jsMethodProps ::: jsNativeMembers
-        ::: componentNativeMembers)
+        ::: witNativeMembers)
       writeTopLevelExportDefs(topLevelExportDefs)
       writeInt(OptimizerHints.toBits(optimizerHints))
     }
@@ -787,12 +787,12 @@ object Serializers {
           writeMethodIdent(name)
           writeJSNativeLoadSpec(Some(jsNativeLoadSpec))
 
-        case ComponentNativeMemberDef(flags, moduleName, name,
+        case WitNativeMemberDef(flags, moduleName, name,
             method, signature) =>
-          writeByte(TagComponentNativeMemberDef)
+          writeByte(TagWitNativeMemberDef)
           writeInt(MemberFlags.toBits(flags))
           writeString(moduleName)
-          writeWasmComponentFunctionName(name)
+          writeWitFunctionName(name)
           writeMethodIdent(method)
           writeWITType(signature)
       }
@@ -823,10 +823,10 @@ object Serializers {
           writeByte(TagTopLevelFieldExportDef)
           writeString(moduleID); writeString(exportName); writeFieldIdentForEnclosingClass(field)
 
-        case WasmComponentExportDef(moduleName, name, methodDef, signature) =>
-          writeByte(TagWasmComponentExportDef)
+        case WitExportDef(moduleName, name, methodDef, signature) =>
+          writeByte(TagWitExportDef)
           writeString(moduleName)
-          writeWasmComponentFunctionName(name)
+          writeWitFunctionName(name)
           writeMemberDef(methodDef)
           writeWITType(signature)
       }
@@ -942,8 +942,8 @@ object Serializers {
           buffer.write(if (nullable) TagClassType else TagNonNullClassType)
           writeName(className)
 
-        case ComponentResourceType(className) =>
-          buffer.write(TagComponentResourceType)
+        case WitResourceType(className) =>
+          buffer.write(TagWitResourceType)
           writeName(className)
 
         case ArrayType(arrayTypeRef, nullable) =>
@@ -1064,8 +1064,8 @@ object Serializers {
       case ClassRef(className) =>
         buffer.writeByte(TagClassRef)
         writeName(className)
-      case ComponentResourceTypeRef(className) =>
-        buffer.writeByte(TagComponentResourceTypeRef)
+      case WitResourceTypeRef(className) =>
+        buffer.writeByte(TagWitResourceTypeRef)
         writeName(className)
       case typeRef: ArrayTypeRef =>
         buffer.writeByte(TagArrayTypeRef)
@@ -1179,25 +1179,25 @@ object Serializers {
       strings.foreach(writeString)
     }
 
-    def writeWasmComponentFunctionName(name: WasmComponentFunctionName): Unit = {
-      import WasmComponentFunctionName._
+    def writeWitFunctionName(name: WitFunctionName): Unit = {
+      import WitFunctionName._
       name match {
         case Function(func) =>
-          buffer.writeByte(TagWasmComponentFunction)
+          buffer.writeByte(TagWitFunction)
           writeString(func)
         case ResourceMethod(func, resource) =>
-          buffer.writeByte(TagWasmComponentResourceMethod)
+          buffer.writeByte(TagWitResourceMethod)
           writeString(func)
           writeString(resource)
         case ResourceStaticMethod(func, resource) =>
-          buffer.writeByte(TagWasmComponentResourceStaticMethod)
+          buffer.writeByte(TagWitResourceStaticMethod)
           writeString(func)
           writeString(resource)
         case ResourceConstructor(resource) =>
-          buffer.writeByte(TagWasmComponentResourceConstructor)
+          buffer.writeByte(TagWitResourceConstructor)
           writeString(resource)
         case ResourceDrop(resource) =>
-          buffer.writeByte(TagWasmComponentResourceDrop)
+          buffer.writeByte(TagWitResourceDrop)
           writeString(resource)
       }
     }
@@ -1657,8 +1657,8 @@ object Serializers {
         case TagLinkTimeProperty =>
           LinkTimeProperty(readString())(readType())
 
-        case TagComponentFunctionApply =>
-          ComponentFunctionApply(readOptTree(), readClassName(), readMethodIdent(), readTrees())(readType())
+        case TagWitFunctionApply =>
+          WitFunctionApply(readOptTree(), readClassName(), readMethodIdent(), readTrees())(readType())
       }
     }
 
@@ -1883,7 +1883,7 @@ object Serializers {
       val jsConstructorBuilder = new OptionBuilder[JSConstructorDef]
       val jsMethodPropsBuilder = List.newBuilder[JSMethodPropDef]
       val jsNativeMembersBuilder = List.newBuilder[JSNativeMemberDef]
-      val componentNativeMembersBuilder = List.newBuilder[ComponentNativeMemberDef]
+      val witNativeMembersBuilder = List.newBuilder[WitNativeMemberDef]
 
       for (_ <- 0 until readInt()) {
         implicit val pos = readPosition()
@@ -1895,7 +1895,7 @@ object Serializers {
           case TagJSMethodDef       => jsMethodPropsBuilder += readJSMethodDef()
           case TagJSPropertyDef     => jsMethodPropsBuilder += readJSPropertyDef()
           case TagJSNativeMemberDef => jsNativeMembersBuilder += readJSNativeMemberDef()
-          case TagComponentNativeMemberDef => componentNativeMembersBuilder += readComponentNativeMemberDef()
+          case TagWitNativeMemberDef => witNativeMembersBuilder += readWitNativeMemberDef()
         }
       }
 
@@ -1928,11 +1928,11 @@ object Serializers {
       }
 
       val jsNativeMembers = jsNativeMembersBuilder.result()
-      val componentNativeMembers = componentNativeMembersBuilder.result()
+      val witNativeMembers = witNativeMembersBuilder.result()
 
       val classDef = ClassDef(name, originalName, kind, jsClassCaptures, superClass, parents,
           jsSuperClass, jsNativeLoadSpec, fields, methods, jsConstructor,
-          jsMethodProps, jsNativeMembers, componentNativeMembers, topLevelExportDefs)(
+          jsMethodProps, jsNativeMembers, witNativeMembers, topLevelExportDefs)(
           optimizerHints)
 
       if (hacks.useBelow(19))
@@ -2302,7 +2302,7 @@ object Serializers {
           jsConstructor,
           jsMethodProps,
           jsNativeMembers,
-          componentNativeMembers,
+          witNativeMembers,
           topLevelExportDefs
         )(OptimizerHints.empty)(pos) // throws away the `@inline`
       }
@@ -2498,13 +2498,13 @@ object Serializers {
       JSNativeMemberDef(flags, name, jsNativeLoadSpec)
     }
 
-    private def readComponentNativeMemberDef()(implicit pos: Position): ComponentNativeMemberDef = {
+    private def readWitNativeMemberDef()(implicit pos: Position): WitNativeMemberDef = {
       val flags = MemberFlags.fromBits(readInt())
       val moduleName = readString()
-      val name = readWasmComponentFunctionName()
+      val name = readWitFunctionName()
       val methodIdent = readMethodIdent()
       val signature = readWITFuncType()
-      ComponentNativeMemberDef(flags, moduleName, name, methodIdent, signature)
+      WitNativeMemberDef(flags, moduleName, name, methodIdent, signature)
     }
 
     /* #4442 and #4601: Patch Labeled, If, Match and TryCatch nodes in
@@ -2595,9 +2595,9 @@ object Serializers {
         case TagTopLevelFieldExportDef =>
           TopLevelFieldExportDef(readModuleID(), readString(), readFieldIdentForEnclosingClass())
 
-        case TagWasmComponentExportDef =>
+        case TagWitExportDef =>
           val moduleName = readString()
-          val name = readWasmComponentFunctionName()
+          val name = readWitFunctionName()
           // read methoddef
           val methodPos = readPosition()
           val tag = readByte()
@@ -2605,7 +2605,7 @@ object Serializers {
           val methodDef = readMethodDef(owner, ownerKind)(methodPos)
 
           val signature = readWITFuncType()
-          WasmComponentExportDef(moduleName, name, methodDef, signature)
+          WitExportDef(moduleName, name, methodDef, signature)
       }
     }
 
@@ -2791,7 +2791,7 @@ object Serializers {
         case TagNonNullClassType => ClassType(readClassName(), nullable = false)
         case TagNonNullArrayType => ArrayType(readArrayTypeRef(), nullable = false)
 
-        case TagComponentResourceType => ComponentResourceType(readClassName())
+        case TagWitResourceType => WitResourceType(readClassName())
 
         case TagClosureType | TagNonNullClosureType =>
           val paramTypes = readTypes()
@@ -2826,7 +2826,7 @@ object Serializers {
         case TagNullRef                   => NullRef
         case TagNothingRef                => NothingRef
         case TagClassRef                  => ClassRef(readClassName())
-        case TagComponentResourceTypeRef  => ComponentResourceTypeRef(readClassName())
+        case TagWitResourceTypeRef  => WitResourceTypeRef(readClassName())
         case TagArrayTypeRef              => readArrayTypeRef()
       }
     }
@@ -3061,19 +3061,19 @@ object Serializers {
       res
     }
 
-    private def readWasmComponentFunctionName(): WasmComponentFunctionName = {
-      import WasmComponentFunctionName._
+    private def readWitFunctionName(): WitFunctionName = {
+      import WitFunctionName._
       val tag = readByte()
       (tag: @switch) match {
-        case TagWasmComponentFunction =>
+        case TagWitFunction =>
           Function(readString())
-        case TagWasmComponentResourceMethod =>
+        case TagWitResourceMethod =>
           ResourceMethod(readString(), readString())
-        case TagWasmComponentResourceStaticMethod =>
+        case TagWitResourceStaticMethod =>
           ResourceStaticMethod(readString(), readString())
-        case TagWasmComponentResourceConstructor =>
+        case TagWitResourceConstructor =>
           ResourceConstructor(readString())
-        case TagWasmComponentResourceDrop =>
+        case TagWitResourceDrop =>
           ResourceDrop(readString())
       }
     }

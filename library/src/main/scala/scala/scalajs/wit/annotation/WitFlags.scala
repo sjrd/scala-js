@@ -10,7 +10,7 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component.annotation
+package scala.scalajs.wit.annotation
 
 import scala.annotation.meta._
 
@@ -20,7 +20,7 @@ import scala.annotation.meta._
  *
  *  Example:
  *  {{{
- *  @ComponentFlags(3)
+ *  @WitFlags(3)
  *  final case class MyFlags(value: Int) { ... }
  *  object MyFlags {
  *    val Flag0 = MyFlags(1 << 0)
@@ -32,4 +32,4 @@ import scala.annotation.meta._
  *  @param numFlags The number of flags in this flags type
  */
 @field @getter @setter
-class ComponentFlags(val numFlags: Int) extends scala.annotation.StaticAnnotation
+class WitFlags(val numFlags: Int) extends scala.annotation.StaticAnnotation

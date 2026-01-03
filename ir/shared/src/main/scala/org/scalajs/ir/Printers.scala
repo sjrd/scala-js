@@ -970,7 +970,7 @@ object Printers {
           print(name)
           print(")")
 
-        case ComponentFunctionApply(receiver, className, method, args) =>
+        case WitFunctionApply(receiver, className, method, args) =>
           print("<component-function-apply>")
           receiver match {
             case Some(receiver) => print(receiver)
@@ -1041,7 +1041,7 @@ object Printers {
       }
       print(" ")
       printColumn(fields ::: methods ::: jsConstructor.toList :::
-          jsMethodProps ::: jsNativeMembers ::: componentNativeMembers ::: topLevelExportDefs, "{", "", "}")
+          jsMethodProps ::: jsNativeMembers ::: witNativeMembers ::: topLevelExportDefs, "{", "", "}")
     }
 
     def print(memberDef: MemberDef): Unit = {
@@ -1126,7 +1126,7 @@ object Printers {
           print(" loadfrom ")
           print(jsNativeLoadSpec)
 
-        case ComponentNativeMemberDef(flags, module, name,
+        case WitNativeMemberDef(flags, module, name,
             method, tpe) =>
           // TODO
       }
@@ -1158,7 +1158,7 @@ object Printers {
           printEscapeJS(exportName, out)
           print("\"")
 
-        case WasmComponentExportDef(moduleName, name, methodDef, signature) =>
+        case WitExportDef(moduleName, name, methodDef, signature) =>
           // TODO
           // var first = true
           // for (ty <- paramTypes) {
@@ -1178,7 +1178,7 @@ object Printers {
         print(tpe)
       case ClassRef(className) =>
         print(className)
-      case ComponentResourceTypeRef(className) =>
+      case WitResourceTypeRef(className) =>
         print("resource<")
         print(className)
         print(">")
@@ -1212,7 +1212,7 @@ object Printers {
         if (!nullable)
           print("!")
 
-      case ComponentResourceType(className) =>
+      case WitResourceType(className) =>
         print("resource<")
         print(className)
         print(">")

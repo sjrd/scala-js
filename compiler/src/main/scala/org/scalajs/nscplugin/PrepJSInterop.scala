@@ -168,18 +168,18 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
       checkJSCallingConventionAnnots(sym)
 
-      if (sym.hasAnnotation(ComponentVariantAnnotation))
-        checkComponentVariantTrait(tree.pos, sym)
-      else if (sym.hasAnnotation(ComponentRecordAnnotation))
-        checkComponentRecord(sym)
-      else if (sym.hasAnnotation(ComponentFlagsAnnotation))
-        checkComponentFlags(sym)
+      if (sym.hasAnnotation(WitVariantAnnotation))
+        checkWitVariantTrait(tree.pos, sym)
+      else if (sym.hasAnnotation(WitRecordAnnotation))
+        checkWitRecord(sym)
+      else if (sym.hasAnnotation(WitFlagsAnnotation))
+        checkWitFlags(sym)
       else if (WasmComponentResourceAnnots.exists(sym.hasAnnotation(_)))
         checkWasmComponentResourceAnnotationContext(tree.pos, sym)
       else if (WasmComponentFunctionAnnots.exists(sym.hasAnnotation(_)))
         checkWasmComponentFunction(tree.pos, sym)
-      else if (sym.hasAnnotation(ComponentResourceImportAnnotation))
-        checkWasmComponentResourceImport(tree.pos, sym)
+      else if (sym.hasAnnotation(WitResourceImportAnnotation))
+        checkWasmWitResourceImport(tree.pos, sym)
 
       // @unchecked needed because MemberDef is not marked `sealed`
       val transformedTree: Tree = (tree: @unchecked) match {
@@ -784,23 +784,23 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     private def checkWasmComponentResourceAnnotationContext(pos: Position, sym: Symbol): Unit = {
       sym.annotations.foreach { annot =>
         if (WasmComponentResourceAnnots.contains(annot.symbol)) {
-          val isResourceMethod = annot.symbol == ComponentResourceMethodAnnotation
-          val isStaticMethod = annot.symbol == ComponentResourceStaticMethodAnnotation
-          val isConstructor = annot.symbol == ComponentResourceConstructorAnnotation
-          val isDrop = annot.symbol == ComponentResourceDropAnnotation
+          val isResourceMethod = annot.symbol == WitResourceMethodAnnotation
+          val isStaticMethod = annot.symbol == WitResourceStaticMethodAnnotation
+          val isConstructor = annot.symbol == WitResourceConstructorAnnotation
+          val isDrop = annot.symbol == WitResourceDropAnnotation
 
           if ((isResourceMethod || isDrop) && (
               !sym.owner.isTraitOrInterface ||
-              !sym.owner.hasAnnotation(ComponentResourceImportAnnotation))) {
+              !sym.owner.hasAnnotation(WitResourceImportAnnotation))) {
             reporter.error(pos,
-                s"$annot is allowed in trait annotated with @ComponentResourceImport")
+                s"$annot is allowed in trait annotated with @WitResourceImport")
           } else if ((isStaticMethod || isConstructor) && (
               !sym.owner.isModuleClass ||
               sym.owner.companionClass == NoSymbol ||
               !sym.owner.companionClass.isTraitOrInterface ||
-              !sym.owner.companionClass.hasAnnotation(ComponentResourceImportAnnotation))) {
+              !sym.owner.companionClass.hasAnnotation(WitResourceImportAnnotation))) {
             reporter.error(pos,
-                s"$annot is allowed in companion object of trait annotated with @ComponentResourceImport")
+                s"$annot is allowed in companion object of trait annotated with @WitResourceImport")
           }
         }
       }
@@ -827,7 +827,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           reporter.error(pos,
               s"$annot methods cannot have type parameters")
         } else {
-          // Validate @ComponentImport-specific rules
+          // Validate @WitImport-specific rules
           for (overridden <- sym.allOverriddenSymbols.headOption) {
             val verb = if (overridden.isDeferred) "implement" else "override"
             reporter.error(pos,
@@ -857,51 +857,51 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
                 s"Return type '${returnType}' is not compatible with Component Model")
           }
 
-          val funcType = jsInterop.ComponentFunctionType(
+          val funcType = jsInterop.WitFunctionType(
             (if (sym.tpe.paramss.isEmpty) Nil else sym.tpe.paramss.head).map(_.tpe),
             sym.tpe.resultType
           )
-          jsInterop.storeComponentFunctionType(sym, funcType)
+          jsInterop.storeWitFunctionType(sym, funcType)
         }
     }
 
-    private def checkWasmComponentResourceImport(pos: Position, sym: Symbol): Unit = {
+    private def checkWasmWitResourceImport(pos: Position, sym: Symbol): Unit = {
       if (!sym.isTrait) {
         reporter.error(pos,
-            "@ComponentResourceImport is allowed for traits")
+            "@WitResourceImport is allowed for traits")
         return
       }
 
       // Resource imports should not be sealed
       if (sym.isSealed) {
         reporter.error(pos,
-            "@ComponentResourceImport traits cannot be sealed")
+            "@WitResourceImport traits cannot be sealed")
         return
       }
 
       var dropMethodCount = 0
       for (member <- sym.info.decls) {
         if (member.isMethod && !member.isConstructor && !member.isSynthetic) {
-          val hasResourceMethod = member.hasAnnotation(ComponentResourceMethodAnnotation)
-          val hasResourceDrop = member.hasAnnotation(ComponentResourceDropAnnotation)
-          val hasResourceConstructor = member.hasAnnotation(ComponentResourceConstructorAnnotation)
-          val hasResourceStaticMethod = member.hasAnnotation(ComponentResourceStaticMethodAnnotation)
+          val hasResourceMethod = member.hasAnnotation(WitResourceMethodAnnotation)
+          val hasResourceDrop = member.hasAnnotation(WitResourceDropAnnotation)
+          val hasResourceConstructor = member.hasAnnotation(WitResourceConstructorAnnotation)
+          val hasResourceStaticMethod = member.hasAnnotation(WitResourceStaticMethodAnnotation)
 
-          // @ComponentResourceConstructor and @ComponentResourceStaticMethod are not allowed in trait
+          // @WitResourceConstructor and @WitResourceStaticMethod are not allowed in trait
           if (hasResourceConstructor) {
             reporter.error(member.pos,
-                "@ComponentResourceConstructor can only be used on apply method in companion object")
+                "@WitResourceConstructor can only be used on apply method in companion object")
           }
           if (hasResourceStaticMethod) {
             reporter.error(member.pos,
-                "@ComponentResourceStaticMethod can only be used in companion object")
+                "@WitResourceStaticMethod can only be used in companion object")
           }
 
           val hasResourceMethodAnnotation = hasResourceMethod || hasResourceDrop
           if (!hasResourceMethodAnnotation) {
             reporter.error(member.pos,
-                s"Method '${member.name}' in @ComponentResourceImport trait must be " +
-                "annotated with @ComponentResourceMethod or @ComponentResourceDrop")
+                s"Method '${member.name}' in @WitResourceImport trait must be " +
+                "annotated with @WitResourceMethod or @WitResourceDrop")
           }
 
           if (hasResourceDrop) {
@@ -912,11 +912,11 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
             if (paramCount > 0) {
               reporter.error(member.pos,
-                  "@ComponentResourceDrop method must take no parameters")
+                  "@WitResourceDrop method must take no parameters")
             }
             if (returnType.typeSymbol != definitions.UnitClass) {
               reporter.error(member.pos,
-                  "@ComponentResourceDrop method must return Unit")
+                  "@WitResourceDrop method must return Unit")
             }
           }
 
@@ -941,23 +941,23 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
             for (overridden <- member.allOverriddenSymbols.headOption) {
               val verb = if (overridden.isDeferred) "implement" else "override"
               reporter.error(member.pos,
-                  s"A @ComponentResourceMethod or @ComponentResourceDrop member cannot $verb the inherited member " +
+                  s"A @WitResourceMethod or @WitResourceDrop member cannot $verb the inherited member " +
                   overridden.fullName)
             }
           }
 
-          val funcType = jsInterop.ComponentFunctionType(
+          val funcType = jsInterop.WitFunctionType(
             (if (member.tpe.paramss.isEmpty) Nil else member.tpe.paramss.head).map(_.tpe),
             member.tpe.resultType
           )
-          jsInterop.storeComponentFunctionType(member, funcType)
+          jsInterop.storeWitFunctionType(member, funcType)
         }
       }
 
       // Ensure there is at most one drop method
       if (dropMethodCount > 1) {
         reporter.error(pos,
-            s"@ComponentResourceImport trait can have at most one @ComponentResourceDrop method, found $dropMethodCount")
+            s"@WitResourceImport trait can have at most one @WitResourceDrop method, found $dropMethodCount")
       }
 
       // Check companion object if it exists
@@ -966,39 +966,39 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         val companionClass = companion.moduleClass
         for (member <- companionClass.info.decls) {
           if (member.isMethod && !member.isConstructor) {
-            val hasConstructorAnnot = member.hasAnnotation(ComponentResourceConstructorAnnotation)
-            val hasStaticMethodAnnot = member.hasAnnotation(ComponentResourceStaticMethodAnnotation)
+            val hasConstructorAnnot = member.hasAnnotation(WitResourceConstructorAnnotation)
+            val hasStaticMethodAnnot = member.hasAnnotation(WitResourceStaticMethodAnnotation)
 
-            // @ComponentResourceConstructor must be on apply method
+            // @WitResourceConstructor must be on apply method
             if (hasConstructorAnnot && member.name != nme.apply) {
               reporter.error(member.pos,
-                  "@ComponentResourceConstructor can only be used on apply method")
+                  "@WitResourceConstructor can only be used on apply method")
             }
 
-            // Public methods in companion must have @ComponentResourceConstructor or @ComponentResourceStaticMethod
+            // Public methods in companion must have @WitResourceConstructor or @WitResourceStaticMethod
             if (!hasConstructorAnnot &&
                 !hasStaticMethodAnnot &&
                 !member.isSynthetic) {
               reporter.error(member.pos,
-                  s"Public method '${member.name}' in companion object of @ComponentResourceImport trait must be " +
-                  "annotated with @ComponentResourceConstructor or @ComponentResourceStaticMethod")
+                  s"Public method '${member.name}' in companion object of @WitResourceImport trait must be " +
+                  "annotated with @WitResourceConstructor or @WitResourceStaticMethod")
             }
 
-            val funcType = jsInterop.ComponentFunctionType(
+            val funcType = jsInterop.WitFunctionType(
               (if (member.tpe.paramss.isEmpty) Nil else member.tpe.paramss.head).map(_.tpe),
               member.tpe.resultType
             )
-            jsInterop.storeComponentFunctionType(member, funcType)
+            jsInterop.storeWitFunctionType(member, funcType)
           }
         }
       }
     }
 
-    /** Validates a @ComponentVariant annotated sealed trait and its cases. */
-    private def checkComponentVariantTrait(pos: Position, sym: Symbol): Unit = {
+    /** Validates a @WitVariant annotated sealed trait and its cases. */
+    private def checkWitVariantTrait(pos: Position, sym: Symbol): Unit = {
       if (!sym.isSealed) {
         reporter.error(pos,
-          "@ComponentVariant can only be used on sealed traits or sealed abstract classes")
+          "@WitVariant can only be used on sealed traits or sealed abstract classes")
         return
       }
 
@@ -1008,12 +1008,12 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           s"Component variant '${sym.name}' must have at least one case")
       } else {
         cases.foreach { caseSym =>
-          validateComponentVariantCase(caseSym)
+          validateWitVariantCase(caseSym)
         }
       }
     }
 
-    private def validateComponentVariantCase(caseSym: Symbol): Unit = {
+    private def validateWitVariantCase(caseSym: Symbol): Unit = {
       if (!caseSym.isCaseClass && !caseSym.isModuleClass) {
         reporter.error(caseSym.pos,
           s"Component variant case '${caseSym.name}' must be a case class or case object")
@@ -1043,10 +1043,10 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
             reporter.error(param.pos,
               s"Field '${param.name}' has type '${fieldType}' which is not compatible with Component Model. ")
           } else {
-            jsInterop.storeComponentVariantValueType(caseSym, fieldType)
+            jsInterop.storeWitVariantValueType(caseSym, fieldType)
           }
         } else { // case object
-          jsInterop.storeComponentVariantValueType(caseSym, definitions.UnitTpe)
+          jsInterop.storeWitVariantValueType(caseSym, definitions.UnitTpe)
         }
       } else { // not a case class or case object
         reporter.error(caseSym.pos,
@@ -1070,37 +1070,37 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         true
       } else if (
           // Check unsigned types (they're type aliases, so check by full name)
-          fullName == "scala.scalajs.component.unsigned.UByte" ||
-          fullName == "scala.scalajs.component.unsigned.UShort" ||
-          fullName == "scala.scalajs.component.unsigned.UInt" ||
-          fullName == "scala.scalajs.component.unsigned.ULong") {
+          fullName == "scala.scalajs.wit.unsigned.UByte" ||
+          fullName == "scala.scalajs.wit.unsigned.UShort" ||
+          fullName == "scala.scalajs.wit.unsigned.UInt" ||
+          fullName == "scala.scalajs.wit.unsigned.ULong") {
         true
       } else if (sym.fullName == "scala.Array") {
         dealiased.typeArgs.headOption.forall(isComponentModelCompatible)
       } else if (sym.fullName == "java.util.Optional") {
         dealiased.typeArgs.headOption.forall(isComponentModelCompatible)
-      } else if (sym.fullName.startsWith("scala.scalajs.component.Tuple")) {
+      } else if (sym.fullName.startsWith("scala.scalajs.wit.Tuple")) {
         dealiased.typeArgs.forall(isComponentModelCompatible)
-      } else if (sym.fullName.startsWith("scala.scalajs.component.Result")) {
+      } else if (sym.fullName.startsWith("scala.scalajs.wit.Result")) {
         dealiased.typeArgs.forall(isComponentModelCompatible)
       } else if (
-          sym.hasAnnotation(ComponentRecordAnnotation) ||
-          sym.hasAnnotation(ComponentVariantAnnotation) ||
-          sym.hasAnnotation(ComponentFlagsAnnotation) ||
-          sym.hasAnnotation(ComponentResourceImportAnnotation)) {
+          sym.hasAnnotation(WitRecordAnnotation) ||
+          sym.hasAnnotation(WitVariantAnnotation) ||
+          sym.hasAnnotation(WitFlagsAnnotation) ||
+          sym.hasAnnotation(WitResourceImportAnnotation)) {
         true
       } else {
         false
       }
     }
 
-    private def checkComponentRecord(sym: Symbol): Unit = {
+    private def checkWitRecord(sym: Symbol): Unit = {
       if (!sym.isCaseClass) {
         reporter.error(sym.pos,
-            "@ComponentRecord can only be used on case classes")
+            "@WitRecord can only be used on case classes")
       } else if (!sym.isFinal) {
         reporter.error(sym.pos,
-            "@ComponentRecord case class must be final")
+            "@WitRecord case class must be final")
       } else {
         // Check that each field has a compatible type
         val primaryCtor = sym.primaryConstructor
@@ -1117,48 +1117,48 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           f <- sym.info.decls
           if !f.isMethod && f.isField
         } {
-          jsInterop.storeComponentVariantValueType(f, f.tpe)
+          jsInterop.storeWitVariantValueType(f, f.tpe)
         }
       }
     }
 
-    private def checkComponentFlags(sym: Symbol): Unit = {
+    private def checkWitFlags(sym: Symbol): Unit = {
       if (!sym.isCaseClass) {
         reporter.error(sym.pos,
-            "@ComponentFlags can only be used on case classes")
+            "@WitFlags can only be used on case classes")
       } else if (!sym.isFinal) {
         reporter.error(sym.pos,
-            "@ComponentFlags case class must be final")
+            "@WitFlags case class must be final")
       } else if (sym.isDerivedValueClass) {
         reporter.error(sym.pos,
-            "@ComponentFlags case class must NOT extend AnyVal. Use a regular case class instead.")
+            "@WitFlags case class must NOT extend AnyVal. Use a regular case class instead.")
       } else {
         val primaryCtor = sym.primaryConstructor
         val params = primaryCtor.paramss.flatten
         if (params.length != 1) {
           reporter.error(sym.pos,
-              s"@ComponentFlags case class must have exactly one parameter, found ${params.length}")
+              s"@WitFlags case class must have exactly one parameter, found ${params.length}")
           return
         }
 
-        val param = params.headOption.getOrElse(throw new Error("checkComponentFlags"))
+        val param = params.headOption.getOrElse(throw new Error("checkWitFlags"))
         if (param.tpe.typeSymbol != IntClass) {
           reporter.error(param.pos,
-              s"@ComponentFlags case class parameter must be of type Int, found '${param.tpe}'")
+              s"@WitFlags case class parameter must be of type Int, found '${param.tpe}'")
         }
         if (param.name.decoded != "value") {
           reporter.error(param.pos,
-              s"@ComponentFlags case class parameter must be named 'value', found '${param.name.decoded}'")
+              s"@WitFlags case class parameter must be named 'value', found '${param.name.decoded}'")
         }
 
-        sym.getAnnotation(ComponentFlagsAnnotation).flatMap(_.intArg(0)) match {
+        sym.getAnnotation(WitFlagsAnnotation).flatMap(_.intArg(0)) match {
           case Some(numFlags) if numFlags > 0 =>
           case Some(numFlags) =>
             reporter.error(sym.pos,
-                s"@ComponentFlags numFlags parameter must be positive, found $numFlags")
+                s"@WitFlags numFlags parameter must be positive, found $numFlags")
           case None =>
             reporter.error(sym.pos,
-                "@ComponentFlags annotation must specify the number of flags as a parameter")
+                "@WitFlags annotation must specify the number of flags as a parameter")
         }
       }
     }
@@ -2088,22 +2088,22 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
       case head :: tail =>
         reporter.error(pos,
             "Wasm Component function must have exactly one annotation among " +
-            "@ComponentImport, @ComponentResourceMethod, @ComponentResourceStaticMethod, " +
-            "@ComponentResourceConstructor, and @ComponentResourceDrop")
+            "@WitImport, @WitResourceMethod, @WitResourceStaticMethod, " +
+            "@WitResourceConstructor, and @WitResourceDrop")
         None
     }
 
   }
 
   private lazy val WasmComponentFunctionAnnots: Set[Symbol] =
-    Set(ComponentImportAnnotation)
+    Set(WitImportAnnotation)
 
   private lazy val WasmComponentResourceAnnots: Set[Symbol] =
     Set(
-      ComponentResourceMethodAnnotation,
-      ComponentResourceStaticMethodAnnotation,
-      ComponentResourceConstructorAnnotation,
-      ComponentResourceDropAnnotation
+      WitResourceMethodAnnotation,
+      WitResourceStaticMethodAnnotation,
+      WitResourceConstructorAnnotation,
+      WitResourceDropAnnotation
     )
 }
 

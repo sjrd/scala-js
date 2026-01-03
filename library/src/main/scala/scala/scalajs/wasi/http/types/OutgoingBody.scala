@@ -1,7 +1,7 @@
 package scala.scalajs.wasi.http.types
 
-import scala.scalajs.{component => cm}
-import scala.scalajs.component.annotation._
+import scala.scalajs.wit
+import scala.scalajs.wit.annotation._
 
 import scala.scalajs.wasi.io.Streams.OutputStream
 
@@ -22,11 +22,11 @@ import scala.scalajs.wasi.io.Streams.OutputStream
  *  including: corrupting the body on the wire, aborting the associated
  *  Request, or sending a late status code for the Response.
  */
-@ComponentResourceImport("wasi:http/types@0.2.0", "outgoing-body")
+@WitResourceImport("wasi:http/types@0.2.0", "outgoing-body")
 trait OutgoingBody {
   // write: func() -> result<output-stream>;
-  @ComponentResourceMethod("write")
-  def write(): cm.Result[OutputStream, Unit] = cm.native
+  @WitResourceMethod("write")
+  def write(): wit.Result[OutputStream, Unit] = wit.native
 }
 object OutgoingBody {
   /// Finalize an outgoing body, optionally providing trailers. This must be
@@ -42,10 +42,10 @@ object OutgoingBody {
   //   this: outgoing-body,
   //   trailers: option<trailers>
   // ) -> result<_, error-code>;
-  @ComponentResourceStaticMethod("finish")
+  @WitResourceStaticMethod("finish")
   def finish(
     `this`: OutgoingBody,
     trailers: java.util.Optional[Trailers]
-  ): cm.Result[Unit, ErrorCode] = cm.native
+  ): wit.Result[Unit, ErrorCode] = wit.native
 
 }

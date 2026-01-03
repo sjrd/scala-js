@@ -5,16 +5,16 @@
 
 package echo
 
-import scala.scalajs.component.annotation._
-import scala.scalajs.{component => cm}
+import scala.scalajs.wit.annotation._
+import scala.scalajs.wit
 import scala.scalajs.wasi.http.types._
 
-import scala.scalajs.ComponentUtils._
+import scala.scalajs.WitUtils._
 import scala.collection.mutable
 
 import echo.exports.wasi.http.v0_2_0.IncomingHandler
 
-@ComponentImplementation
+@WitImplementation
 object Server extends IncomingHandler {
   override def handle(request: IncomingRequest, outParam: ResponseOutparam): Unit = {
     val inputBody = (for {
@@ -43,7 +43,7 @@ object Server extends IncomingHandler {
     val resp = OutgoingResponse(headers)
     val body: OutgoingBody = toEither(resp.body()).getOrElse(throw new Error("failed to obtain outgoing response"))
 
-    ResponseOutparam.set(outParam, new cm.Ok(resp))
+    ResponseOutparam.set(outParam, new wit.Ok(resp))
 
     val out = toEither(body.write()).getOrElse(throw new Error("failed to get outgoing stream"))
     out.blockingWriteAndFlush(inputBody)

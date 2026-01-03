@@ -168,7 +168,7 @@ private[backend] final class NameGen {
             appendTypeRef(base)
           case TransientTypeRef(name) =>
             builder.append('t').append(genName(name))
-          case ComponentResourceTypeRef(className) =>
+          case WitResourceTypeRef(className) =>
             throw new AssertionError(s"Unexpected component resource type ref in JS backend.")
         }
       }

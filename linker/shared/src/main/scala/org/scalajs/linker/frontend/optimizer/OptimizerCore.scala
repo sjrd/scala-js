@@ -326,7 +326,7 @@ private[optimizer] abstract class OptimizerCore(
            * of type tests.
            */
           true
-        case _:ClosureType | _:RecordType | ComponentResourceType(_) =>
+        case _:ClosureType | _:RecordType | WitResourceType(_) =>
           // These types are only subtypes of themselves, modulo nullability
           true
       }
@@ -786,9 +786,9 @@ private[optimizer] abstract class OptimizerCore(
 
       // Component Model
 
-      case tree: ComponentFunctionApply =>
+      case tree: WitFunctionApply =>
         trampoline {
-          pretransformComponentFunctionApply(tree)(finishTransform(isStat))
+          pretransformWitFunctionApply(tree)(finishTransform(isStat))
         }
 
       // Trees that need not be transformed
@@ -1122,8 +1122,8 @@ private[optimizer] abstract class OptimizerCore(
         pretransformJSFunctionApply(tree, isStat = false,
             usePreTransform = true)(cont)
 
-      case tree: ComponentFunctionApply =>
-        pretransformComponentFunctionApply(tree)(cont)
+      case tree: WitFunctionApply =>
+        pretransformWitFunctionApply(tree)(cont)
 
       case JSArrayConstr(items) =>
         /* Trying to virtualize more than 64 items in a JS array is probably
@@ -2236,7 +2236,7 @@ private[optimizer] abstract class OptimizerCore(
             case RefinedType(_:PrimType | _:ArrayType, _) => true
             case RefinedType(AnyType | AnyNotNullType, _) => false
 
-            case RefinedType(_:ClosureType | _:RecordType | ComponentResourceType(_), _) =>
+            case RefinedType(_:ClosureType | _:RecordType | WitResourceType(_), _) =>
               throw new AssertionError(s"Invalid receiver type ${treceiver.tpe} at $pos")
           }
 
@@ -2685,20 +2685,20 @@ private[optimizer] abstract class OptimizerCore(
     }
   }
 
-  private def pretransformComponentFunctionApply(tree: ComponentFunctionApply)(
+  private def pretransformWitFunctionApply(tree: WitFunctionApply)(
       cont: PreTransCont)(implicit scope: Scope): TailRec[Tree] = {
-    val ComponentFunctionApply(optReceiver, className, methodIdent, args) = tree
+    val WitFunctionApply(optReceiver, className, methodIdent, args) = tree
     implicit val pos = tree.pos
 
     optReceiver match {
       case Some(receiver) =>
         pretransformExprs(receiver, args) { (treceiver, targs) =>
-          cont(PreTransTree(ComponentFunctionApply(Some(finishTransformExpr(treceiver)),
+          cont(PreTransTree(WitFunctionApply(Some(finishTransformExpr(treceiver)),
               className, methodIdent, targs.map(finishTransformExpr))(tree.tpe)))
         }
       case None =>
         pretransformExprs(args) { targs =>
-          cont(PreTransTree(ComponentFunctionApply(None, className,
+          cont(PreTransTree(WitFunctionApply(None, className,
               methodIdent, targs.map(finishTransformExpr))(tree.tpe)))
         }
     }
@@ -4298,13 +4298,13 @@ private[optimizer] abstract class OptimizerCore(
         primRef.displayName
       case ClassRef(className) =>
         mappedClassName(className)
-      case ComponentResourceTypeRef(className) =>
+      case WitResourceTypeRef(className) =>
         "resource<" + mappedClassName(className) + ">"
       case ArrayTypeRef(primRef: PrimRef, dimensions) =>
         "[" * dimensions + primRef.charCode
       case ArrayTypeRef(ClassRef(className), dimensions) =>
         "[" * dimensions + "L" + mappedClassName(className) + ";"
-      case ArrayTypeRef(ComponentResourceTypeRef(className), dimensions) =>
+      case ArrayTypeRef(WitResourceTypeRef(className), dimensions) =>
         "[" * dimensions + "W" + mappedClassName(className) + ";"
       case typeRef: TransientTypeRef =>
         throw new IllegalArgumentException(typeRef.toString())
@@ -5855,8 +5855,8 @@ private[optimizer] abstract class OptimizerCore(
           if (isJSType(className)) AnyType
           else ClassType(className, nullable = true)
 
-        case ComponentResourceTypeRef(className) =>
-          ComponentResourceType(className)
+        case WitResourceTypeRef(className) =>
+          WitResourceType(className)
       }
     } else {
       ArrayType(ArrayTypeRef(base, dimensions - 1), nullable = true)

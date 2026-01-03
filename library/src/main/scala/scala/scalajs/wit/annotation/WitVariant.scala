@@ -10,7 +10,7 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component.annotation
+package scala.scalajs.wit.annotation
 
 import scala.annotation.meta._
 
@@ -26,7 +26,7 @@ import scala.annotation.meta._
  *
  *  Example:
  *  {{{
- *  @ComponentVariant
+ *  @WitVariant
  *  sealed trait Result
  *  object Result {
  *    final case class Ok(value: Int) extends Result
@@ -36,7 +36,7 @@ import scala.annotation.meta._
  *
  *  Example with case object (enum-like):
  *  {{{
- *  @ComponentVariant
+ *  @WitVariant
  *  sealed trait Status
  *  object Status {
  *    case object Pending extends Status
@@ -46,4 +46,4 @@ import scala.annotation.meta._
  *  }}}
  */
 @field @getter @setter
-class ComponentVariant extends scala.annotation.StaticAnnotation
+class WitVariant extends scala.annotation.StaticAnnotation

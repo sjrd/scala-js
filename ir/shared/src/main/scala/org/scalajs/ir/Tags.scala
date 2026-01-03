@@ -139,7 +139,7 @@ private[ir] object Tags {
   final val TagLinkTimeIf = TagJSAwait + 1
 
   // New in Component Model
-  final val TagComponentFunctionApply = TagLinkTimeIf + 1
+  final val TagWitFunctionApply = TagLinkTimeIf + 1
 
   // Tags for member defs
 
@@ -157,7 +157,7 @@ private[ir] object Tags {
 
   final val TagJSConstructorDef = TagJSNativeMemberDef + 1
 
-  final val TagComponentNativeMemberDef = TagJSConstructorDef + 1
+  final val TagWitNativeMemberDef = TagJSConstructorDef + 1
 
   // Tags for top-level export defs
 
@@ -165,7 +165,7 @@ private[ir] object Tags {
   final val TagTopLevelModuleExportDef = TagTopLevelJSClassExportDef + 1
   final val TagTopLevelMethodExportDef = TagTopLevelModuleExportDef + 1
   final val TagTopLevelFieldExportDef = TagTopLevelMethodExportDef + 1
-  final val TagWasmComponentExportDef = TagTopLevelFieldExportDef + 1
+  final val TagWitExportDef = TagTopLevelFieldExportDef + 1
 
   // Tags for Types
 
@@ -203,7 +203,7 @@ private[ir] object Tags {
 
   // New in Component Model support
 
-  final val TagComponentResourceType = TagNonNullClosureType + 1
+  final val TagWitResourceType = TagNonNullClosureType + 1
 
   // Tags for TypeRefs
 
@@ -227,7 +227,7 @@ private[ir] object Tags {
 
   // New in Component Model support
 
-  final val TagComponentResourceTypeRef = TagTransientTypeRefHashingOnly + 1
+  final val TagWitResourceTypeRef = TagTransientTypeRefHashingOnly + 1
 
   // Tags for JS native loading specs
 
@@ -266,9 +266,9 @@ private[ir] object Tags {
 
   // Tags for wasm Component Function kind
 
-  final val TagWasmComponentFunction = 0
-  final val TagWasmComponentResourceMethod = TagWasmComponentFunction + 1
-  final val TagWasmComponentResourceStaticMethod = TagWasmComponentResourceMethod + 1
-  final val TagWasmComponentResourceConstructor = TagWasmComponentResourceStaticMethod + 1
-  final val TagWasmComponentResourceDrop = TagWasmComponentResourceConstructor + 1
+  final val TagWitFunction = 0
+  final val TagWitResourceMethod = TagWitFunction + 1
+  final val TagWitResourceStaticMethod = TagWitResourceMethod + 1
+  final val TagWitResourceConstructor = TagWitResourceStaticMethod + 1
+  final val TagWitResourceDrop = TagWitResourceConstructor + 1
 }

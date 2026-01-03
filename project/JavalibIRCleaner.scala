@@ -191,7 +191,7 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
       val preprocessedTree = ClassDef(name, originalName, kind, jsClassCaptures,
           superClass, newInterfaces, jsSuperClass, jsNativeLoadSpec, fields,
           newMethods, jsConstructor, jsMethodProps, jsNativeMembers,
-          componentNativeMembers, topLevelExportDefs)(
+          witNativeMembers, topLevelExportDefs)(
           optimizerHints)(pos)
 
       // Only validate the hierarchy; do not transform
@@ -329,7 +329,7 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
         classDef.jsConstructor,
         classDef.jsMethodProps,
         classDef.jsNativeMembers,
-        classDef.componentNativeMembers,
+        classDef.witNativeMembers,
         classDef.topLevelExportDefs
       )(classDef.optimizerHints)(classDef.pos)
     }
@@ -470,8 +470,8 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
           ApplyStatic(t.flags, transformNonJSClassName(t.className),
               transformMethodIdent(t.method), t.args)(transformType(t.tpe))
 
-        case t: ComponentFunctionApply =>
-          ComponentFunctionApply(t.receiver,
+        case t: WitFunctionApply =>
+          WitFunctionApply(t.receiver,
               transformNonJSClassName(t.className),
               transformMethodIdent(t.method), t.args)(transformType(t.tpe))
 
@@ -568,7 +568,7 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
         implicit pos: Position): TypeRef = typeRef match {
       case typeRef: PrimRef                  => typeRef
       case typeRef: ClassRef                 => transformClassRef(typeRef)
-      case ComponentResourceTypeRef(className) => ComponentResourceTypeRef(transformClassName(className))
+      case WitResourceTypeRef(className) => WitResourceTypeRef(transformClassName(className))
       case typeRef: ArrayTypeRef             => transformArrayTypeRef(typeRef)
       case typeRef: TransientTypeRef         => TransientTypeRef(typeRef.name)(transformType(typeRef.tpe))
     }
@@ -599,8 +599,8 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
           ArrayType(transformArrayTypeRef(arrayTypeRef), nullable)
         case ClosureType(paramTypes, resultType, nullable) =>
           ClosureType(paramTypes.map(transformType(_)), transformType(resultType), nullable)
-        case ComponentResourceType(className) =>
-          ComponentResourceType(transformClassName(className))
+        case WitResourceType(className) =>
+          WitResourceType(transformClassName(className))
         case AnyType | AnyNotNullType | _:PrimType | _:RecordType =>
           tpe
       }
@@ -623,7 +623,7 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
       }
 
       def isWasmComponent = {
-        cls.nameString.startsWith("scala.scalajs.component") ||
+        cls.nameString.startsWith("scala.scalajs.wit") ||
         cls.nameString.startsWith("scala.scalajs.wasi")
       }
 

@@ -10,9 +10,9 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component.annotation
+package scala.scalajs.wit.annotation
 
 import scala.annotation.meta._
 
 @field @getter @setter
-class ComponentResourceDrop() extends scala.annotation.StaticAnnotation
+class WitResourceDrop() extends scala.annotation.StaticAnnotation

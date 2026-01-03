@@ -76,7 +76,7 @@ private final class IRChecker(linkTimeProperties: LinkTimeProperties,
           implicit val ctx = ErrorContext(methodDef)
           typecheckAny(methodDef.body, Env.empty)
 
-        case WasmComponentExportDef(_, _, methodDef, _) =>
+        case WitExportDef(_, _, methodDef, _) =>
           // TODO
 
         case _:TopLevelJSClassExportDef | _:TopLevelModuleExportDef |
@@ -748,8 +748,8 @@ private final class IRChecker(linkTimeProperties: LinkTimeProperties,
 
       case JSTypeOfGlobalRef(_) =>
 
-      case ComponentFunctionApply(receiver, _, _, args) =>
-        receiver.foreach { r => typecheckExpr(r, env) } // TODO: typecheck WasmComponentResourceType
+      case WitFunctionApply(receiver, _, _, args) =>
+        receiver.foreach { r => typecheckExpr(r, env) } // TODO: typecheck WasmWitResourceType
         for (arg <- args)
           typecheckExpr(arg, env)
 
@@ -880,7 +880,7 @@ private final class IRChecker(linkTimeProperties: LinkTimeProperties,
       case ClassRef(className)        => classNameToType(className)
       case arrayTypeRef: ArrayTypeRef => ArrayType(arrayTypeRef, nullable = true)
       case typeRef: TransientTypeRef  => typeRef.tpe
-      case ComponentResourceTypeRef(className) => ComponentResourceType(className)
+      case WitResourceTypeRef(className) => WitResourceType(className)
     }
   }
 

@@ -197,7 +197,7 @@ object Traversers {
       case JSTypeOfGlobalRef(globalRef) =>
         traverse(globalRef)
 
-      case ComponentFunctionApply(receiver, module, name, args) =>
+      case WitFunctionApply(receiver, module, name, args) =>
         receiver.foreach(traverse)
         args.foreach(traverse)
 
@@ -261,7 +261,7 @@ object Traversers {
         case TopLevelMethodExportDef(_, methodDef) =>
           traverseJSMethodPropDef(methodDef)
 
-        case WasmComponentExportDef(_, _, methodDef, _) =>
+        case WitExportDef(_, _, methodDef, _) =>
           traverseMethodDef(methodDef)
       }
     }

@@ -10,11 +10,10 @@
  * additional information regarding copyright ownership.
  */
 
-package scala.scalajs.component.annotation
+package scala.scalajs.wit
 
-import scala.annotation.meta._
+sealed trait Result[+A, +B]
 
-@field @getter @setter
-class ComponentExport private () extends scala.annotation.StaticAnnotation {
-  def this(moduleName: String, name: String) = this()
-}
+final case class Ok[A](value: A) extends Result[A, Nothing]
+
+final case class Err[B](value: B) extends Result[Nothing, B]
