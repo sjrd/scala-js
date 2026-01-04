@@ -62,6 +62,9 @@ abstract class OutputDirectoryImpl extends OutputDirectory {
 
   /** Deletes the given file. Fails if it does not exist. */
   def delete(name: String)(implicit ec: ExecutionContext): Future[Unit]
+
+  /** Returns the absolute path string for a file in the OutputDirectory. */
+  def getAbsolutePath(name: String): String
 }
 
 object OutputDirectoryImpl {

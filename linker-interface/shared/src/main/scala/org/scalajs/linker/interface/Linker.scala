@@ -86,5 +86,11 @@ private object Linker {
       else
         Future.failed(new IOException(s"file $name does not exist"))
     }
+
+    def getAbsolutePath(name: String): String = {
+      throw new UnsupportedOperationException(
+        "MemOutputDirectory does not support getAbsolutePath"
+      )
+    }
   }
 }

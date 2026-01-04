@@ -225,6 +225,16 @@ object ScalaJSPlugin extends AutoPlugin {
         "An internal task used to track changes to the `scalaJSLinkerConfig` setting",
         KeyRanks.Invisible)
 
+    val scalaJSWitDirectory = SettingKey[File](
+        "scalaJSWitDirectory",
+        "Directory containing WIT files for component model builds",
+        CSetting)
+
+    val scalaJSWitWorld = SettingKey[Option[String]](
+        "scalaJSWitWorld",
+        "World name to use for component model embedding (default: None, auto-detect)",
+        CSetting)
+
     val scalaJSStage = SettingKey[Stage]("scalaJSStage",
         "The optimization stage at which run and test are executed", APlusSetting)
 
@@ -292,6 +302,9 @@ object ScalaJSPlugin extends AutoPlugin {
         scalaJSStage := Stage.FastOpt,
 
         scalaJSLinkerConfig := StandardConfig(),
+
+        scalaJSWitDirectory := file("wit"),
+        scalaJSWitWorld := None,
 
         scalaJSLinkerImpl / dependencyResolution := {
           val log = streams.value.log

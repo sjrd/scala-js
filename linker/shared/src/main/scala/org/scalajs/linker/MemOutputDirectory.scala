@@ -73,6 +73,12 @@ object MemOutputDirectory {
         fileNotFound(name)
     }
 
+    def getAbsolutePath(name: String): String = {
+      throw new UnsupportedOperationException(
+        "MemOutputDirectory does not support getAbsolutePath"
+      )
+    }
+
     private def fileNotFound(name: String): Future[Nothing] =
       Future.failed(new IOException(s"file $name does not exist"))
   }
