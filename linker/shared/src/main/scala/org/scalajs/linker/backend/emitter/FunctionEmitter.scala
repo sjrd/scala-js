@@ -3291,6 +3291,10 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case NewArray(typeRef, length) =>
           js.New(genArrayConstrOf(typeRef), transformExprNoChar(length) :: Nil)
 
+        case ArrayValue(ArrayTypeRef(IntRef, 1), elems)
+            if elems.lengthCompare(1) > 0 && elems.forall(_.isInstanceOf[Literal]) =>
+          genConstantArray(IntRef, elems)
+
         case ArrayValue(typeRef, elems) =>
           val newElems = typeRef match {
             case ArrayTypeRef(CharRef, 1) =>
@@ -3564,6 +3568,141 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         baseResult
       else
         genCallHelper(VarField.bC, baseResult)
+    }
+
+    // Ordered by decreasing run-time performance
+    private final val CAStrategyRaw = 0
+    private final val CAStrategyUVals = 1
+    private final val CAStrategyUDiffs = 2
+    private final val CAStrategySVals = 3
+    private final val CAStrategySDiffs = 4
+
+    private def genConstantArray(primRef: PrimRef, elems: List[Tree])(implicit pos: Position): js.Tree = {
+      val LowRangeStart = 0x30
+      val LowRangeEnd = 0x4f
+      val HighRangeStart = 0x5d
+      val HighRangeEnd = 0x7c
+
+      val elemCount = elems.size
+      val rawBuffer = java.nio.ByteBuffer.allocate(4 * elemCount).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+      for (elem <- elems)
+        rawBuffer.putInt(elem.asInstanceOf[IntLiteral].value)
+      rawBuffer.position(0)
+
+      val strategy = pickConstantArrayStrategy(rawBuffer, elemByteSize = 4)
+      val isSigned = strategy == CAStrategySVals || strategy == CAStrategySDiffs
+      val isDiffs = strategy == CAStrategyUDiffs || strategy == CAStrategySDiffs
+
+      def charCountUnsignedFor(value: Int): Int = {
+        if ((value & ~0x1f) == 0) 1
+        else 1 + charCountUnsignedFor(value >>> 5)
+      }
+
+      def charCountSignedFor(value: Int): Int = {
+        if (((value ^ (value >> 31)) & ~0x0f) == 0) 1
+        else 1 + charCountSignedFor(value >> 5)
+      }
+
+      val encoded = new java.lang.StringBuilder()
+      var prev = 0
+      for (elem <- elems) {
+        val elemValue = elem.asInstanceOf[IntLiteral].value
+        var valueToEncode = if (isDiffs) elemValue - prev else elemValue
+        prev = elemValue
+
+        val charCount =
+          if (isSigned) charCountSignedFor(valueToEncode)
+          else charCountUnsignedFor(valueToEncode)
+
+        for (i <- (charCount - 1) to 1 by -1) {
+          val shift = 5 * i
+          encoded.append((LowRangeStart + ((valueToEncode >>> shift) & 0x1f)).toChar)
+        }
+        encoded.append((HighRangeStart + (valueToEncode & 0x1f)).toChar)
+      }
+
+      val helperVarField = strategy match {
+        case CAStrategyRaw    => VarField.constArrRaw
+        case CAStrategyUVals  => VarField.constArrUVals
+        case CAStrategyUDiffs => VarField.constArrUDiffs
+        case CAStrategySVals  => VarField.constArrSVals
+        case CAStrategySDiffs => VarField.constArrSDiffs
+      }
+
+      js.New(
+        genArrayConstrOf(ArrayTypeRef(primRef, 1)),
+        List(
+          js.Apply(
+            globalVar(helperVarField, primRef),
+            List(
+              js.IntLiteral(elems.size),
+              js.StringLiteral(encoded.toString())
+            )
+          )
+        )
+      )
+    }
+
+    private def pickConstantArrayStrategy(buffer: java.nio.ByteBuffer, elemByteSize: Int): Int = {
+      import java.nio._
+
+      def ceilDiv(x: Int, y: Int): Int =
+        Integer.divideUnsigned(x + y - 1, y)
+
+      val elemBitSize = 8 * elemByteSize
+
+      val estimatedSizeRaw = ceilDiv(buffer.remaining() * 4, 3)
+
+      var estimatedSizeUVals = 0
+      var estimatedSizeUDiffs = 0
+      var estimatedSizeSVals = 0
+      var estimatedSizeSDiffs = 0
+
+      var prevElem = 0
+
+      while (buffer.hasRemaining()) {
+        /*val elem: Long = elemByteSize match {
+          case 1 => java.lang.Byte.toUnsignedLong(elem.getByte())
+          case 2 => java.lang.Short.toUnsignedLong(elem.getShort())
+          case 4 => Integer.toUnsignedLong(elem.getInt())
+          case 8 => elem.getLong()
+        }*/
+        val elem = buffer.getInt()
+
+        val diff = elem - prevElem
+
+        def uBitSize(x: Int): Int = 32 - Integer.numberOfLeadingZeros(x)
+
+        def sBitSize(x: Int): Int = 1 + uBitSize(x ^ (x >> 31))
+
+        estimatedSizeUVals += ceilDiv(uBitSize(elem), 5)
+        estimatedSizeUDiffs += ceilDiv(uBitSize(diff), 5)
+        estimatedSizeSVals += ceilDiv(sBitSize(elem), 5)
+        estimatedSizeSDiffs += ceilDiv(sBitSize(diff), 5)
+
+        prevElem = elem
+      }
+
+      buffer.position(0)
+
+      // Indexed by CAStrategyX constants; the order matters
+      val estimatedSizes = Array(
+        estimatedSizeRaw,
+        estimatedSizeUVals,
+        estimatedSizeUDiffs,
+        estimatedSizeSVals,
+        estimatedSizeSDiffs
+      )
+
+      var best = 0
+      for (i <- 1 until estimatedSizes.length) {
+        if (estimatedSizes(i) < estimatedSizes(best))
+          best = i
+      }
+      println(s"size ${buffer.limit()} -> ${estimatedSizes.mkString(", ")} -> $best")
+      if (best == CAStrategyRaw)
+        best = CAStrategyUVals
+      best
     }
 
     /** Desugar a Long expression of the IR into a pair `(lo, hi)` of JavaScript expressions.

@@ -202,7 +202,7 @@ object UnicodeDataGen {
 
     var prevCP = 0
     val intDataRanges = dataRanges.map { e =>
-      val diff = e.firstCP - prevCP
+      val diff = e.firstCP // - prevCP
       prevCP = e.firstCP
       val truncatedData = dataToInt(e.data, propFlags) & ((1 << CodePointShift) - 1)
       (diff << CodePointShift) | truncatedData

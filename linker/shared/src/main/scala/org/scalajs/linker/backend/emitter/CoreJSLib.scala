@@ -99,6 +99,7 @@ private[emitter] object CoreJSLib {
     private val NumberRef = globalRef("Number")
     private val DataViewRef = globalRef("DataView")
     private val ArrayBufferRef = globalRef("ArrayBuffer")
+    private val Uint8ArrayRef = globalRef("Uint8Array")
     private val TypeErrorRef = globalRef("TypeError")
     private def BigIntRef = globalRef("BigInt")
     private val SymbolRef = globalRef("Symbol")
@@ -146,7 +147,8 @@ private[emitter] object CoreJSLib {
       defineTypeDataClass() :::
       defineSpecializedIsArrayOfFunctions() :::
       defineSpecializedAsArrayOfFunctions() :::
-      defineSpecializedTypeDatas()
+      defineSpecializedTypeDatas() :::
+      defineConstantArrayMakers()
     }
 
     private def defineFileLevelThis(): List[Tree] = {
@@ -2354,6 +2356,211 @@ private[emitter] object CoreJSLib {
       }
 
       obj ::: prims
+    }
+
+    private def defineConstantArrayMakers(): List[Tree] = {
+      def charCodeAt(s: Tree, i: Tree): Tree =
+        Apply(genIdentBracketSelect(s, "charCodeAt"), i :: Nil)
+
+      /* Critical things to avoid: 0x22 ("), 0x5c (\), 0x7f (DEL).
+       * These characters require escaping when used in a JS string, or are
+       * not printable. Therefore, we can use 0x23-0x5b and 0x5d-0x7e.
+       */
+
+      /* For the raw variant, we use the ranges and 0x2c-0x5b and 0x60-0x6f.
+       * The gap between the two is 4 (0x60 - 4 = 0x5c = 0x5b + 1), and the
+       * high range can be identified by the the bits 0x60 being both 1.
+       * This allows for a branchless (and parallel!) computation of the actual
+       * value from the encoded bits.
+       */
+
+      val constArrayBufferFunction = defineFunction2(VarField.constArrayBuffer) { (len, encoded) =>
+        val buf = varRef("buf")
+        val inLen = varRef("inLen")
+        val regularChunksEnd = varRef("regularChunksEnd")
+        val i = varRef("i")
+        val j = varRef("j")
+        val chunk0 = varRef("chunk0")
+        val chunk = varRef("chunk")
+        val trailing = varRef("trailing")
+
+        val LowRangeStart = 0x2d
+        val LowRangeStartParallel =
+          (LowRangeStart << 18) | (LowRangeStart << 12) | (LowRangeStart << 6) | LowRangeStart
+
+        val Gap = 4
+
+        val Shift40 = 6 // 1 << 6 == 0x40 (first bit of 0x60)
+        val Shift20 = 5 // 1 << 5 == 0x20 (second bit of 0x60)
+        val Shift04 = 2 // 1 << 2 == 4 == Gap
+
+        val ShiftDiff1 = Shift40 - Shift04
+        val ShiftDiff2 = Shift20 - Shift04
+
+        val GapMaskParallel = (Gap << 18) | (Gap << 12) | (Gap << 6) | Gap
+
+        val computeChunkBlock = Block(
+          // Read the 4 uncorrected groups
+          const(
+            chunk0,
+            (charCodeAt(encoded, i) << 18) |
+            (charCodeAt(encoded, (i + 1) | 0) << 12) |
+            (charCodeAt(encoded, (i + 2) | 0) << 6) |
+            charCodeAt(encoded, (i + 3) | 0)
+          ),
+
+          /* Apply the 4 decoding corrections in parallel, because that's cool.
+           * For each group of 6 bits, compute
+           *   (group - LowRangeStart) - (if ((group & 0x60) == 0x60) 4 else 0)
+           * The `if` is done without branch as
+           *   (group >>> ShiftDiff1) & (group >>> ShiftDiff2) & 4
+           *
+           * We can do the 4 groups in parallel, because the operations are
+           * non-overlapping.
+           */
+          const(
+            chunk,
+            ((chunk0 - LowRangeStartParallel) | 0)
+              - ((chunk0 >>> ShiftDiff1) & (chunk0 >>> ShiftDiff2) & GapMaskParallel)
+          )
+        )
+
+        Block(
+          const(buf, New(Uint8ArrayRef, List(len))),
+          const(inLen, encoded.length | 0),
+          const(regularChunksEnd, inLen & ~3),
+          let(i, 0),
+          let(j, 0),
+          While(i !== regularChunksEnd, Block(
+            computeChunkBlock,
+            BracketSelect(buf, j) := (chunk >>> 16),
+            BracketSelect(buf, (j + 1) | 0) := ((chunk >>> 8) & 0xff),
+            BracketSelect(buf, (j + 2) | 0) := (chunk & 0xff),
+            i := ((i + 4) | 0),
+            j := ((j + 3) | 0)
+          )),
+
+          // Trailing bytes for buffers whose length is not a multiple of 3.
+          const(trailing, (len % 3) | 0),
+          If(trailing !== 0, Block(
+            computeChunkBlock,
+            BracketSelect(buf, j) := (chunk >>> 16),
+            If(trailing === 2, {
+               BracketSelect(buf, (j + 1) | 0) := ((chunk >>> 8) & 0xff)
+            })
+          )),
+
+          Return(genIdentBracketSelect(buf, "buffer"))
+        )
+      }
+
+      val integerPrimRefs = List(IntRef)
+
+      val variableLengthHelperFields = List(
+        VarField.constArrUVals,
+        VarField.constArrUDiffs,
+        VarField.constArrSVals,
+        VarField.constArrSDiffs
+      )
+
+      /* We use the ranges 0x30-0x4f (for continuation chunks) and 0x5d-0x7c
+       * (for final chunks). These ranges contain only printable ASCII
+       * characters that require no escape in a JS string.
+       * Critical things to avoid: 0x22 ("), 0x5c (\), 0x7f (DEL).
+       */
+      val LowRangeStart = 0x30
+      val LowRangeEnd = 0x4f
+      val HighRangeStart = 0x5d
+      val HighRangeEnd = 0x7c
+
+      val variableLengthFunctions: List[List[Tree]] = for {
+        primRef <- integerPrimRefs
+        helperVarField <- variableLengthHelperFields
+      } yield {
+        val isSigned = helperVarField == VarField.constArrSVals || helperVarField == VarField.constArrSDiffs
+        val isDiffs = helperVarField == VarField.constArrUDiffs || helperVarField == VarField.constArrSDiffs
+
+        val len = varRef("len")
+        val encoded = varRef("encoded")
+        val inLen = varRef("inLen")
+        val buf = varRef("buf")
+        val regularChunks = varRef("regularChunks")
+        val prev = varRef("prev")
+        val i = varRef("i")
+        val j = varRef("j")
+        val c = varRef("c")
+        val first = varRef("first")
+        val v = varRef("v")
+        val inOffset = varRef("inOffset")
+        val outOffset = varRef("outOffset")
+        val chunk = varRef("chunk")
+
+        val tArrayRef = extractWithGlobals(typedArrayRef(primRef).get)
+
+        extractWithGlobals(globalFunctionDef(helperVarField, primRef, paramList(len, encoded), None, {
+          Block(
+            const(buf, New(tArrayRef, List(len))),
+            const(inLen, encoded.length | 0),
+            if (isDiffs) let(prev, 0) else Skip(),
+            let(i, 0),
+            let(j, 0),
+            let(v, 0),
+            if (!isSigned) {
+              While(i !== inLen, Block(
+                const(c, charCodeAt(encoded, i)),
+                If(c < (LowRangeEnd + 1), Block(
+                  v := ((v | (c - LowRangeStart)) << 5)
+                ), Block(
+                  v := (v | (c - HighRangeStart)),
+                  if (isDiffs) {
+                    prev := ((prev + v) | 0)
+                  } else {
+                    Skip()
+                  },
+                  BracketSelect(buf, j) := (if (isDiffs) prev else v),
+                  j := ((j + 1) | 0),
+                  v := 0
+                )),
+                i := ((i + 1) | 0)
+              ))
+            } else {
+              // isSigned
+              Block(
+                let(first, bool(true)),
+                While(i !== inLen, Block(
+                  const(c, charCodeAt(encoded, i)),
+                  If(c < (LowRangeEnd + 1), Block(
+                    If(first, Block(
+                      v := (((c - LowRangeStart) << 27) >> 22),
+                      first := bool(false)
+                    ), {
+                      v := ((v | (c - LowRangeStart)) << 5)
+                    })
+                  ), Block(
+                    If(first, {
+                      v := (((c - HighRangeStart) << 27) >> 27)
+                    }, Block(
+                      v := v | (c - HighRangeStart),
+                      first := bool(true)
+                    )),
+                    if (isDiffs) {
+                      prev := ((prev + v) | 0)
+                    } else {
+                      Skip()
+                    },
+                    BracketSelect(buf, j) := (if (isDiffs) prev else v),
+                    j := ((j + 1) | 0)
+                  )),
+                  i := ((i + 1) | 0)
+                ))
+              )
+            },
+            Return(buf)
+          )
+        }))
+      }
+
+      (constArrayBufferFunction :: variableLengthFunctions).flatten
     }
 
     private def assignES5ClassMembers(classRef: Tree, members: List[MethodDef]): List[Tree] = {

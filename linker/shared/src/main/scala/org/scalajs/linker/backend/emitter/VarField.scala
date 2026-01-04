@@ -264,6 +264,18 @@ private[emitter] object VarField {
 
   final val aJCheckGet = mk("$aJCheckGet")
 
+  final val constArrayBuffer = mk("$constArrayBuffer")
+
+  final val constArrRaw = mk("$constArrRaw")
+
+  final val constArrUVals = mk("$constArrUVals")
+
+  final val constArrUDiffs = mk("$constArrUDiffs")
+
+  final val constArrSVals = mk("$constArrSVals")
+
+  final val constArrSDiffs = mk("$constArrSDiffs")
+
   // JS helpers
 
   final val newJSObjectWithVarargs = mk("$newJSObjectWithVarargs")
