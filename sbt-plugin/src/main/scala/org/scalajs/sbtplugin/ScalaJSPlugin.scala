@@ -194,6 +194,11 @@ object ScalaJSPlugin extends AutoPlugin {
     val scalaJSIR = TaskKey[Attributed[Seq[IRFile]]](
         "scalaJSIR", "All the *.sjsir files on the classpath", CTask)
 
+    val scalaJSGenerateWitBindings = TaskKey[Seq[File]](
+        "scalaJSGenerateWitBindings",
+        "Generate Scala bindings from WIT files using wit-bindgen",
+        CTask)
+
     val scalaJSModuleInitializers = TaskKey[Seq[ModuleInitializer]]("scalaJSModuleInitializers",
         "Module initializers of the Scala.js application, to be called when it starts.",
         AMinusTask)
@@ -233,6 +238,11 @@ object ScalaJSPlugin extends AutoPlugin {
     val scalaJSWitWorld = SettingKey[Option[String]](
         "scalaJSWitWorld",
         "World name to use for component model embedding (default: None, auto-detect)",
+        CSetting)
+
+    val scalaJSWitPackage = SettingKey[Option[String]](
+        "scalaJSWitPackage",
+        "Base package name for generated Scala bindings from WIT files (default: None)",
         CSetting)
 
     val scalaJSStage = SettingKey[Stage]("scalaJSStage",
@@ -305,6 +315,7 @@ object ScalaJSPlugin extends AutoPlugin {
 
         scalaJSWitDirectory := file("wit"),
         scalaJSWitWorld := None,
+        scalaJSWitPackage := None,
 
         scalaJSLinkerImpl / dependencyResolution := {
           val log = streams.value.log

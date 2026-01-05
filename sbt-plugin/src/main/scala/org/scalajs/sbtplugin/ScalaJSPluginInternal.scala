@@ -28,6 +28,8 @@ import sbt._
 import sbt.Keys._
 import sbt.complete.DefaultParsers._
 
+import sys.process._
+
 import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport._
 
 import org.scalajs.linker.interface._
@@ -108,6 +110,41 @@ private[sbtplugin] object ScalaJSPluginInternal {
         val keyStr = Scope.display(skey.scope, skey.key.label)
         throw new MessageOnlyException(
             s"failed to start $cmd; did you install it? (run `last $keyStr` for the full stack trace)")
+    }
+  }
+
+  private def checkWitBindgenAvailable(log: Logger): Unit = {
+    try {
+      // Check if wit-bindgen is installed
+      val checkCmd = Seq("wit-bindgen", "--version")
+      val exitCode = Process(checkCmd).!(ProcessLogger(_ => (), _ => ()))
+      if (exitCode != 0) {
+        throw new MessageOnlyException("wit-bindgen is installed but returned non-zero exit code")
+      }
+
+      // Check if scala subcommand is available
+      val checkScalaCmd = Seq("wit-bindgen", "scala", "--help")
+      val scalaExitCode = Process(checkScalaCmd).!(ProcessLogger(_ => (), _ => ()))
+      if (scalaExitCode != 0) {
+        throw new MessageOnlyException(
+          """wit-bindgen is installed but the 'scala' subcommand is not available.
+            |
+            |Please install the Scala-enabled version of wit-bindgen:
+            |  cargo install --git https://github.com/scala-wasm/wit-bindgen --branch scala
+            |""".stripMargin
+        )
+      }
+    } catch {
+      case e: MessageOnlyException =>
+        throw e
+      case _: java.io.IOException =>
+        throw new MessageOnlyException(
+          """wit-bindgen is not installed or not in PATH.
+            |
+            |Please install the Scala-enabled version of wit-bindgen:
+            |  cargo install --git https://github.com/scala-wasm/wit-bindgen --branch scala
+            |""".stripMargin
+        )
     }
   }
 
@@ -629,7 +666,58 @@ private[sbtplugin] object ScalaJSPluginInternal {
 
       runMain := {
         throw new MessageOnlyException("`runMain` is not supported in Scala.js")
-      }
+      },
+
+      scalaJSGenerateWitBindings := {
+        val linkerConfig = scalaJSLinkerConfig.value
+        val witDir = scalaJSWitDirectory.value
+        val witWorld = scalaJSWitWorld.value
+        val witPackage = scalaJSWitPackage.value
+        val targetDir = (Compile / sourceManaged).value / "wit-bindgen"
+        val s = streams.value
+        val log = s.log
+
+        // Only run when component model is enabled
+        if (!linkerConfig.wasmFeatures.componentModel) {
+          Seq.empty[File]
+        } else if (!witDir.exists()) {
+          log.debug(s"WIT directory $witDir does not exist, skipping wit-bindgen")
+          Seq.empty[File]
+        } else {
+          val witFiles = (witDir ** "*.wit").get.toSet
+
+          if (witFiles.isEmpty) {
+            log.debug(s"No WIT files found in $witDir")
+            Seq.empty[File]
+          } else {
+            checkWitBindgenAvailable(log)
+
+            val cacheDir = s.cacheDirectory / "wit-bindgen"
+            val generatedFiles = FileFunction.cached(cacheDir, FilesInfo.lastModified, FilesInfo.exists) { _ =>
+              log.info(s"Generating Scala bindings from WIT files in $witDir")
+
+              IO.createDirectory(targetDir)
+
+              val baseCmd = Seq("wit-bindgen", "scala", witDir.absolutePath, "--out-dir", targetDir.absolutePath)
+              val worldArgs = witWorld.toSeq.flatMap(w => Seq("--world", w))
+              val packageArgs = witPackage.toSeq.flatMap(p => Seq("--base-package", p))
+              val fullCmd = baseCmd ++ worldArgs ++ packageArgs
+
+              log.info(s"Running: ${fullCmd.mkString(" ")}")
+
+              val exitCode = Process(fullCmd).!(log)
+              if (exitCode != 0) {
+                throw new MessageOnlyException(s"wit-bindgen failed with exit code $exitCode")
+              }
+              (targetDir ** "*.scala").get.toSet
+            }(witFiles)
+
+            generatedFiles.toSeq
+          }
+        }
+      },
+
+      Compile / sourceGenerators += scalaJSGenerateWitBindings.taskValue
   )
 
   val scalaJSCompileSettings: Seq[Setting[_]] = (
