@@ -751,18 +751,18 @@ object Infos {
           val ctor = MethodName.constructor(fields.map(f => wit.toTypeRef(f.tpe)))
           builder.addInstantiatedClass(className, ctor)
           for (f <- fields) {
-            // builder.addFieldRead(FieldName(c.className, WitVariantValueFieldName))
+            builder.addFieldRead(f.label)
             generateForWIT(f.tpe)
           }
 
-        case wit.FlagsType(_, _) =>
+        case wit.FlagsType(className, _) =>
+          builder.maybeAddAccessedClassData(ClassRef(className))
+          // FlagsType is a case class with a single Int parameter
+          val ctor = MethodName.constructor(List(IntRef))
+          builder.addInstantiatedClass(className, ctor)
 
         case wit.OptionType(t) =>
           builder.addInstantiatedClass(juOptionalClass, MethodName.constructor(List(ClassRef(ObjectClass))))
-          // builder.addInstantiatedClass(juOptionalModuleClass, Method)
-          // builder.addMethodCalled(juOptionalClass, juOptionalClass_get)
-          // builder.addMethodCalled(juOptionalModuleClass, juOptionalModuleClass_of)
-          // builder.addMethodCalled(juOptionalModuleClass, juOptionalModuleClass_empty)
           builder.addFieldRead(FieldName(juOptionalClass, SimpleFieldName("java$util$Optional$$value")))
           generateForWIT(t)
 
@@ -771,9 +771,9 @@ object Infos {
             wit.CaseType(ComponentResultOkClass, ok),
             wit.CaseType(ComponentResultErrClass, err),
           )
-          builder.maybeAddReferencedClass(ClassRef(ComponentResultClass))
+          builder.maybeAddAccessedClassData(ClassRef(ComponentResultClass))
           for (c <- cases) {
-            val ctor = wit.makeCtorName(c.tpe)
+            // ResultType uses generic Ok/Err classes, so after type erasure they take Object
             builder.addInstantiatedClass(c.className, MethodName.constructor(List(ClassRef(ObjectClass))))
             c.tpe.foreach { tpe =>
               builder.addFieldRead(FieldName(c.className, WitVariantValueFieldName))
@@ -782,9 +782,7 @@ object Infos {
           }
 
         case wit.VariantType(className, cases) =>
-          // reference to all the children types so we can type test in interop
-          // and make field read so we can read those fields in interop
-          // builder.maybeAddReferencedClass(ClassRef(className)) // forClass
+          builder.maybeAddAccessedClassData(ClassRef(className))
           for (c <- cases) {
             val ctor = wit.makeCtorName(c.tpe)
             builder.addInstantiatedClass(c.className, ctor)
