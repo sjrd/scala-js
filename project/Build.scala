@@ -2109,7 +2109,7 @@ object Build {
       moduleName := "helloworld-wasi",
       // scalaJSUseMainModuleInitializer := true,
       scalaJSWitDirectory := baseDirectory.value.getParentFile / "wit",
-      scalaJSWitWorld := Some("scala"),
+      scalaJSWitPackage := Some("helloworld"),
       scalaJSLinkerConfig := {
         val witDir = scalaJSWitDirectory.value
         val witWorld = scalaJSWitWorld.value
@@ -2138,6 +2138,7 @@ object Build {
       moduleName := "helloworld-component-model",
       scalaJSWitDirectory := baseDirectory.value.getParentFile / "wit",
       scalaJSWitWorld := Some("scala"),
+      scalaJSWitPackage := Some("helloworld"),
       scalaJSLinkerConfig := {
         val witDir = scalaJSWitDirectory.value
         val witWorld = scalaJSWitWorld.value
@@ -2166,12 +2167,14 @@ object Build {
       // MultiScalaProject creates subprojects with base directories at .2.12 and .2.13
       scalaJSWitDirectory := baseDirectory.value.getParentFile / "wit",
       scalaJSWitWorld := Some("scala"),
+      scalaJSWitPackage := Some("componentmodel"),
       scalaJSLinkerConfig := {
         val witDir = scalaJSWitDirectory.value
         val witWorld = scalaJSWitWorld.value
         scalaJSLinkerConfig.value
          .withPrettyPrint(true)
          .withModuleKind(ModuleKind.ESModule)
+         .withExperimentalUseWebAssembly(true)
          .withWasmFeatures { prevFeatures =>
            prevFeatures
              .withExceptionHandling(false)
