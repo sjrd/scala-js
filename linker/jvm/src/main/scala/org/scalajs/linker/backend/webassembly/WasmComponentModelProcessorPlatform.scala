@@ -32,6 +32,7 @@ private final class WasmComponentModelProcessorImpl extends WasmComponentModelPr
       wasmFileName: String,
       witDirectory: Path,
       worldName: Option[String],
+      autoIncludeWasiImports: Boolean,
       logger: Logger
   )(implicit ec: ExecutionContext): Future[Unit] = {
     checkWasmToolsInstalled()
@@ -39,6 +40,13 @@ private final class WasmComponentModelProcessorImpl extends WasmComponentModelPr
     outputDirectory.readFull(wasmFileName).flatMap { wasmContentBuffer =>
       Future {
         val tempFile = Files.createTempFile("scala-wasm-", ".wasm")
+
+        val wasiWitDir = if (autoIncludeWasiImports) {
+          Some(WasiWitExtractor.extractWasiWitToTempDir())
+        } else {
+          None
+        }
+
         try {
           val wasmContent = new Array[Byte](wasmContentBuffer.remaining())
           wasmContentBuffer.get(wasmContent)
@@ -53,32 +61,36 @@ private final class WasmComponentModelProcessorImpl extends WasmComponentModelPr
             wasmFilePath,
             "-o", wasmFilePath
           )
-
           // Add world name if specified, otherwise wasm-tools will auto-detect
-          val embedCmd = worldName match {
+          val embedCmd1 = worldName match {
             case Some(world) => baseEmbedCmd ++ Seq("-w", world, "--encoding", "utf16")
             case None => baseEmbedCmd ++ Seq("--encoding", "utf16")
           }
 
-          logger.info(s"Running wasm-tools component embed for $wasmFileName")
+          logger.info(s"Embedding user WIT for $wasmFileName")
 
-          val embedProcess = Process(embedCmd)
-          val embedOutput = new StringBuilder
-          val embedError = new StringBuilder
+          runCommand(embedCmd1, "wasm-tools component embed")
 
-          val embedLogger = ProcessLogger(
-            line => embedOutput.append(line).append("\n"),
-            line => embedError.append(line).append("\n")
-          )
+          // Step 2: wasm-tools component embed (WASI WIT) - if enabled
+          wasiWitDir.foreach { wasiDir =>
+            val embedCmd2 = Seq(
+              "wasm-tools", "component", "embed",
+              wasiDir.toString,
+              wasmFilePath,
+              "-o", wasmFilePath,
+              "-w", "wasi-bindings",
+              "--encoding", "utf16"
+            )
 
-          val embedResult = embedProcess.!(embedLogger)
-          if (embedResult != 0) {
-            val errorMsg =
-              s"wasm-tools component embed failed with exit code $embedResult:\n${embedError.toString}"
-            throw new WasmToolsExecutionException(errorMsg)
+            logger.info(s"Embedding WASI WIT for $wasmFileName")
+
+            runCommand(embedCmd2, "wasm-tools component embed (WASI)")
           }
 
-          // Step 2: wasm-tools component new (in-place)
+          /** Step 3: wasm-tools component new.
+           *  Reads all component-type custom sections which is embedded by component embed,
+           *  filter by core module requirements (unused WASI imports would be dropped), and merges them.
+           */
           val newCmd = Seq(
             "wasm-tools", "component", "new",
             wasmFilePath,
@@ -87,31 +99,36 @@ private final class WasmComponentModelProcessorImpl extends WasmComponentModelPr
 
           logger.info(s"Running wasm-tools component new for $wasmFileName")
 
-          val newProcess = Process(newCmd)
-          val newOutput = new StringBuilder
-          val newError = new StringBuilder
-
-          val newLogger = ProcessLogger(
-            line => newOutput.append(line).append("\n"),
-            line => newError.append(line).append("\n")
-          )
-
-          val newResult = newProcess.!(newLogger)
-          if (newResult != 0) {
-            val errorMsg =
-              s"wasm-tools component new failed with exit code $newResult:\n${newError.toString}"
-            throw new WasmToolsExecutionException(errorMsg)
-          }
+          runCommand(newCmd, "wasm-tools component new")
 
           // Read the modified wasm back
           val modifiedWasm = Files.readAllBytes(tempFile)
           ByteBuffer.wrap(modifiedWasm)
         } finally {
+          wasiWitDir.foreach(WasiWitExtractor.deleteDirectory)
           Files.deleteIfExists(tempFile)
         }
       }.flatMap { modifiedWasmBuffer =>
         outputDirectory.writeFull(wasmFileName, modifiedWasmBuffer, skipContentCheck = true)
       }
+    }
+  }
+
+  private def runCommand(cmd: Seq[String], description: String): Unit = {
+    val process = Process(cmd)
+    val output = new StringBuilder
+    val error = new StringBuilder
+
+    val processLogger = ProcessLogger(
+      line => output.append(line).append("\n"),
+      line => error.append(line).append("\n")
+    )
+
+    val result = process.!(processLogger)
+    if (result != 0) {
+      val errorMsg =
+        s"$description failed with exit code $result:\n${error.toString}"
+      throw new WasmToolsExecutionException(errorMsg)
     }
   }
 
