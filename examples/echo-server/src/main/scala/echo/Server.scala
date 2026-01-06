@@ -7,12 +7,12 @@ package echo
 
 import scala.scalajs.wit.annotation._
 import scala.scalajs.wit
-import scala.scalajs.wasi.http.types._
 
 import scala.scalajs.WitUtils._
 import scala.collection.mutable
 
-import echo.exports.wasi.http.v0_2_0.IncomingHandler
+import echo.exports.wasi.http.IncomingHandler
+import echo.wasi.http.types._
 
 @WitImplementation
 object Server extends IncomingHandler {

@@ -1,10 +1,6 @@
 package component:testing;
 
 world scala {
-  import wasi:clocks/wall-clock@0.2.0;
-  import wasi:cli/stdout@0.2.0;
-  import wasi:io/streams@0.2.0;
-
   import basics;
   import tests;
   import countable;
