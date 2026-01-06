@@ -12,10 +12,12 @@
 
 package org.scalajs.linker.backend.webassembly
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration.Duration
 import scala.sys.process._
 
-import java.nio.file.Path
+import java.nio.ByteBuffer
+import java.nio.file.{Files, Path}
 
 import org.scalajs.linker.interface.unstable.OutputDirectoryImpl
 import org.scalajs.logging.Logger
@@ -31,66 +33,85 @@ private final class WasmComponentModelProcessorImpl extends WasmComponentModelPr
       witDirectory: Path,
       worldName: Option[String],
       logger: Logger
-  )(implicit ec: ExecutionContext): Future[Unit] = Future {
+  )(implicit ec: ExecutionContext): Future[Unit] = {
     checkWasmToolsInstalled()
 
-    val wasmFilePath = outputDirectory.getAbsolutePath(wasmFileName)
+    outputDirectory.readFull(wasmFileName).flatMap { wasmContentBuffer =>
+      Future {
+        val tempFile = Files.createTempFile("scala-wasm-", ".wasm")
+        try {
+          val wasmContent = new Array[Byte](wasmContentBuffer.remaining())
+          wasmContentBuffer.get(wasmContent)
+          Files.write(tempFile, wasmContent)
 
-    // Step 1: wasm-tools component embed (in-place)
-    val baseEmbedCmd = Seq(
-      "wasm-tools", "component", "embed",
-      witDirectory.toString,
-      wasmFilePath,
-      "-o", wasmFilePath
-    )
+          val wasmFilePath = tempFile.toString
 
-    // Add world name if specified, otherwise wasm-tools will auto-detect
-    val embedCmd = worldName match {
-      case Some(world) => baseEmbedCmd ++ Seq("-w", world, "--encoding", "utf16")
-      case None => baseEmbedCmd ++ Seq("--encoding", "utf16")
-    }
+          // Step 1: wasm-tools component embed (in-place)
+          val baseEmbedCmd = Seq(
+            "wasm-tools", "component", "embed",
+            witDirectory.toString,
+            wasmFilePath,
+            "-o", wasmFilePath
+          )
 
-    logger.info(s"Running wasm-tools component embed for $wasmFileName")
+          // Add world name if specified, otherwise wasm-tools will auto-detect
+          val embedCmd = worldName match {
+            case Some(world) => baseEmbedCmd ++ Seq("-w", world, "--encoding", "utf16")
+            case None => baseEmbedCmd ++ Seq("--encoding", "utf16")
+          }
 
-    val embedProcess = Process(embedCmd)
-    val embedOutput = new StringBuilder
-    val embedError = new StringBuilder
+          logger.info(s"Running wasm-tools component embed for $wasmFileName")
 
-    val embedLogger = ProcessLogger(
-      line => embedOutput.append(line).append("\n"),
-      line => embedError.append(line).append("\n")
-    )
+          val embedProcess = Process(embedCmd)
+          val embedOutput = new StringBuilder
+          val embedError = new StringBuilder
 
-    val embedResult = embedProcess.!(embedLogger)
-    if (embedResult != 0) {
-      val errorMsg =
-        s"wasm-tools component embed failed with exit code $embedResult:\n${embedError.toString}"
-      throw new WasmToolsExecutionException(errorMsg)
-    }
+          val embedLogger = ProcessLogger(
+            line => embedOutput.append(line).append("\n"),
+            line => embedError.append(line).append("\n")
+          )
 
-    // Step 2: wasm-tools component new (in-place)
-    val newCmd = Seq(
-      "wasm-tools", "component", "new",
-      wasmFilePath,
-      "-o", wasmFilePath
-    )
+          val embedResult = embedProcess.!(embedLogger)
+          if (embedResult != 0) {
+            val errorMsg =
+              s"wasm-tools component embed failed with exit code $embedResult:\n${embedError.toString}"
+            throw new WasmToolsExecutionException(errorMsg)
+          }
 
-    logger.info(s"Running wasm-tools component new for $wasmFileName")
+          // Step 2: wasm-tools component new (in-place)
+          val newCmd = Seq(
+            "wasm-tools", "component", "new",
+            wasmFilePath,
+            "-o", wasmFilePath
+          )
 
-    val newProcess = Process(newCmd)
-    val newOutput = new StringBuilder
-    val newError = new StringBuilder
+          logger.info(s"Running wasm-tools component new for $wasmFileName")
 
-    val newLogger = ProcessLogger(
-      line => newOutput.append(line).append("\n"),
-      line => newError.append(line).append("\n")
-    )
+          val newProcess = Process(newCmd)
+          val newOutput = new StringBuilder
+          val newError = new StringBuilder
 
-    val newResult = newProcess.!(newLogger)
-    if (newResult != 0) {
-      val errorMsg =
-        s"wasm-tools component new failed with exit code $newResult:\n${newError.toString}"
-      throw new WasmToolsExecutionException(errorMsg)
+          val newLogger = ProcessLogger(
+            line => newOutput.append(line).append("\n"),
+            line => newError.append(line).append("\n")
+          )
+
+          val newResult = newProcess.!(newLogger)
+          if (newResult != 0) {
+            val errorMsg =
+              s"wasm-tools component new failed with exit code $newResult:\n${newError.toString}"
+            throw new WasmToolsExecutionException(errorMsg)
+          }
+
+          // Read the modified wasm back
+          val modifiedWasm = Files.readAllBytes(tempFile)
+          ByteBuffer.wrap(modifiedWasm)
+        } finally {
+          Files.deleteIfExists(tempFile)
+        }
+      }.flatMap { modifiedWasmBuffer =>
+        outputDirectory.writeFull(wasmFileName, modifiedWasmBuffer, skipContentCheck = true)
+      }
     }
   }
 

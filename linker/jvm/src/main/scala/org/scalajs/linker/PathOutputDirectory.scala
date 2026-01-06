@@ -39,9 +39,6 @@ object PathOutputDirectory {
    */
 
   private final class Impl(directory: Path) extends OutputDirectoryImpl {
-    def getAbsolutePath(name: String): String =
-      directory.resolve(name).toString
-
     def writeFull(name: String, buf: ByteBuffer)(implicit ec: ExecutionContext): Future[Unit] = {
       val file = getPath(name)
 

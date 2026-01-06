@@ -58,9 +58,6 @@ object NodeOutputDirectory {
     def delete(name: String)(implicit ec: ExecutionContext): Future[Unit] =
       cbFuture[Unit](NodeFS.unlink(getPath(name), _))
 
-    def getAbsolutePath(name: String): String =
-      getPath(name)
-
     private def getPath(name: String) = NodeFS.join(directory, name)
   }
 }
