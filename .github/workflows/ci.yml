@@ -123,12 +123,12 @@ jobs:
         run: npm install
       - name: Install wasm32-wasip2
         run: rustup target add wasm32-wasip2
-      - name: Install wasmtime, wasm-tools, cargo-component@0.17.0
+      - name: Install wasmtime, wasm-tools, wac-cli, cargo-component
         uses: taiki-e/install-action@v2
         with:
-          tool: wasmtime,wasm-tools,cargo-component
-      - name: Install wac
-        run: cargo install --git https://github.com/bytecodealliance/wac wac-cli # install from git for https://github.com/bytecodealliance/wac/pull/146
+          tool: wasmtime,wasm-tools,wac-cli,cargo-component
+      - name: Install wit-bindgen from scala-wasm/wit-bindgen scala branch
+        run: cargo install --git https://github.com/scala-wasm/wit-bindgen --branch scala
       - name: Build rust-exports
         run: cargo component build --target wasm32-wasip2 -r
         working-directory: examples/test-component-model/rust-exports
@@ -139,9 +139,7 @@ jobs:
         run: sbt 'set Global/enableWasmEverywhere := true' testComponentModel${{ matrix.suffix }}/fastLinkJS
       - name: Compose
         run: |
-          wasm-tools component embed wit .2.12/target/scala-2.12/testing-module-for-component-model-fastopt/main.wasm -o main.wasm -w scala --encoding utf16
-          wasm-tools component new main.wasm -o main.wasm
-          wac plug --plug rust-exports/target/wasm32-wasip1/release/rust_exports.wasm main.wasm -o scala.wasm
+          wac plug --plug rust-exports/target/wasm32-wasip1/release/rust_exports.wasm .2.12/target/scala-2.12/testing-module-for-component-model-fastopt/main.wasm -o scala.wasm
           wac plug --plug scala.wasm rust-run/target/wasm32-wasip1/release/rust_run.wasm -o out.wasm
         working-directory: examples/test-component-model
       - name: Run tests

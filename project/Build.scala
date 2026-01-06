@@ -2108,15 +2108,23 @@ object Build {
       name := "HelloWorld WASI",
       moduleName := "helloworld-wasi",
       // scalaJSUseMainModuleInitializer := true,
-      scalaJSLinkerConfig ~= {
-        _.withPrettyPrint(true)
+      scalaJSWitDirectory := baseDirectory.value.getParentFile / "wit",
+      scalaJSWitPackage := Some("helloworld"),
+      scalaJSLinkerConfig := {
+        val witDir = scalaJSWitDirectory.value
+        val witWorld = scalaJSWitWorld.value
+        scalaJSLinkerConfig.value
+         .withPrettyPrint(true)
          .withExperimentalUseWebAssembly(true)
          .withModuleKind(ModuleKind.ESModule)
-         .withWasmFeatures(
-           _.withTargetPureWasm(true)
-              .withComponentModel(true)
+         .withWasmFeatures { prevFeatures =>
+           prevFeatures
+             .withTargetPureWasm(true)
+             .withComponentModel(true)
              .withExceptionHandling(false)
-          )
+             .withWitDirectory(Some(witDir.getAbsolutePath))
+             .withWitWorld(witWorld)
+          }
       },
   ).withScalaJSCompiler.dependsOnLibrary
 
@@ -2128,15 +2136,24 @@ object Build {
       exampleSettings,
       name := "HelloWorld Component Model",
       moduleName := "helloworld-component-model",
-      scalaJSLinkerConfig ~= {
-        _.withPrettyPrint(true)
+      scalaJSWitDirectory := baseDirectory.value.getParentFile / "wit",
+      scalaJSWitWorld := Some("scala"),
+      scalaJSWitPackage := Some("helloworld"),
+      scalaJSLinkerConfig := {
+        val witDir = scalaJSWitDirectory.value
+        val witWorld = scalaJSWitWorld.value
+        scalaJSLinkerConfig.value
+         .withPrettyPrint(true)
          .withExperimentalUseWebAssembly(true)
          .withModuleKind(ModuleKind.ESModule)
-         .withWasmFeatures(
-           _.withTargetPureWasm(true)
-              .withComponentModel(true)
+         .withWasmFeatures { prevFeatures =>
+           prevFeatures
+             .withTargetPureWasm(true)
+             .withComponentModel(true)
              .withExceptionHandling(false)
-          )
+             .withWitDirectory(Some(witDir.getAbsolutePath))
+             .withWitWorld(witWorld)
+          }
       },
   ).withScalaJSCompiler.dependsOnLibrary
 
@@ -2147,14 +2164,25 @@ object Build {
   ).settings(
       exampleSettings,
       name := "Testing module for component model",
-      scalaJSLinkerConfig ~= {
-        _.withPrettyPrint(true)
+      // MultiScalaProject creates subprojects with base directories at .2.12 and .2.13
+      scalaJSWitDirectory := baseDirectory.value.getParentFile / "wit",
+      scalaJSWitWorld := Some("scala"),
+      scalaJSWitPackage := Some("componentmodel"),
+      scalaJSLinkerConfig := {
+        val witDir = scalaJSWitDirectory.value
+        val witWorld = scalaJSWitWorld.value
+        scalaJSLinkerConfig.value
+         .withPrettyPrint(true)
          .withModuleKind(ModuleKind.ESModule)
-         .withWasmFeatures(
-           _.withExceptionHandling(false)
-            .withTargetPureWasm(true)
-            .withComponentModel(true)
-         )
+         .withExperimentalUseWebAssembly(true)
+         .withWasmFeatures { prevFeatures =>
+           prevFeatures
+             .withExceptionHandling(false)
+             .withTargetPureWasm(true)
+             .withComponentModel(true)
+             .withWitDirectory(Some(witDir.getAbsolutePath))
+             .withWitWorld(witWorld)
+         }
       },
   ).withScalaJSCompiler.dependsOnLibrary
 

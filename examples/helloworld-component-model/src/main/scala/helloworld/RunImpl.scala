@@ -1,8 +1,9 @@
 package helloworld
 
 import scala.scalajs.wit.annotation._
-import helloworld.exports.wasi.cli.Run
 import scala.scalajs.wit
+
+import helloworld.exports.wasi.cli.Run
 import helloworld.scala_wasm.helloworld.greeter.greet
 
 /** Implementation using the new @WitImplementation pattern */

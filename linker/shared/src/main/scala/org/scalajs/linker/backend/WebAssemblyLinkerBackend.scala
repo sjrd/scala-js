@@ -53,6 +53,9 @@ final class WebAssemblyLinkerBackend(config: LinkerBackendImpl.Config)
     new Emitter(Emitter.Config(coreSpec, loaderModuleName))
   }
 
+  private val componentModelProcessor: WasmComponentModelProcessor =
+    WasmComponentModelProcessor()
+
   val symbolRequirements: SymbolRequirement = emitter.symbolRequirements
 
   override def injectedIRFiles: Seq[IRFile] = emitter.injectedIRFiles
@@ -117,7 +120,7 @@ final class WebAssemblyLinkerBackend(config: LinkerBackendImpl.Config)
     def writeWasmFile(): Future[Unit] = {
       val emitDebugInfo = !config.minify
 
-      if (config.sourceMap) {
+      (if (config.sourceMap) {
         val sourceMapWriter = new ByteArrayWriter
 
         val wasmFileURI = s"./$wasmFileName"
@@ -135,6 +138,55 @@ final class WebAssemblyLinkerBackend(config: LinkerBackendImpl.Config)
       } else {
         val binaryOutput = BinaryWriter.write(wasmModule, emitDebugInfo)
         outputImpl.writeFull(wasmFileName, binaryOutput)
+      }).flatMap { _ =>
+        if (!coreSpec.wasmFeatures.componentModel) {
+          Future.unit
+        } else {
+          processComponentModel()
+        }
+      }
+    }
+
+    def processComponentModel()(implicit ec: ExecutionContext): Future[Unit] = {
+      val witDir = coreSpec.wasmFeatures.witDirectory
+      val worldName = coreSpec.wasmFeatures.witWorld
+
+      witDir match {
+        case None =>
+          Future.failed(new IllegalArgumentException(
+            """Component model is enabled but witDirectory is not set.
+              |
+              |Please configure the WIT directory in your build.sbt:
+              |  scalaJSWitDirectory := file("wit")
+              |  scalaJSWitWorld := Some("scala")  // optional, auto-detect if not specified
+              |""".stripMargin
+          ))
+
+        case Some(witDirStr) =>
+          val witDirPath = new java.io.File(witDirStr).toPath
+
+          if (!java.nio.file.Files.exists(witDirPath)) {
+            Future.failed(new IllegalArgumentException(
+              s"WIT directory does not exist: $witDirStr"
+            ))
+          } else {
+            // Process the wasm file in-place using wasm-tools
+            componentModelProcessor.processComponentModel(
+              outputImpl,
+              wasmFileName,
+              witDirPath,
+              worldName,
+              logger
+            ).recover {
+              case e: WasmToolsNotFoundException =>
+                throw e
+              case e: WasmToolsExecutionException =>
+                throw new Exception(
+                  s"Failed to process component model: ${e.getMessage}",
+                  e
+                )
+            }
+          }
       }
     }
 

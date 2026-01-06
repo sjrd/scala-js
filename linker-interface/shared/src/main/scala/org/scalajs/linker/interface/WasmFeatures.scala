@@ -5,7 +5,9 @@ import Fingerprint.FingerprintBuilder
 final class WasmFeatures private (
   _exceptionHandling: Boolean,
   _targetPureWasm: Boolean,
-  _componentModel: Boolean
+  _componentModel: Boolean,
+  _witDirectory: Option[String],
+  _witWorld: Option[String]
 ) {
   import WasmFeatures._
 
@@ -13,13 +15,17 @@ final class WasmFeatures private (
     this(
       _exceptionHandling = true,
       _targetPureWasm = false,
-      _componentModel = false
+      _componentModel = false,
+      _witDirectory = None,
+      _witWorld = None
     )
   }
 
   val exceptionHandling = _exceptionHandling
   val targetPureWasm = _targetPureWasm
   val componentModel = _componentModel
+  val witDirectory = _witDirectory
+  val witWorld = _witWorld
 
   def withExceptionHandling(exceptionHandling: Boolean): WasmFeatures =
     copy(exceptionHandling = exceptionHandling)
@@ -30,11 +36,19 @@ final class WasmFeatures private (
   def withComponentModel(componentModel: Boolean): WasmFeatures =
     copy(componentModel = componentModel)
 
+  def withWitDirectory(witDirectory: Option[String]): WasmFeatures =
+    copy(witDirectory = witDirectory)
+
+  def withWitWorld(witWorld: Option[String]): WasmFeatures =
+    copy(witWorld = witWorld)
+
   override def equals(that: Any): Boolean = that match {
     case that: WasmFeatures =>
       this.exceptionHandling == that.exceptionHandling &&
       this.targetPureWasm == that.targetPureWasm &&
-      this.componentModel == that.componentModel
+      this.componentModel == that.componentModel &&
+      this.witDirectory == that.witDirectory &&
+      this.witWorld == that.witWorld
     case _ =>
       false
   }
@@ -44,27 +58,35 @@ final class WasmFeatures private (
     var acc = HashSeed
     acc = mix(acc, exceptionHandling.##)
     acc = mix(acc, targetPureWasm.##)
-    acc = mixLast(acc, componentModel.##)
-    finalizeHash(acc, 3)
+    acc = mix(acc, componentModel.##)
+    acc = mix(acc, witDirectory.##)
+    acc = mixLast(acc, witWorld.##)
+    finalizeHash(acc, 5)
   }
 
   override def toString(): String = {
     s"""WasmFeatures(
        |  exceptionHandling = $exceptionHandling,
-       |  targetPureWasm = $targetPureWasm
-       |  componentModel = $componentModel
+       |  targetPureWasm = $targetPureWasm,
+       |  componentModel = $componentModel,
+       |  witDirectory = $witDirectory,
+       |  witWorld = $witWorld
        |)""".stripMargin
   }
 
   private def copy(
       exceptionHandling: Boolean = this.exceptionHandling,
       targetPureWasm: Boolean = this.targetPureWasm,
-      componentModel: Boolean = this.componentModel
+      componentModel: Boolean = this.componentModel,
+      witDirectory: Option[String] = this.witDirectory,
+      witWorld: Option[String] = this.witWorld
   ): WasmFeatures = {
     new WasmFeatures(
         _exceptionHandling = exceptionHandling,
         _targetPureWasm = targetPureWasm,
-        _componentModel = componentModel
+        _componentModel = componentModel,
+        _witDirectory = witDirectory,
+        _witWorld = witWorld
     )
   }
 }
@@ -83,6 +105,8 @@ object WasmFeatures {
         .addField("exceptionHandling", wasmFeatures.exceptionHandling)
         .addField("targetPureWasm", wasmFeatures.targetPureWasm)
         .addField("componentModel", wasmFeatures.componentModel)
+        .addField("witDirectory", wasmFeatures.witDirectory)
+        .addField("witWorld", wasmFeatures.witWorld)
         .build()
     }
   }
