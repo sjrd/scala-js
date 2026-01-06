@@ -1,68 +1,64 @@
 package scala.scalajs.wasi.io
 
-import scala.scalajs.wit
-import scala.scalajs.wit.annotation._
-import scala.scalajs.wit.unsigned._
+package object streams {
 
-import scala.scalajs.wasi.io.Error.{Error => WasiIOError}
+  // Type definitions
+  type Error = scala.scalajs.wasi.io.error.Error
 
-/** WASI I/O is an I/O abstraction API which is currently focused on providing
- *  stream types.
- *
- *  In the future, the component model is expected to add built-in stream types;
- *  when it does, they are expected to subsume this API.
- *  @see https://github.com/WebAssembly/WASI/blob/main/wasip2/io/streams.wit */
-object Streams {
+  type Pollable = scala.scalajs.wasi.io.poll.Pollable
 
-  /** An input bytestream.
-   *
-   *  `input-stream`s are *non-blocking* to the extent practical on underlying
-   *  platforms. I/O operations always return promptly; if fewer bytes are
-   *  promptly available than requested, they return the number of bytes promptly
-   *  available, which could even be zero. To wait for data to be available,
-   *  use the `subscribe` function to obtain a `pollable` which can be polled
-   *  for using `wasi:io/poll`.
-   */
-  @WitResourceImport("wasi:io/streams@0.2.0", "input-stream")
-  trait InputStream {
-    // /// Read bytes from a stream, after blocking until at least one byte can
-    // /// be read. Except for blocking, behavior is identical to `read`.
-    // @since(version = 0.2.0)
-    // blocking-read: func(
-    //     /// The maximum number of bytes to read
-    //     len: u64
-    // ) -> result<list<u8>, stream-error>;
-    @WitResourceMethod("blocking-read")
-    def blockingRead(len: ULong): wit.Result[Array[UByte], StreamError] = wit.native
-  }
-
-  /** An output bytestream.
-   *
-   *  `output-stream`s are *non-blocking* to the extent practical on
-   *  underlying platforms. Except where specified otherwise, I/O operations also
-   *  always return promptly, after the number of bytes that can be written
-   *  promptly, which could even be zero. To wait for the stream to be ready to
-   *  accept data, the `subscribe` function to obtain a `pollable` which can be
-   *  polled for using `wasi:io/poll`.
-   *
-   *  Dropping an `output-stream` while there's still an active write in
-   *  progress may result in the data being lost. Before dropping the stream,
-   *  be sure to fully flush your writes.
-   */
-  @WitResourceImport("wasi:io/streams@0.2.0", "output-stream")
-  trait OutputStream {
-
-    @WitResourceMethod("blocking-write-and-flush")
-    def blockingWriteAndFlush(contents: Array[UByte]): wit.Result[Unit, StreamError]
-
-    @WitResourceDrop
-    def close(): Unit = wit.native
-  }
-
-  @WitVariant
+  @scala.scalajs.wit.annotation.WitVariant
   sealed trait StreamError
   object StreamError {
-    final case class LastOperationFailed(value: WasiIOError) extends StreamError
-    final case object Closed extends StreamError
+    final case class LastOperationFailed(value: Error) extends StreamError
+    case object Closed extends StreamError
   }
+
+  // Resources
+  @scala.scalajs.wit.annotation.WitResourceImport("wasi:io/streams@0.2.0", "input-stream")
+  trait InputStream {
+    @scala.scalajs.wit.annotation.WitResourceMethod("read")
+    def read(len: scala.scalajs.wit.unsigned.ULong): scala.scalajs.wit.Result[Array[scala.scalajs.wit.unsigned.UByte], StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("blocking-read")
+    def blockingRead(len: scala.scalajs.wit.unsigned.ULong): scala.scalajs.wit.Result[Array[scala.scalajs.wit.unsigned.UByte], StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("skip")
+    def skip(len: scala.scalajs.wit.unsigned.ULong): scala.scalajs.wit.Result[scala.scalajs.wit.unsigned.ULong, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("blocking-skip")
+    def blockingSkip(len: scala.scalajs.wit.unsigned.ULong): scala.scalajs.wit.Result[scala.scalajs.wit.unsigned.ULong, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("subscribe")
+    def subscribe(): Pollable = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceDrop
+    def close(): Unit = scala.scalajs.wit.native
+  }
+  object InputStream {
+  }
+
+  @scala.scalajs.wit.annotation.WitResourceImport("wasi:io/streams@0.2.0", "output-stream")
+  trait OutputStream {
+    @scala.scalajs.wit.annotation.WitResourceMethod("check-write")
+    def checkWrite(): scala.scalajs.wit.Result[scala.scalajs.wit.unsigned.ULong, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("write")
+    def write(contents: Array[scala.scalajs.wit.unsigned.UByte]): scala.scalajs.wit.Result[Unit, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("blocking-write-and-flush")
+    def blockingWriteAndFlush(contents: Array[scala.scalajs.wit.unsigned.UByte]): scala.scalajs.wit.Result[Unit, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("flush")
+    def flush(): scala.scalajs.wit.Result[Unit, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("blocking-flush")
+    def blockingFlush(): scala.scalajs.wit.Result[Unit, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("subscribe")
+    def subscribe(): Pollable = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("write-zeroes")
+    def writeZeroes(len: scala.scalajs.wit.unsigned.ULong): scala.scalajs.wit.Result[Unit, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("blocking-write-zeroes-and-flush")
+    def blockingWriteZeroesAndFlush(len: scala.scalajs.wit.unsigned.ULong): scala.scalajs.wit.Result[Unit, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("splice")
+    def splice(src: InputStream, len: scala.scalajs.wit.unsigned.ULong): scala.scalajs.wit.Result[scala.scalajs.wit.unsigned.ULong, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("blocking-splice")
+    def blockingSplice(src: InputStream, len: scala.scalajs.wit.unsigned.ULong): scala.scalajs.wit.Result[scala.scalajs.wit.unsigned.ULong, StreamError] = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceDrop
+    def close(): Unit = scala.scalajs.wit.native
+  }
+  object OutputStream {
+  }
+
 }
