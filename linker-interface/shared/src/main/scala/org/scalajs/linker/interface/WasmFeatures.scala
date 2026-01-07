@@ -7,7 +7,8 @@ final class WasmFeatures private (
   _targetPureWasm: Boolean,
   _componentModel: Boolean,
   _witDirectory: Option[String],
-  _witWorld: Option[String]
+  _witWorld: Option[String],
+  _autoIncludeWasiImports: Boolean
 ) {
   import WasmFeatures._
 
@@ -17,7 +18,8 @@ final class WasmFeatures private (
       _targetPureWasm = false,
       _componentModel = false,
       _witDirectory = None,
-      _witWorld = None
+      _witWorld = None,
+      _autoIncludeWasiImports = true
     )
   }
 
@@ -26,6 +28,7 @@ final class WasmFeatures private (
   val componentModel = _componentModel
   val witDirectory = _witDirectory
   val witWorld = _witWorld
+  val autoIncludeWasiImports = _autoIncludeWasiImports
 
   def withExceptionHandling(exceptionHandling: Boolean): WasmFeatures =
     copy(exceptionHandling = exceptionHandling)
@@ -42,13 +45,17 @@ final class WasmFeatures private (
   def withWitWorld(witWorld: Option[String]): WasmFeatures =
     copy(witWorld = witWorld)
 
+  def withAutoIncludeWasiImports(autoIncludeWasiImports: Boolean): WasmFeatures =
+    copy(autoIncludeWasiImports = autoIncludeWasiImports)
+
   override def equals(that: Any): Boolean = that match {
     case that: WasmFeatures =>
       this.exceptionHandling == that.exceptionHandling &&
       this.targetPureWasm == that.targetPureWasm &&
       this.componentModel == that.componentModel &&
       this.witDirectory == that.witDirectory &&
-      this.witWorld == that.witWorld
+      this.witWorld == that.witWorld &&
+      this.autoIncludeWasiImports == that.autoIncludeWasiImports
     case _ =>
       false
   }
@@ -60,8 +67,9 @@ final class WasmFeatures private (
     acc = mix(acc, targetPureWasm.##)
     acc = mix(acc, componentModel.##)
     acc = mix(acc, witDirectory.##)
-    acc = mixLast(acc, witWorld.##)
-    finalizeHash(acc, 5)
+    acc = mix(acc, witWorld.##)
+    acc = mixLast(acc, autoIncludeWasiImports.##)
+    finalizeHash(acc, 6)
   }
 
   override def toString(): String = {
@@ -70,7 +78,8 @@ final class WasmFeatures private (
        |  targetPureWasm = $targetPureWasm,
        |  componentModel = $componentModel,
        |  witDirectory = $witDirectory,
-       |  witWorld = $witWorld
+       |  witWorld = $witWorld,
+       |  autoIncludeWasiImports = $autoIncludeWasiImports
        |)""".stripMargin
   }
 
@@ -79,14 +88,16 @@ final class WasmFeatures private (
       targetPureWasm: Boolean = this.targetPureWasm,
       componentModel: Boolean = this.componentModel,
       witDirectory: Option[String] = this.witDirectory,
-      witWorld: Option[String] = this.witWorld
+      witWorld: Option[String] = this.witWorld,
+      autoIncludeWasiImports: Boolean = this.autoIncludeWasiImports
   ): WasmFeatures = {
     new WasmFeatures(
         _exceptionHandling = exceptionHandling,
         _targetPureWasm = targetPureWasm,
         _componentModel = componentModel,
         _witDirectory = witDirectory,
-        _witWorld = witWorld
+        _witWorld = witWorld,
+        _autoIncludeWasiImports = autoIncludeWasiImports
     )
   }
 }
@@ -107,6 +118,7 @@ object WasmFeatures {
         .addField("componentModel", wasmFeatures.componentModel)
         .addField("witDirectory", wasmFeatures.witDirectory)
         .addField("witWorld", wasmFeatures.witWorld)
+        .addField("autoIncludeWasiImports", wasmFeatures.autoIncludeWasiImports)
         .build()
     }
   }

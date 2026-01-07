@@ -1,5 +1,16 @@
-This is a repository for bindings to https://github.com/WebAssembly/WASI/tree/main/wasip2.
+# WASI Bindings
 
-Originally, these code were located under `javalib-internal`. However, it is being moved under `library` because there are cases where we want to use the WASI API directly from outside of `WasmSystem` (really?).
+Generated from WIT files in `linker/jvm/src/main/resources/org/scalajs/linker/backend/webassembly/wasi-wit/`
 
-`JavalibIRCleaner` currently allows access to `scala.scalajs.wasi` and `scala.scalajs.wit`. However, ideally, we would like to apply `JavalibIRCleaner` to these WASI and component model-related APIs as well, to ensure that there is no access to Scala.
+## Regenerating bindings
+
+Install `scala-wasm` supported `wit-bindgen` from https://github.com/scala-wasm/wit-bindgen
+
+From project root:
+
+```bash
+wit-bindgen scala linker/jvm/src/main/resources/org/scalajs/linker/backend/webassembly/wasi-wit \
+  --world wasi-bindings \
+  --out-dir library/src/main/scala \
+  --base-package scala.scalajs.wasi
+```

@@ -2064,13 +2064,24 @@ object Build {
       exampleSettings,
       name := "Echo Server - Scala.js WASI example",
       moduleName := "echo",
-      // scalaJSUseMainModuleInitializer := true,
-      scalaJSLinkerConfig ~= {
-        _.withPrettyPrint(true)
-         .withWasmFeatures(
-            _.withTargetPureWasm(true)
-              .withComponentModel(true)
-             .withExceptionHandling(false))
+      scalaJSWitDirectory := baseDirectory.value.getParentFile / "wit",
+      scalaJSWitWorld := Some("sample"),
+      scalaJSWitPackage := Some("echo"),
+      scalaJSLinkerConfig := {
+        val witDir = scalaJSWitDirectory.value
+        val witWorld = scalaJSWitWorld.value
+        scalaJSLinkerConfig.value
+         .withPrettyPrint(true)
+         .withExperimentalUseWebAssembly(true)
+         .withModuleKind(ModuleKind.ESModule)
+         .withWasmFeatures { prevFeatures =>
+           prevFeatures
+             .withTargetPureWasm(true)
+             .withComponentModel(true)
+             .withExceptionHandling(false)
+             .withWitDirectory(Some(witDir.getAbsolutePath))
+             .withWitWorld(witWorld)
+         }
       },
   ).withScalaJSCompiler.dependsOnLibrary
 

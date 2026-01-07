@@ -1,11 +1,12 @@
 package scala.scalajs.wasi.random
 
-import scala.scalajs.wit.annotation._
-import scala.scalajs.wit.unsigned._
-import scala.scalajs.wit
+package object insecure {
 
-/** https://github.com/WebAssembly/WASI/blob/main/wasip2/random/insecure.wit */
-object Insecure {
-  @WitImport("wasi:random/insecure", "get-insecure-random-u64")
-  def getInsecureRandomU64(): ULong = wit.native
+  // Functions
+  @scala.scalajs.wit.annotation.WitImport("wasi:random/insecure@0.2.0", "get-insecure-random-bytes")
+  def getInsecureRandomBytes(len: scala.scalajs.wit.unsigned.ULong): Array[scala.scalajs.wit.unsigned.UByte] = scala.scalajs.wit.native
+
+  @scala.scalajs.wit.annotation.WitImport("wasi:random/insecure@0.2.0", "get-insecure-random-u64")
+  def getInsecureRandomU64(): scala.scalajs.wit.unsigned.ULong = scala.scalajs.wit.native
+
 }

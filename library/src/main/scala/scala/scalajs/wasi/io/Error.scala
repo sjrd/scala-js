@@ -1,13 +1,16 @@
 package scala.scalajs.wasi.io
 
-import scala.scalajs.wit.annotation._
-import scala.scalajs.wit
+package object error {
 
-/** https://github.com/WebAssembly/WASI/blob/main/wasip2/io/error.wit */
-object Error {
-  @WitResourceImport("wasi:io/error", "error")
+  // Resources
+  @scala.scalajs.wit.annotation.WitResourceImport("wasi:io/error@0.2.0", "error")
   trait Error {
-    @WitResourceMethod("to-debug-string")
-    def toDebugString(): String = wit.native
+    @scala.scalajs.wit.annotation.WitResourceMethod("to-debug-string")
+    def toDebugString(): String = scala.scalajs.wit.native
+    @scala.scalajs.wit.annotation.WitResourceDrop
+    def close(): Unit = scala.scalajs.wit.native
   }
+  object Error {
+  }
+
 }

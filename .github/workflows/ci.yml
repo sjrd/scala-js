@@ -146,6 +146,10 @@ jobs:
         run: wasmtime -W function-references,gc -C collector=null out.wasm
         working-directory: examples/test-component-model
 
+      # echoserver test, check at least it links
+      - name: echoserver${{ matrix.suffix }}/fastLinkJS
+        run: sbt 'set Global/enableWasmEverywhere := true' echoserver${{ matrix.suffix }}/fastLinkJS
+
   test-suite-jvm:
     runs-on: ubuntu-latest
     strategy:
