@@ -5,14 +5,26 @@ world scala {
   import tests;
   import countable;
 
+  // world level function imports
+  import bare-add: func(a: s32, b: s32) -> s32;
+  import bare-greet: func(name: string) -> string;
+
   export tests;
   export test-imports;
+
+  // world level function exports
+  export bare-multiply: func(a: s32, b: s32) -> s32;
+  export bare-uppercase: func(text: string) -> string;
 }
 
 world rust-exports {
   export basics;
   export tests;
   export countable;
+
+  // Bare function exports for Rust to implement
+  export bare-add: func(a: s32, b: s32) -> s32;
+  export bare-greet: func(name: string) -> string;
 }
 
 world rust-run {
@@ -20,6 +32,10 @@ world rust-run {
 
   import tests;
   import test-imports;
+
+  // world level function exports
+  import bare-multiply: func(a: s32, b: s32) -> s32;
+  import bare-uppercase: func(text: string) -> string;
 }
 
 interface basics {

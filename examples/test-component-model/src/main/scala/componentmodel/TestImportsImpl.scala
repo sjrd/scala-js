@@ -7,6 +7,7 @@ import scala.scalajs.wit.unsigned._
 import componentmodel.component.testing.basics._
 import componentmodel.component.testing.tests._
 import componentmodel.component.testing.countable._
+import componentmodel.root._
 import componentmodel.exports.component.testing.TestImports
 
 import scala.scalajs.WitUtils.toEither
@@ -18,6 +19,13 @@ object TestImportsImpl extends TestImports {
   override def run(): Unit = {
 
     val start = System.currentTimeMillis()
+
+    // Test world-level function imports
+    assert(5 == bareAdd(2, 3))
+    assert(10 == bareAdd(7, 3))
+    assert("Hello, World!" == bareGreet("World"))
+    assert("Hello, Scala!" == bareGreet("Scala"))
+
     assert(1 == roundtripU8(1))
     assert(0 == roundtripS8(0))
     assert(0 == roundtripU16(0))

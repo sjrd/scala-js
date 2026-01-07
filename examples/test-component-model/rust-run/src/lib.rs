@@ -4,11 +4,18 @@ mod bindings;
 use crate::bindings::exports::wasi::cli::run::Guest as Run;
 use crate::bindings::component::testing::tests::*;
 use crate::bindings::component::testing::test_imports;
+use crate::bindings::{bare_multiply, bare_uppercase};
 
 struct Component;
 
 impl Run for Component {
     fn run() -> Result<(), ()> {
+      // Test world level function imports (mapped from $root module in core wasm)
+      assert_eq!(bare_multiply(3, 4), 12);
+      assert_eq!(bare_multiply(7, 8), 56);
+      assert_eq!(bare_uppercase("hello"), "HELLO");
+      assert_eq!(bare_uppercase("world"), "WORLD");
+
       test_imports::run();
 
       assert_eq!(

@@ -46,13 +46,23 @@ object InteropEmitter {
     val importName = toWasmImportExportName(member.name)
     val loweredFuncType = Flatten.lowerFlattenFuncType(member.signature)
     genComponentAdapterFunction(clazz, member, importFunctionID)
+
+    // For world-level functions (moduleName is empty), use "$root" as the module namespace
+    // following the wasm-tools convention
+    val importModuleName = if (member.moduleName.isEmpty) "$root" else member.moduleName
+    val originalName = if (member.moduleName.isEmpty) {
+      s"$$root#$importName"
+    } else {
+      s"${member.moduleName}#$importName"
+    }
+
     ctx.moduleBuilder.addImport(
       wamod.Import(
-        member.moduleName,
+        importModuleName,
         importName,
         wamod.ImportDesc.Func(
           importFunctionID,
-          OriginalName(s"${member.moduleName}#$importName"),
+          OriginalName(originalName),
           ctx.moduleBuilder.functionTypeToTypeID(loweredFuncType.funcType)
         )
       )
@@ -148,9 +158,14 @@ object InteropEmitter {
       implicit ctx: WasmContext): Unit = {
     implicit val pos = exportDef.pos
 
-    // convention of wasm-tools
+    // For world level functions (moduleName is empty), use just the function name
+    // Otherwise use the wasm-tools convention: moduleName#functionName
     // see: https://github.com/WebAssembly/component-model/issues/422
-    val exportName = s"${exportDef.moduleName}#${toWasmImportExportName(exportDef.name)}"
+    val exportName = if (exportDef.moduleName.isEmpty) {
+      toWasmImportExportName(exportDef.name)
+    } else {
+      s"${exportDef.moduleName}#${toWasmImportExportName(exportDef.name)}"
+    }
     val method = exportDef.methodDef
 
     val methodFunctionID = genFunctionID.forMethod(method.flags.namespace, owningClass, method.name.name)
