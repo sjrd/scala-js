@@ -2350,7 +2350,6 @@ object Build {
               ) ||
               contains(f, "/shared/src/test/scala/org/scalajs/testsuite/") && (
                 // scalalib
-                !endsWith(f, "/scalalib/RangesTest.scala") && // BigDecimal
                 !endsWith(f, "/scalalib/SymbolTest.scala") && // Symbol#JSUniquenessCache
 
                 // javalib/math
