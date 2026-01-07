@@ -50,6 +50,12 @@ import org.scalajs.testsuite.utils.AssertExtensions.assertExactEquals
 import org.scalajs.testsuite.javalib.lang.data._
 class StrictMathTest {
 
+  private def parseDouble(str: String): Double = {
+    if (str == "HUGE_VAL") Double.PositiveInfinity
+    else if (str == "-HUGE_VAL") Double.NegativeInfinity
+    else JDouble.parseDouble(str)
+  }
+
   @Test def log(): Unit = {
     assertExactEquals(Double.NegativeInfinity, StrictMath.log(-0.0))
     assertExactEquals(Double.NegativeInfinity, StrictMath.log(0.0))
@@ -81,6 +87,16 @@ class StrictMathTest {
     assertExactEquals("log(1.0 + 0x1p-20)", 9.536738616591883E-7, StrictMath.log(1.0000009536743164))
     assertExactEquals("log(19.75)", 2.9831534913471307, StrictMath.log(19.75))
     assertExactEquals("log(19.75 * 0x1p100)", 72.29787154734166, StrictMath.log(2.503609935450753E31))
+
+    StrictMathLog.data.foreach { case (expectedHex, inputHex) =>
+      val expected = parseDouble(expectedHex)
+      val input = parseDouble(inputHex)
+      val actual = StrictMath.log(input)
+      // Bionic uses 1 ULP tolerance
+      // https://android.googlesource.com/platform/bionic/+/refs/heads/main/tests/math_test.cpp#2019
+      val ulp = Math.ulp(expected)
+      assertEquals(s"log($inputHex)", expected, actual, ulp)
+    }
   }
 
   @Test def log10(): Unit = {
@@ -97,6 +113,16 @@ class StrictMathTest {
     assertExactEquals("log10(1.0 + 0x1p-20)", 4.141752956539506E-7, StrictMath.log10(1.0000009536743164))
     assertExactEquals("log10(19.75)", 1.295567099962479, StrictMath.log10(19.75))
     assertExactEquals("log10(19.75 * 0x1p100)", 31.398566666360598, StrictMath.log10(2.503609935450753E31))
+
+    StrictMathLog10.data.foreach { case (expectedHex, inputHex) =>
+      val expected = parseDouble(expectedHex)
+      val input = parseDouble(inputHex)
+      val actual = StrictMath.log10(input)
+      // Bionic uses 1 ULP tolerance
+      // https://android.googlesource.com/platform/bionic/+/refs/heads/main/tests/math_test.cpp#2029
+      val ulp = Math.ulp(expected)
+      assertEquals(s"log10($inputHex)", expected, actual, ulp)
+    }
   }
 
   @Test def log1p(): Unit = {
@@ -115,6 +141,16 @@ class StrictMathTest {
 
     assertExactEquals(0.1823215567939546, StrictMath.log1p(0.19999999999999996)) // 0x0.3333333333333p0
     assertExactEquals(-0.2231435513142097, StrictMath.log1p(-0.19999999999999996)) // -0x0.3333333333333p0
+
+    StrictMathLog1p.data.foreach { case (expectedHex, inputHex) =>
+      val expected = parseDouble(expectedHex)
+      val input = parseDouble(inputHex)
+      val actual = StrictMath.log1p(input)
+      // Bionic uses 1 ULP tolerance
+      // https://android.googlesource.com/platform/bionic/+/refs/heads/main/tests/math_test.cpp#2039
+      val ulp = Math.ulp(expected)
+      assertEquals(s"log1p($inputHex)", expected, actual, ulp)
+    }
   }
 
   @Test def sqrt(): Unit = {
@@ -141,12 +177,6 @@ class StrictMathTest {
     // assertTrue(StrictMath.pow(Double.NaN, 3.0).isNaN)
     // assertTrue(StrictMath.pow(1.0, Double.NaN).isNaN)
     // assertTrue(StrictMath.pow(Double.NaN, Double.NaN).isNaN)
-
-    def parseDouble(str: String): Double = {
-      if (str == "HUGE_VAL") Double.PositiveInfinity
-      else if (str == "-HUGE_VAL") Double.NegativeInfinity
-      else JDouble.parseDouble(str)
-    }
 
     StrictMathPow.data.foreach { case (expectedHex, x, y) =>
       val expected = parseDouble(expectedHex)
