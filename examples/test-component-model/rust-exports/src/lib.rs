@@ -6,10 +6,22 @@ use crate::bindings::exports::component::testing::countable::Guest as Countable;
 use crate::bindings::exports::component::testing::basics::Guest as Basics;
 use crate::bindings::exports::component::testing::tests::Guest as Tests;
 use crate::bindings::exports::component::testing::tests::*;
+use crate::bindings::Guest as RootGuest;
 
 use std::cell::RefCell;
 
 struct Component;
+
+// world level function exports - exported directly from the world, not from an interface
+impl RootGuest for Component {
+  fn bare_add(a: i32, b: i32) -> i32 {
+    a + b
+  }
+
+  fn bare_greet(name: String) -> String {
+    format!("Hello, {}!", name)
+  }
+}
 
 impl Basics for Component {
   fn roundtrip_u8(a: u8) -> u8 { a }
