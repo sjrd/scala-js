@@ -240,6 +240,9 @@ object StrictMath {
       (x, 0)
     }
     val high = (JDouble.doubleToRawLongBits(scaledX) >>> 32).toInt
+    if (high >= 0x7ff00000) {
+      return x + x;
+    }
 
     /* Normalize x = 2^k * newX
      * log10(x) = log10(2^k * newX)
