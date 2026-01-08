@@ -28,6 +28,13 @@
  * limitations under the License.
  */
 
+/* Note: Android Bionic's log10 implementation has some accuracy fixes
+ * from the original fdlibm implementation.
+ * Our StrictMath.log10 is based on the original fdlibm implementation.
+ * Some test cases have been commented out where the expected values from
+ * Android Bionic differ from OpenJDK's output.
+ */
+
 package org.scalajs.testsuite.javalib.lang.data
 
 private[lang] object StrictMathLog10 {
@@ -44,7 +51,7 @@ private[lang] object StrictMathLog10 {
     ("0x1.e1a95d2d9ba1dfa58b2f8e5fdf0a1b54p4", "0x1.0080402010080p100"), // Entry 9
     ("0x1.fdc9fc7b9d3258675b494256b7928fc6p-11", "0x1.0092e4b92e4a0p0"), // Entry 10
     ("0x1.159c1712e74c68277fba58fe711f8027p-10", "0x1.00ap0"), // Entry 11
-    ("0x1.bd94e520279af862fe39c005f4682635p-10", "0x1.01010p0"), // Entry 12
+    // ("0x1.bd94e520279af862fe39c005f4682635p-10", "0x1.01010p0"), // Entry 12
     ("0x1.828f82071564e84adb4af8ee9eed7b5ep-9", "0x1.01be8f10cdap0"), // Entry 13
     ("0x1.9fb8cdcda6c2645e174538ea88aed24ap-9", "0x1.01e05e9614213p0"), // Entry 14
     ("0x1.a37a0053a01f959dff9d7ed8c0738223p-9", "0x1.01e4b95a8d930p0"), // Entry 15
@@ -66,14 +73,14 @@ private[lang] object StrictMathLog10 {
     ("-0x1.9897e85148d75fffff988e06dd8eae5ep4", "0x1.1f8b0260ccc08p-85"), // Entry 31
     ("-0x1.ffbfc2bbc780375837c4b0b84f38a14ap-3", "0x1.2p-1"), // Entry 32
     ("0x1.de288434c35c582817ddb245949a59a7p-5", "0x1.24d3540217b15p0"), // Entry 33
-    ("-0x1.ee30e065377edd211ae67f49d114a8dep-3", "0x1.25bde8b09bc9fp-1"), // Entry 34
+    // ("-0x1.ee30e065377edd211ae67f49d114a8dep-3", "0x1.25bde8b09bc9fp-1"), // Entry 34
     ("-0x1.bef28412a9d80800871c59a8425d3aa6p0", "0x1.262p-6"), // Entry 35
     ("0x1.f25d629171aaeb2276907167a9aecd6ep-5", "0x1.267e4cfc99f93p0"), // Entry 36
     ("-0x1.9080890e2f1798003a7f3166289a2555p2", "0x1.288p-21"), // Entry 37
-    ("-0x1.e561065b019c7c8d498e8c78464330bap-3", "0x1.28aa9f2515f87p-1"), // Entry 38
+    // ("-0x1.e561065b019c7c8d498e8c78464330bap-3", "0x1.28aa9f2515f87p-1"), // Entry 38
     ("-0x1.acdc65a935a5e7fbeb2a0414dae29db6p-1", "0x1.29a74a135d178p-3"), // Entry 39
     ("-0x1.ef0c55090466e7fc5d2be8b017aa1eb5p4", "0x1.29ba33c33bb58p-103"), // Entry 40
-    ("-0x1.d8d9a2cfb79d0b2ce6db09b403fbdef1p-3", "0x1.2cep-1"), // Entry 41
+    // ("-0x1.d8d9a2cfb79d0b2ce6db09b403fbdef1p-3", "0x1.2cep-1"), // Entry 41
     ("0x1.44538ea06035a000000e7cc1825ca422p-4", "0x1.33333353c89c5p0"), // Entry 42
     ("0x1.p0", "0x1.4p3"), // Entry 43
     ("0x1.9c899ddb7cc3a80106bd92d9f30607adp-4", "0x1.42d14b4da920cp0"), // Entry 44
@@ -83,8 +90,8 @@ private[lang] object StrictMathLog10 {
     ("0x1.d3bdb9847bf709c43457968ca6e28646p-4", "0x1.4cfe1a8c30ed4p0"), // Entry 48
     ("0x1.d6cf13653b91464319282088eeff4c97p-4", "0x1.4d913e35aea4ep0"), // Entry 49
     ("-0x1.f1225ac4366237fdb303a0597a3c8f4ap-2", "0x1.4ed318236c85ap-2"), // Entry 50
-    ("0x1.f37196430c2beec26b1c31bf38d57f48p-4", "0x1.52faf510e022dp0"), // Entry 51
-    ("0x1.f38c0c8325d85ad659b2174a3ebf6f55p-4", "0x1.530p0"), // Entry 52
+    // ("0x1.f37196430c2beec26b1c31bf38d57f48p-4", "0x1.52faf510e022dp0"), // Entry 51
+    // ("0x1.f38c0c8325d85ad659b2174a3ebf6f55p-4", "0x1.530p0"), // Entry 52
     ("0x1.ffedeac4d176f7d2cde344b7ec70f166p-4", "0x1.555e30bbda69fp0"), // Entry 53
     ("0x1.ef35aa1c6b1a77fd9de45a1e172b02c6p0", "0x1.57ee98247d966p6"), // Entry 54
     ("-0x1.e280fe9b8cf857fdc3ad0dc812e58d1dp-2", "0x1.5a05d853c77c9p-2"), // Entry 55
@@ -93,7 +100,7 @@ private[lang] object StrictMathLog10 {
     ("0x1.d97edc6cb096a800000c666995420256p-2", "0x1.7333334217b9ap1"), // Entry 58
     ("0x1.4fb68838ccfa27ff2311eecb508d5928p-3", "0x1.7563c3887db28p0"), // Entry 59
     ("0x1.f8871c174778c7fff5731acf2ea4467cp0", "0x1.76000000040p6"), // Entry 60
-    ("-0x1.f2c14c2f6c5c9dbe7c8284b15fe01787p-4", "0x1.82d0b42d0b428p-1"), // Entry 61
+    // ("-0x1.f2c14c2f6c5c9dbe7c8284b15fe01787p-4", "0x1.82d0b42d0b428p-1"), // Entry 61
     ("-0x1.db1d990e111ee766e962104fbbf0f003p-4", "0x1.87fd6da61c3dbp-1"), // Entry 62
     ("-0x1.88bdca024f32e80a1de6671b22560759p2", "0x1.880p-21"), // Entry 63
     ("-0x1.d03b8ce6051c97fdd425647f3739d7a7p-4", "0x1.8a653d99282aap-1"), // Entry 64
@@ -109,7 +116,7 @@ private[lang] object StrictMathLog10 {
     ("0x1.e37abe09539ad7fdb2cbb9c1975d1fc2p5", "0x1.b1af286bca208p200"), // Entry 74
     ("0x1.d7f59ab2bcd057ffffffb4bb61effb6fp-3", "0x1.b33333398e9e6p0"), // Entry 75
     ("0x1.d7f59ae8908aa7ffffef7f3f17823162p-3", "0x1.b3333353e507cp0"), // Entry 76
-    ("0x1.e67b44ba485188898012c0536c604a15p-3", "0x1.ba5d2e974bap0"), // Entry 77
+    // ("0x1.e67b44ba485188898012c0536c604a15p-3", "0x1.ba5d2e974bap0"), // Entry 77
     ("-0x1.d51e74e2235f9001c902f49b3d39be88p-5", "0x1.c0cp-1"), // Entry 78
     ("-0x1.c250b537e74bc8265c7b1b0eb3cb7541p-5", "0x1.c320c8320c832p-1"), // Entry 79
     ("0x1.c1497aa3ee77f7fcf0bc96c7418f04b6p0", "0x1.c71c71c71c71ep5"), // Entry 80
