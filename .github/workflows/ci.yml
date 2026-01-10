@@ -143,7 +143,7 @@ jobs:
           wac plug --plug scala.wasm rust-run/target/wasm32-wasip1/release/rust_run.wasm -o out.wasm
         working-directory: examples/test-component-model
       - name: Run tests
-        run: wasmtime -W function-references,gc -C collector=null out.wasm
+        run: wasmtime -W function-references,gc,exceptions out.wasm
         working-directory: examples/test-component-model
 
       # echoserver test, check at least it links
