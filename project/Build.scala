@@ -2078,7 +2078,6 @@ object Build {
            prevFeatures
              .withTargetPureWasm(true)
              .withComponentModel(true)
-             .withExceptionHandling(false)
              .withWitDirectory(Some(witDir.getAbsolutePath))
              .withWitWorld(witWorld)
          }
@@ -2132,7 +2131,6 @@ object Build {
            prevFeatures
              .withTargetPureWasm(true)
              .withComponentModel(true)
-             .withExceptionHandling(false)
              .withWitDirectory(Some(witDir.getAbsolutePath))
              .withWitWorld(witWorld)
           }
@@ -2161,7 +2159,6 @@ object Build {
            prevFeatures
              .withTargetPureWasm(true)
              .withComponentModel(true)
-             .withExceptionHandling(false)
              .withWitDirectory(Some(witDir.getAbsolutePath))
              .withWitWorld(witWorld)
           }
@@ -2188,7 +2185,6 @@ object Build {
          .withExperimentalUseWebAssembly(true)
          .withWasmFeatures { prevFeatures =>
            prevFeatures
-             .withExceptionHandling(false)
              .withTargetPureWasm(true)
              .withComponentModel(true)
              .withWitDirectory(Some(witDir.getAbsolutePath))

@@ -55,6 +55,8 @@ interface basics {
 interface countable {
   resource counter {
     constructor(i: s32);
+    // TODO: make a and b borrow<bounter>
+    // otherwise ownership moves, and cannot use a,b afterwards
     sum: static func(a: counter, b: counter) -> counter;
     up: func();
     down: func();

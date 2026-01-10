@@ -12,7 +12,7 @@ component:
 	wac plug --plug $(RUST_MODULE) $(SCALA_MODULE) -o $(OUT)
 
 run: component
-	wasmtime -W function-references,gc $(OUT)
+	wasmtime -W function-references,gc,exceptions $(OUT)
 
 clean:
 	rm -f $(OUT)
