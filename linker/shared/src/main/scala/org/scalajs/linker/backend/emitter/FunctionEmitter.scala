@@ -3291,6 +3291,10 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case NewArray(typeRef, length) =>
           js.New(genArrayConstrOf(typeRef), transformExprNoChar(length) :: Nil)
 
+        case ArrayValue(ArrayTypeRef(primRef: PrimRef, 1), elems)
+            if shouldGenerateAsConstantArray(primRef, elems) =>
+          genConstantArray(primRef, elems)
+
         case ArrayValue(typeRef, elems) =>
           val newElems = typeRef match {
             case ArrayTypeRef(CharRef, 1) =>
@@ -3564,6 +3568,238 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         baseResult
       else
         genCallHelper(VarField.bC, baseResult)
+    }
+
+    /** Minimum amount of elements in a constant array to use the encoded strategy.
+     *
+     *  This is a trade-off. For small arrays, it is probably more important
+     *  that they are created quickly, rather than saving some bytes.
+     *
+     *  Must not be 0. The constant array decoder functions assume that the
+     *  resulting array is not empty.
+     */
+    private final val ConstantArrayThreshold = 8
+
+    /** Should we a use a constant array strategy for the given array elems.
+     *
+     *  This true when all of the following apply:
+     *
+     *  - We emit for ES2015+ (because we assume that arrays use TypedArrays),
+     *  - The elem type is an integer type,
+     *  - There are at least `ConstantArrayThreshold` elements, and
+     *  - All the elements are Literals.
+     *
+     *  In the future, we could add floating point types and booleans.
+     */
+    private def shouldGenerateAsConstantArray(primRef: PrimRef, elems: List[Tree]): Boolean = {
+      primRef match {
+        case _ if !es2015 =>
+          false
+        case CharRef | ByteRef | ShortRef | IntRef | LongRef =>
+          elems.lengthCompare(ConstantArrayThreshold) >= 0 &&
+          elems.forall(_.isInstanceOf[Literal])
+        case _ =>
+          false
+      }
+    }
+
+    // Ordered by decreasing run-time performance
+    private final val CAStrategyRaw = 0
+    private final val CAStrategyUVals = 1
+    private final val CAStrategyUDiffs = 2
+    private final val CAStrategySVals = 3
+    private final val CAStrategySDiffs = 4
+
+    /** Generates a constant array using a base-64-encoded string.
+     *
+     *  See CoreJSLib.defineConstantArrayMakers() for more information on the
+     *  encoding.
+     */
+    private def genConstantArray(primRef: PrimRef, elems: List[Tree])(
+        implicit pos: Position): js.Tree = {
+
+      val elemCount = elems.size
+      val elemByteSize = primRef match {
+        case ByteRef             => 1
+        case CharRef | ShortRef  => 2
+        case IntRef              => 4
+        case LongRef             => 8
+      }
+
+      val rawBuffer = java.nio.ByteBuffer.allocate(elemCount * elemByteSize)
+        .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+
+      for (elem <- elems) {
+        (elem: @unchecked) match {
+          case CharLiteral(v)  => rawBuffer.putChar(v)
+          case ByteLiteral(v)  => rawBuffer.put(v)
+          case ShortLiteral(v) => rawBuffer.putShort(v)
+          case IntLiteral(v)   => rawBuffer.putInt(v)
+          case LongLiteral(v)  => rawBuffer.putLong(v)
+        }
+      }
+      rawBuffer.position(0)
+
+      // Currently, only ints and longs have the non-raw strategies
+      val strategy = primRef match {
+        case IntRef | LongRef =>
+          pickConstantInt32ArrayStrategy(rawBuffer)
+        case _ =>
+          CAStrategyRaw
+      }
+      rawBuffer.position(0)
+
+      val encoded =
+        if (strategy == CAStrategyRaw) encodeConstantArrayRaw(rawBuffer)
+        else encodeConstantInt32ArrayVarLen(rawBuffer, strategy)
+
+      val helperVarField = strategy match {
+        case CAStrategyRaw    => VarField.constArrRaw
+        case CAStrategyUVals  => VarField.constArrUVals
+        case CAStrategyUDiffs => VarField.constArrUDiffs
+        case CAStrategySVals  => VarField.constArrSVals
+        case CAStrategySDiffs => VarField.constArrSDiffs
+      }
+
+      js.Apply(
+        globalVar(helperVarField, primRef),
+        List(
+          js.IntLiteral(elemCount),
+          js.StringLiteral(encoded)
+        )
+      )
+    }
+
+    /** Pick an encoding strategy for an Int32Array-based array.
+     *
+     *  This is used for longs as well, since we store their lo and hi fields
+     *  separately. This is true even when using bigints for longs: we decode
+     *  as pairs of ints, then reinterpret as a BigInt64Array.
+     */
+    private def pickConstantInt32ArrayStrategy(buffer: java.nio.ByteBuffer): Int = {
+      import java.nio._
+
+      def ceilDiv(x: Int, y: Int): Int =
+        Integer.divideUnsigned(x + y - 1, y)
+
+      val estimatedSizeRaw = ceilDiv(buffer.remaining() * 4, 3)
+
+      var estimatedSizeUVals = 0
+      var estimatedSizeUDiffs = 0
+      var estimatedSizeSVals = 0
+      var estimatedSizeSDiffs = 0
+
+      /* The number of bits required to encode an unsigned int.
+       * The | 1 ensures that we return 1 for x == 0.
+       */
+      def uBitSize(x: Int): Int = 32 - Integer.numberOfLeadingZeros(x | 1)
+
+      /* The number of bits required to encode a signed int.
+       * 1 for the sign bit, plus the number of bits required to encode the
+       * "bit-absolute" value of x (i.e., ~x if x < 0).
+       */
+      def sBitSize(x: Int): Int = 1 + uBitSize(x ^ (x >> 31))
+
+      var prevElem = 0
+
+      while (buffer.hasRemaining()) {
+        val elem = buffer.getInt()
+        val diff = elem - prevElem
+        prevElem = elem
+
+        estimatedSizeUVals += ceilDiv(uBitSize(elem), 5)
+        estimatedSizeUDiffs += ceilDiv(uBitSize(diff), 5)
+        estimatedSizeSVals += ceilDiv(sBitSize(elem), 5)
+        estimatedSizeSDiffs += ceilDiv(sBitSize(diff), 5)
+      }
+
+      // Indexed by CAStrategyX constants; the order matters
+      val estimatedSizes = Array(
+        estimatedSizeRaw,
+        estimatedSizeUVals,
+        estimatedSizeUDiffs,
+        estimatedSizeSVals,
+        estimatedSizeSDiffs
+      )
+
+      var best = 0
+      for (i <- 1 until estimatedSizes.length) {
+        if (estimatedSizes(i) < estimatedSizes(best))
+          best = i
+      }
+      println(s"size ${buffer.limit()} -> ${estimatedSizes.mkString(", ")} -> $best")
+      best
+    }
+
+    private def encodeConstantArrayRaw(buffer: java.nio.ByteBuffer): String = {
+      val len = buffer.remaining()
+
+      val encoded = new java.lang.StringBuilder(Integer.divideUnsigned(len * 4 + 2, 3))
+
+      while (buffer.hasRemaining()) {
+        val a = buffer.get() & 0xff
+        val b = if (buffer.hasRemaining()) buffer.get() & 0xff else 0
+        val c = if (buffer.hasRemaining()) buffer.get() & 0xff else 0
+
+        def encode6Bits(x: Int): Char = {
+          if (x < 8) (0x34 + x).toChar
+          else if (x < 36) (0x40 + (x - 8)).toChar
+          else (0x60 + (x - 36)).toChar
+        }
+
+        encoded.append(encode6Bits(a & 0x3f))
+        encoded.append(encode6Bits((a >>> 6) | ((b & 0x0f) << 2)))
+        encoded.append(encode6Bits((b >>> 4) | ((c & 0x03) << 4)))
+        encoded.append(encode6Bits(c >>> 2))
+      }
+
+      encoded.toString()
+    }
+
+    private def encodeConstantInt32ArrayVarLen(buffer: java.nio.ByteBuffer,
+        strategy: Int): String = {
+
+      val LowRangeStart = 0x30
+      val LowRangeEnd = 0x4f
+      val HighRangeStart = 0x5d
+      val HighRangeEnd = 0x7c
+
+      val isSigned = strategy == CAStrategySVals || strategy == CAStrategySDiffs
+      val isDiffs = strategy == CAStrategyUDiffs || strategy == CAStrategySDiffs
+
+      def charCountUnsignedFor(value: Int): Int = {
+        // Stop when the value fits in 5 bits
+        if ((value & ~0x1f) == 0) 1
+        else 1 + charCountUnsignedFor(value >>> 5)
+      }
+
+      def charCountSignedFor(value: Int): Int = {
+        // Stop when the "bit-absolute" value fits in 4 bits
+        if (((value ^ (value >> 31)) & ~0x0f) == 0) 1
+        else 1 + charCountSignedFor(value >> 5)
+      }
+
+      val encoded = new java.lang.StringBuilder()
+      var prev = 0
+      while (buffer.hasRemaining()) {
+        val elemValue = buffer.getInt()
+        var valueToEncode = if (isDiffs) elemValue - prev else elemValue
+        prev = elemValue
+
+        val charCount =
+          if (isSigned) charCountSignedFor(valueToEncode)
+          else charCountUnsignedFor(valueToEncode)
+
+        for (i <- (charCount - 1) to 1 by -1) {
+          val shifted =
+            if (isSigned) valueToEncode >> (5 * i)
+            else valueToEncode >>> (5 * i)
+          encoded.append((LowRangeStart + (shifted & 0x1f)).toChar)
+        }
+        encoded.append((HighRangeStart + (valueToEncode & 0x1f)).toChar)
+      }
+
+      encoded.toString()
     }
 
     /** Desugar a Long expression of the IR into a pair `(lo, hi)` of JavaScript expressions.
