@@ -3727,7 +3727,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         if (estimatedSizes(i) < estimatedSizes(best))
           best = i
       }
-      println(s"size ${buffer.limit()} -> ${estimatedSizes.mkString(", ")} -> $best")
+      //println(s"size ${buffer.limit()} -> ${estimatedSizes.mkString(", ")} -> $best")
       best
     }
 
