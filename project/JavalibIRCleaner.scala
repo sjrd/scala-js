@@ -561,6 +561,8 @@ final class JavalibIRCleaner(baseDirectoryURI: URI) {
             ArrayTypeRef(ClassRef(ObjectClass), typeRef.dimensions)
           else
             ArrayTypeRef(ClassRef(transformClassName(baseClassName)), typeRef.dimensions)
+        case WitResourceTypeRef(className) =>
+          ArrayTypeRef(WitResourceTypeRef(transformClassName(className)), typeRef.dimensions)
       }
     }
 

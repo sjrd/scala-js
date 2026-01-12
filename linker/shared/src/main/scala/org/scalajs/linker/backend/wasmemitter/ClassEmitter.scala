@@ -97,6 +97,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       case ClassKind.NativeWasmComponentResourceClass =>
         genResourceStruct(clazz)
         genResourceCastFunction(clazz)
+        genResourceVTable(clazz)
       case ClassKind.HijackedClass | ClassKind.AbstractJSType | ClassKind.NativeJSClass |
           ClassKind.NativeJSModuleClass =>
         () // nothing to do
@@ -1601,19 +1602,112 @@ class ClassEmitter(coreSpec: CoreSpec) {
 
   /** Generates struct type definition for a component resource class.
    *
-   *  Resource structs are simple wrappers containing only an i32 handle field.
-   *  struct { handle: i32 }
+   *  Resource structs wrap an i32 handle with vtable and idHashCode fields.
+   *  The idHashCode field is kept for being subtype of ObjectStruct,
+   *  but the custom hashCode method returns the handle value instead.
+   *  struct { vtable: ref ObjectVTable, idHashCode: i32, handle: i32 }
    */
   private def genResourceStruct(clazz: LinkedClass)(implicit ctx: WasmContext): Unit = {
-    val id = genTypeID.forResourceClass(clazz.className)
+    val className = clazz.className
+    val structTypeID = genTypeID.forResourceClass(className)
+
+    val vtableField = watpe.StructField(
+      genFieldID.objStruct.vtable,
+      OriginalName(genFieldID.objStruct.vtable.toString()),
+      watpe.RefType(genTypeID.ObjectVTable),
+      isMutable = false
+    )
+
+    val idHashCodeField =
+      watpe.StructField(
+        genFieldID.objStruct.idHashCode,
+        OriginalName(genFieldID.objStruct.idHashCode.toString()),
+        watpe.Int32,
+        isMutable = true
+      )
+
     val handleField = watpe.StructField(
       genFieldID.handle,
-      NoOriginalName,
+      OriginalName(genFieldID.handle.toString()),
       watpe.Int32,
       isMutable = false
     )
-    val structType = watpe.StructType(List(handleField))
-    ctx.mainRecType.addSubType(id, OriginalName(id.toString()), structType)
+    val fields = List(vtableField, idHashCodeField, handleField)
+
+    ctx.mainRecType.addSubType(
+      watpe.SubType(
+        structTypeID,
+        makeDebugName(ns.ResourceClassInstance, className),
+        isFinal = true,
+        superType = Some(genTypeID.ObjectStruct),
+        watpe.StructType(fields)
+      )
+    )
+  }
+
+  /** Generates vtable for a component resource class.
+   *
+   *  Resource vtables reuse Object's vtable type and contain TypeData with the
+   *  resource name (e.g., "resource<ClassName>") and all Object methods.
+   */
+  private def genResourceVTable(clazz: LinkedClass)(implicit ctx: WasmContext): Unit = {
+    assert(clazz.kind == ClassKind.NativeWasmComponentResourceClass)
+    val className = clazz.className
+    val vtableTypeID = genTypeID.ObjectVTable
+    val objectClassInfo = ctx.getClassInfo(ObjectClass)
+
+    // Generate custom hashCode and equals methods for this resource
+    genResourceHashCode(className)
+    genResourceEquals(className)
+
+    val itableSlots = ClassEmitter.genItableSlots(objectClassInfo, Nil)
+
+    val vtableSlots = objectClassInfo.tableEntries.map { methodName =>
+      val functionID =
+        if (methodName == MethodName("hashCode", Nil, IntRef))
+          genFunctionID.forTableEntry(className, methodName)
+        else if (methodName == MethodName("equals", List(ObjectRef), BooleanRef))
+          genFunctionID.forTableEntry(className, methodName)
+        else
+          objectClassInfo.resolvedMethodInfos(methodName).tableEntryID
+      ctx.refFuncWithDeclaration(functionID)
+    }
+
+    val strictAncestorsTypeData = List(
+      wa.GlobalGet(genGlobalID.forVTable(ObjectClass)),
+      wa.ArrayNewFixed(genTypeID.typeDataArray, 1)
+    )
+
+    val nameStr = "resource<" + runtimeClassNameOf(className) + ">"
+    val nameValue =
+      ctx.stringPool.getConstantStringDataInstr(nameStr) :+
+          wa.RefNull(watpe.HeapType(genTypeID.wasmString))
+
+    val vtableInit: List[wa.Instr] = nameValue ::: List(
+      wa.I32Const(KindClass),
+      wa.I32Const(0) // specialInstanceTypes
+    ) ::: (
+      strictAncestorsTypeData // strictAncestors = [Object]
+    ) ::: List(
+      wa.RefNull(watpe.HeapType.None), // componentType
+      wa.RefNull(watpe.HeapType.None), // classOf
+      wa.RefNull(watpe.HeapType.None), // arrayOf
+      wa.RefNull(watpe.HeapType.NoFunc), // cloneFunction
+      wa.RefNull(watpe.HeapType.NoFunc), // isJSClassInstance
+      wa.ArrayNewFixed(genTypeID.reflectiveProxies, 0) // reflectiveProxies
+    ) ::: itableSlots ::: vtableSlots ::: List(
+      wa.StructNew(genTypeID.ObjectVTable)
+    )
+
+    ctx.addGlobal(
+      wamod.Global(
+        genGlobalID.forVTable(className),
+        makeDebugName(ns.TypeData, className),
+        isMutable = false,
+        watpe.RefType(vtableTypeID),
+        wa.Expr(vtableInit)
+      )
+    )
   }
 
   /** Generates the asInstance cast function for a resource type.
@@ -1796,6 +1890,7 @@ object ClassEmitter {
     val ITable = UTF8String("it.")
     val Clone = UTF8String("clone.")
     val NewDefault = UTF8String("new.")
+    val ResourceClassInstance = UTF8String("r.")
   }
 
   private val thisOriginalName: OriginalName = OriginalName("this")
@@ -1839,5 +1934,75 @@ object ClassEmitter {
     }
 
     itablesInit.flatten.toList
+  }
+
+  /** Generates custom hashCode function for a resource class.
+   *
+   *  Resources use handle-based equality, so hashCode returns the handle value.
+   *  This ensures that resources with the same handle have the same hashCode.
+   */
+  private def genResourceHashCode(className: ClassName)(implicit ctx: WasmContext): wanme.FunctionID = {
+    implicit val noPos: Position = Position.NoPosition
+    val methodName = MethodName("hashCode", Nil, IntRef)
+    val functionID = genFunctionID.forTableEntry(className, methodName)
+
+    val fb = new FunctionBuilder(ctx.moduleBuilder, functionID, OriginalName(functionID.toString()), noPos)
+    val thisParam = fb.addParam("this", watpe.RefType.any)
+    fb.setResultType(watpe.Int32)
+    fb.setFunctionType(ctx.tableFunctionType(methodName))
+
+    fb += wa.LocalGet(thisParam)
+    fb += wa.RefCast(watpe.RefType(genTypeID.forResourceClass(className)))
+    fb += wa.StructGet(genTypeID.forResourceClass(className), genFieldID.handle)
+
+    fb.buildAndAddToModule()
+    functionID
+  }
+
+  /** Generates custom equals table entry function for a resource class.
+   *
+   *  Resources use handle-based equality: two resources are equal if they
+   *  have the same handle value (i.e., refer to the same external resource).
+   */
+  private def genResourceEquals(className: ClassName)(implicit ctx: WasmContext): wanme.FunctionID = {
+    implicit val noPos: Position = Position.NoPosition
+
+    val methodName = MethodName("equals", List(ObjectRef), BooleanRef)
+    val functionID = genFunctionID.forTableEntry(className, methodName)
+
+    val fb = new FunctionBuilder(ctx.moduleBuilder, functionID, OriginalName(functionID.toString()), noPos)
+    val thisParam = fb.addParam("this", watpe.RefType.any)
+    val thatParam = fb.addParam("that", watpe.RefType.any)
+    fb.setResultType(watpe.Int32)
+    fb.setFunctionType(ctx.tableFunctionType(methodName))
+
+    val resourceStructTypeID = genTypeID.forResourceClass(className)
+    val thisResourceLocal = fb.addLocal("thisResource", watpe.RefType(resourceStructTypeID))
+    val thatResourceLocal = fb.addLocal("thatResource", watpe.RefType.nullable(watpe.HeapType(resourceStructTypeID)))
+
+    fb += wa.LocalGet(thisParam)
+    fb += wa.RefCast(watpe.RefType(resourceStructTypeID))
+    fb += wa.LocalSet(thisResourceLocal)
+
+    fb += wa.LocalGet(thatParam)
+    fb += wa.RefCast(watpe.RefType.nullable(watpe.HeapType(resourceStructTypeID)))
+    fb += wa.LocalTee(thatResourceLocal)
+
+    // If cast fails, return false
+    fb += wa.RefIsNull
+    fb.ifThenElse(watpe.Int32) {
+      fb += wa.I32Const(0)
+    } {
+      // this.handle == that.handle
+      fb += wa.LocalGet(thisResourceLocal)
+      fb += wa.StructGet(resourceStructTypeID, genFieldID.handle)
+      fb += wa.LocalGet(thatResourceLocal)
+      fb += wa.RefAsNonNull
+      fb += wa.StructGet(resourceStructTypeID, genFieldID.handle)
+      fb += wa.I32Eq
+    }
+
+    fb.buildAndAddToModule()
+    functionID
   }
 }

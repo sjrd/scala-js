@@ -2235,8 +2235,9 @@ private[optimizer] abstract class OptimizerCore(
             case RefinedType(_: ClassType, exact)         => exact
             case RefinedType(_:PrimType | _:ArrayType, _) => true
             case RefinedType(AnyType | AnyNotNullType, _) => false
+            case RefinedType(_: WitResourceType, _)       => true
 
-            case RefinedType(_:ClosureType | _:RecordType | WitResourceType(_), _) =>
+            case RefinedType(_:ClosureType | _:RecordType, _) =>
               throw new AssertionError(s"Invalid receiver type ${treceiver.tpe} at $pos")
           }
 
@@ -2416,7 +2417,7 @@ private[optimizer] abstract class OptimizerCore(
   private def boxedClassForType(tpe: Type): ClassName = (tpe: @unchecked) match {
     case ClassType(className, _) =>
       className
-    case AnyType | AnyNotNullType | _:ArrayType =>
+    case AnyType | AnyNotNullType | _:ArrayType | _:WitResourceType =>
       ObjectClass
     case tpe: PrimType =>
       PrimTypeToBoxedClass(tpe)

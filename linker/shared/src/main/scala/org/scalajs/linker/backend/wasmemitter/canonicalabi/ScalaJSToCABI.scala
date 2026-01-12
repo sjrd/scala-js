@@ -203,6 +203,7 @@ object ScalaJSToCABI {
 
       case wit.ResourceType(className) =>
         val resourceStructID = genTypeID.forResourceClass(className)
+        fb += wa.RefCast(watpe.RefType(resourceStructID))
         fb += wa.StructGet(resourceStructID, genFieldID.handle)
         fb += wa.I32Store()
 
@@ -225,6 +226,7 @@ object ScalaJSToCABI {
       case wit.ResourceType(className) =>
         // Unwrap: Extract i32 handle from resource struct for stack
         val resourceStructID = genTypeID.forResourceClass(className)
+        fb += wa.RefCast(watpe.RefType(resourceStructID))
         fb += wa.StructGet(resourceStructID, genFieldID.handle)
 
       case tpe: wit.ListType =>

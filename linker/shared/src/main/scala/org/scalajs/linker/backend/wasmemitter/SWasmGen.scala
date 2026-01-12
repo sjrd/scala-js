@@ -28,7 +28,11 @@ object SWasmGen {
   def genZeroOf(tpe: Type)(implicit ctx: WasmContext): List[Instr] = {
     tpe match {
       case WitResourceType(className) =>
-        List(I32Const(0), StructNew(genTypeID.forResourceClass(className)))
+        List(
+          GlobalGet(genGlobalID.forVTable(className)), // vtable
+          I32Const(0), // idHashCode (unused, needed for subtyping)
+          I32Const(0), // handle (zero value)
+          StructNew(genTypeID.forResourceClass(className)))
       case _ =>
         List(genZeroOf0(tpe))
     }

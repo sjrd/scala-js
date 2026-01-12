@@ -145,7 +145,12 @@ object CABIToScalaJS {
 
       case wit.ResourceType(className) =>
         val resourceStructID = genTypeID.forResourceClass(className)
+        val handleLocal = fb.addLocal(NoOriginalName, watpe.Int32)
         fb += wa.I32Load()
+        fb += wa.LocalSet(handleLocal)
+        fb += wa.GlobalGet(genGlobalID.forVTable(className))  // vtable
+        fb += wa.I32Const(0) // idHashCode
+        fb += wa.LocalGet(handleLocal) // handle
         fb += wa.StructNew(resourceStructID)
 
       case variant @ wit.VariantType(className, cases) =>
@@ -224,7 +229,9 @@ object CABIToScalaJS {
         }
 
       case wit.ResourceType(className) =>
-        vi.next(watpe.Int32)
+        fb += wa.GlobalGet(genGlobalID.forVTable(className))  // vtable
+        fb += wa.I32Const(0) // idHashCode
+        vi.next(watpe.Int32) // handle
         fb += wa.StructNew(genTypeID.forResourceClass(className))
 
       case wit.TupleType(fields) =>
