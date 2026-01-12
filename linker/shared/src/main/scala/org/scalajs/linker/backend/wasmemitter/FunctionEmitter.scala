@@ -987,19 +987,19 @@ private class FunctionEmitter private (
             PrimTypeToBoxedClass(prim)
           case ClassType(cls, _) =>
             cls
-          case AnyType | AnyNotNullType | ArrayType(_, _) =>
+          case AnyType | AnyNotNullType | ArrayType(_, _) | WitResourceType(_) =>
             ObjectClass
 
-          // WitResourceType should be compiled to WasmWitFunctionApply in frontend
-          case tpe @ (_:ClosureType | _:RecordType | WitResourceType(_)) =>
+          case tpe @ (_:ClosureType | _:RecordType) =>
             throw new AssertionError(s"Invalid receiver type $tpe")
         }
         val receiverClassInfo = ctx.getClassInfo(receiverClassName)
 
         /* Hijacked classes do not receive tables at all, and `Apply`s on array
-         * types are considered to be statically resolved by the `Analyzer`.
-         * Therefore, if the receiver's static type is a prim type, hijacked
-         * class or array type, we must use static dispatch instead.
+         * types and WIT resource types are considered to be statically resolved
+         * by the `Analyzer`. Therefore, if the receiver's static type is a prim
+         * type, hijacked class, array type, or WIT resource type, we must use
+         * static dispatch instead.
          *
          * This never happens when we use the optimizer, since it already turns
          * any such `Apply` into an `ApplyStatically` (when it does not inline
@@ -1007,7 +1007,8 @@ private class FunctionEmitter private (
          */
         val useStaticDispatch = {
           receiverClassInfo.kind == ClassKind.HijackedClass ||
-          receiver.tpe.isInstanceOf[ArrayType]
+          receiver.tpe.isInstanceOf[ArrayType] ||
+          receiver.tpe.isInstanceOf[WitResourceType]
         }
         if (useStaticDispatch) {
           genApplyStatically(ApplyStatically(
@@ -2370,7 +2371,10 @@ private class FunctionEmitter private (
       case ArrayType(_, _) =>
         genWithDispatch(isAncestorOfHijackedClass = false)
 
-      case tpe @ (_:ClosureType | _:RecordType | _:WitResourceType) =>
+      case WitResourceType(_) =>
+        genWithDispatch(isAncestorOfHijackedClass = false)
+
+      case tpe @ (_:ClosureType | _:RecordType) =>
         throw new AssertionError(
             s"Invalid type ${tree.tpe} for String_+ at ${tree.pos}: $tree")
     }

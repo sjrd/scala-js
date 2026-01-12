@@ -149,12 +149,66 @@ object TestImportsImpl extends TestImports {
 
       // val s2 = Counter.sum(c1, c2)
       // assert(s1.valueOf() == s2.valueOf())
-
-      // use c1 multiple times fails with
-      // unknown handle index 1 (?)
+      assert(100 == s1.valueOf())
       // assert(100 == Counter.sum(c1, c2).valueOf())
     }
+
+    // Test Object methods on imported resources
+    TestFunctions.testResourceObjectMethods()
+
     val end = System.currentTimeMillis()
     println(s"elapsed: ${(end - start).toInt} ms")
+  }
+}
+
+object TestFunctions {
+  def testResourceObjectMethods(): Unit = {
+    val c1 = Counter(42)
+    val c2 = Counter(100)
+    val c3 = c1 // same reference
+
+    // Test toString - should return "resource<ClassName>@hashcode"
+    val str1 = c1.toString()
+    assert(str1.startsWith("resource<componentmodel.component.testing.countable.package$Counter>@"))
+    val str2 = c2.toString()
+    val str3 = c3.toString()
+    assert(str1 == str3)
+    assert(str1 != str2)
+    val str4 = s"$c1 + x" // test toStringForConcat
+    assert(str4.startsWith("resource<componentmodel.component.testing.countable.package$Counter>@"))
+
+    // Test hashCode - should be based on handle value
+    val hash1 = c1.hashCode()
+    val hash2 = c2.hashCode()
+    val hash3 = c3.hashCode()
+    assert(hash1 == hash3)
+    assert(hash1 != hash2)
+
+    // Test equals - should use handle-based equality
+    assert(c1.equals(c1))
+    assert(c1.equals(c3))
+    assert(c3.equals(c1))
+    assert(!c1.equals(c2))
+    assert(!c2.equals(c1))
+    assert(!c1.equals(null))
+    assert(!c1.equals("not a counter"))
+    assert(!c1.equals(42))
+
+    assert(c1 == c3)
+    assert(c1 != c2)
+    assert(c2 != c1)
+
+    assert(c1 eq c3)
+    assert(c1 ne c2)
+    assert(c2 ne c1)
+    assert(!(c1 eq c2))
+    assert(!(c1 ne c3))
+
+    val cls1 = c1.getClass()
+    val cls2 = c2.getClass()
+    val cls3 = c3.getClass()
+    assert(cls1 == cls2)
+    assert(cls1 == cls3)
+    assert(cls2 == cls3)
   }
 }

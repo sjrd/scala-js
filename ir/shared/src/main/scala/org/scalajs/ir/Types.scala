@@ -516,6 +516,11 @@ object Types {
         isSubnullable(lhsNullable, rhsNullable) &&
         AncestorsOfPseudoArrayClass.contains(className)
 
+      case (WitResourceType(_), ClassType(className, rhsNullable)) =>
+        // WitResourceType is always non-nullable and subtype of ObjectClass.
+        isSubnullable(false, rhsNullable) &&
+        className == ObjectClass
+
       case _ =>
         false
     })

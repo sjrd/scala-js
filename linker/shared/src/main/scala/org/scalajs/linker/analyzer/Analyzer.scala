@@ -629,8 +629,12 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
           }
 
         case NativeWasmComponentResourceClass =>
-          assert(superClass.isEmpty)
-          None
+          superClass match {
+            case Some(superCl) =>
+              _errors ::= InvalidSuperClass(superCl, this, from)
+            case None =>
+          }
+          Some(objectClassInfo)
       }
     }
 
