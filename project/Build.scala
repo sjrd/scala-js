@@ -56,8 +56,13 @@ object ExposedValues extends AutoPlugin {
 
     val enableMinifyEverywhere: SettingKey[Boolean] =
       settingKey("force usage of the `minify` option of the linker in all contexts (fast and full)")
+    val enableGCCEverywhere: SettingKey[Boolean] =
+      settingKey("enable the Google Closure Compiler in fullLinkJS")
     val enableWasmEverywhere: SettingKey[Boolean] =
       settingKey("enable the WebAssembly backend everywhere, including additional required linker config")
+
+    val regenerateUnicodeData: TaskKey[Unit] =
+      taskKey("regenerate all the Unicode data in the source files")
 
     // set scalaJSLinkerConfig in someProject ~= makeCompliant
     val makeCompliant: StandardConfig => StandardConfig = { prev =>
@@ -108,7 +113,12 @@ object ExposedValues extends AutoPlugin {
   }
 }
 
-import ExposedValues.autoImport.{enableMinifyEverywhere, enableWasmEverywhere}
+import ExposedValues.autoImport.{
+  enableMinifyEverywhere,
+  enableGCCEverywhere,
+  enableWasmEverywhere,
+  regenerateUnicodeData,
+}
 
 final case class ExpectedSizes(fastLink: Range, fullLink: Range,
     fastLinkGz: Range, fullLinkGz: Range)
@@ -150,23 +160,31 @@ object MyScalaJSPlugin extends AutoPlugin {
     scalaJSCompilerOption(s"mapSourceURI:$baseDirURI->$targetURI")
   }
 
+  @scala.annotation.nowarn("cat=deprecation")
+  private def enableClosureNoWarn(config: StandardConfig): StandardConfig =
+    config.withClosureCompiler(true)
+
   override def globalSettings: Seq[Setting[_]] = Def.settings(
       // can be overridden with a 'set' command
       enableMinifyEverywhere := false,
+      enableGCCEverywhere := false,
       enableWasmEverywhere := false,
 
       scalaJSLinkerConfig := {
-        val baseConfig = scalaJSLinkerConfig.value
+        var config = scalaJSLinkerConfig.value
           .withCheckIR(true)
           .withMinify(enableMinifyEverywhere.value)
 
+        if (enableGCCEverywhere.value)
+          config = enableClosureNoWarn(config)
+
         if (enableWasmEverywhere.value) {
-          baseConfig
+          config = config
             .withExperimentalUseWebAssembly(true)
             .withModuleKind(ModuleKind.ESModule)
-        } else {
-          baseConfig
         }
+
+        config
       },
 
       scalaJSLinkerImpl / fullClasspath := {
@@ -219,22 +237,6 @@ object MyScalaJSPlugin extends AutoPlugin {
       },
 
       wantSourceMaps := true,
-
-      // If `enableMinifyEverywhere` is used, make sure to deactive GCC in fullLinkJS
-      Compile / fullLinkJS / scalaJSLinkerConfig := {
-        val prev = (Compile / fullLinkJS / scalaJSLinkerConfig).value
-        if (enableMinifyEverywhere.value)
-          prev.withClosureCompiler(false)
-        else
-          prev
-      },
-      Test / fullLinkJS / scalaJSLinkerConfig := {
-        val prev = (Test / fullLinkJS / scalaJSLinkerConfig).value
-        if (enableMinifyEverywhere.value)
-          prev.withClosureCompiler(false)
-        else
-          prev
-      },
 
       jsEnv := {
         val baseConfig = NodeJSEnv.Config().withSourceMap(wantSourceMaps.value)
@@ -295,6 +297,9 @@ object MyScalaJSPlugin extends AutoPlugin {
         val full = (Compile / fullOptJS).value.data
 
         val desc = s"${thisProject.value.id} Scala ${scalaVersion.value}, useMinifySizes = $useMinifySizes"
+
+        if (enableGCCEverywhere.value)
+          throw new MessageOnlyException("checksizes cannot be used when enableGCCEverywhere is true")
 
         maybeExpected.fold {
           logger.info(s"Ignoring checksizes for " + desc)
@@ -1552,6 +1557,11 @@ object Build {
 
       recompileAllOrNothingSettings,
 
+      regenerateUnicodeData := {
+        val detectedJDKVersion = javaVersion.value
+        UnicodeDataGen.generateAll(detectedJDKVersion)
+      },
+
       /* Do not import `Predef._` so that we have a better control of when
        * we rely on the Scala library.
        * This is particularly important within the java.lang package, as
@@ -2222,9 +2232,9 @@ object Build {
             if (!useMinifySizes) {
               Some(ExpectedSizes(
                   fastLink = 620000 to 621000,
-                  fullLink = 94000 to 95000,
+                  fullLink = 284000 to 285000,
                   fastLinkGz = 75000 to 79000,
-                  fullLinkGz = 24000 to 25000,
+                  fullLinkGz = 43000 to 44000,
               ))
             } else {
               Some(ExpectedSizes(
@@ -2239,14 +2249,14 @@ object Build {
             if (!useMinifySizes) {
               Some(ExpectedSizes(
                   fastLink = 439000 to 440000,
-                  fullLink = 90000 to 91000,
+                  fullLink = 263000 to 264000,
                   fastLinkGz = 57000 to 58000,
-                  fullLinkGz = 24000 to 25000,
+                  fullLinkGz = 43000 to 44000,
               ))
             } else {
               Some(ExpectedSizes(
                   fastLink = 304000 to 305000,
-                  fullLink = 264000 to 265000,
+                  fullLink = 263000 to 264000,
                   fastLinkGz = 48000 to 49000,
                   fullLinkGz = 43000 to 44000,
               ))
