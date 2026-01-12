@@ -1014,10 +1014,11 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     }
 
     private def validateWitVariantCase(caseSym: Symbol): Unit = {
-      if (!caseSym.isCaseClass && !caseSym.isModuleClass) {
-        reporter.error(caseSym.pos,
-          s"Component variant case '${caseSym.name}' must be a case class or case object")
-      } else if (caseSym.isCaseClass) {
+      if (caseSym.isModuleClass) {
+        // Regular object (enum case without payload)
+        jsInterop.storeWitVariantValueType(caseSym, definitions.UnitTpe)
+      } else if (caseSym.isClass && caseSym.isFinal && !caseSym.isTrait) {
+        // Final class (variant case with payload)
         val primaryCtor = caseSym.primaryConstructor
         if (primaryCtor == NoSymbol) {
           reporter.error(caseSym.pos,
@@ -1045,12 +1046,13 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           } else {
             jsInterop.storeWitVariantValueType(caseSym, fieldType)
           }
-        } else { // case object
+        } else {
+          // Zero parameters - enum case defined as a class
           jsInterop.storeWitVariantValueType(caseSym, definitions.UnitTpe)
         }
-      } else { // not a case class or case object
+      } else {
         reporter.error(caseSym.pos,
-          s"Component variant case '${caseSym.name}' must be a case class or case object")
+          s"Component variant case '${caseSym.name}' must be a final class or object")
       }
     }
 
@@ -1095,12 +1097,12 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     }
 
     private def checkWitRecord(sym: Symbol): Unit = {
-      if (!sym.isCaseClass) {
+      if (!sym.isClass || sym.isTrait || sym.isModuleClass) {
         reporter.error(sym.pos,
-            "@WitRecord can only be used on case classes")
+            "@WitRecord can only be used on classes")
       } else if (!sym.isFinal) {
         reporter.error(sym.pos,
-            "@WitRecord case class must be final")
+            "@WitRecord class must be final")
       } else {
         // Check that each field has a compatible type
         val primaryCtor = sym.primaryConstructor
@@ -1123,32 +1125,32 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     }
 
     private def checkWitFlags(sym: Symbol): Unit = {
-      if (!sym.isCaseClass) {
+      if (!sym.isClass || sym.isTrait || sym.isModuleClass) {
         reporter.error(sym.pos,
-            "@WitFlags can only be used on case classes")
+            "@WitFlags can only be used on classes")
       } else if (!sym.isFinal) {
         reporter.error(sym.pos,
-            "@WitFlags case class must be final")
+            "@WitFlags class must be final")
       } else if (sym.isDerivedValueClass) {
         reporter.error(sym.pos,
-            "@WitFlags case class must NOT extend AnyVal. Use a regular case class instead.")
+            "@WitFlags class must NOT extend AnyVal. Use a regular class instead.")
       } else {
         val primaryCtor = sym.primaryConstructor
         val params = primaryCtor.paramss.flatten
         if (params.length != 1) {
           reporter.error(sym.pos,
-              s"@WitFlags case class must have exactly one parameter, found ${params.length}")
+              s"@WitFlags class must have exactly one parameter, found ${params.length}")
           return
         }
 
         val param = params.headOption.getOrElse(throw new Error("checkWitFlags"))
         if (param.tpe.typeSymbol != IntClass) {
           reporter.error(param.pos,
-              s"@WitFlags case class parameter must be of type Int, found '${param.tpe}'")
+              s"@WitFlags class parameter must be of type Int, found '${param.tpe}'")
         }
         if (param.name.decoded != "value") {
           reporter.error(param.pos,
-              s"@WitFlags case class parameter must be named 'value', found '${param.name.decoded}'")
+              s"@WitFlags class parameter must be named 'value', found '${param.name.decoded}'")
         }
 
         sym.getAnnotation(WitFlagsAnnotation).flatMap(_.intArg(0)) match {
