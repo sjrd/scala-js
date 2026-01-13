@@ -762,7 +762,7 @@ object Infos {
 
         case wit.FlagsType(className, _) =>
           builder.maybeAddAccessedClassData(ClassRef(className))
-          // FlagsType is a case class with a single Int parameter
+          // FlagsType is a final class with a single Int parameter
           val ctor = MethodName.constructor(List(IntRef))
           builder.addInstantiatedClass(className, ctor)
 

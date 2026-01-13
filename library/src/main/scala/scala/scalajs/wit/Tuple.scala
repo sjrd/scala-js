@@ -19,9 +19,6 @@ final class Tuple1[+T1](val _1: T1)
 object Tuple1 {
   def apply[T1](_1: T1): Tuple1[T1] = new Tuple1(_1)
 
-  @inline def unapply[T1](t: Tuple1[T1]): Some[Tuple1[T1]] =
-    Some(Tuple1(t._1))
-
   @inline implicit def fromScalaTuple1[T1](t: Tuple1[T1]): Tuple1[T1] =
     apply(t._1)
 
@@ -34,9 +31,6 @@ final class Tuple2[+T1, +T2](val _1: T1, val _2: T2)
 object Tuple2 {
   def apply[T1, T2](_1: T1, _2: T2): Tuple2[T1, T2] = new Tuple2(_1, _2)
 
-  @inline def unapply[T1, T2](t: Tuple2[T1, T2]): Some[(T1, T2)] =
-    Some((t._1, t._2))
-
   @inline implicit def fromScalaTuple2[T1, T2](t: (T1, T2)): Tuple2[T1, T2] =
     apply(t._1, t._2)
 
@@ -48,9 +42,6 @@ final class Tuple3[+T1, +T2, +T3](val _1: T1, val _2: T2, val _3: T3)
 
 object Tuple3 {
   def apply[T1, T2, T3](_1: T1, _2: T2, _3: T3): Tuple3[T1, T2, T3] = new Tuple3(_1, _2, _3)
-
-  @inline def unapply[T1, T2, T3](t: Tuple3[T1, T2, T3]): Some[(T1, T2, T3)] =
-    Some((t._1, t._2, t._3))
 
   @inline implicit def fromScalaTuple3[T1, T2, T3](t: (T1, T2, T3)): Tuple3[T1, T2, T3] =
     apply(t._1, t._2, t._3)
@@ -65,9 +56,6 @@ object Tuple4 {
   def apply[T1, T2, T3, T4](_1: T1, _2: T2, _3: T3, _4: T4): Tuple4[T1, T2, T3, T4] =
     new Tuple4(_1, _2, _3, _4)
 
-  @inline def unapply[T1, T2, T3, T4](t: Tuple4[T1, T2, T3, T4]): Some[(T1, T2, T3, T4)] =
-    Some((t._1, t._2, t._3, t._4))
-
   @inline implicit def fromScalaTuple4[T1, T2, T3, T4](t: (T1, T2, T3, T4)): Tuple4[T1, T2, T3, T4] =
     apply(t._1, t._2, t._3, t._4)
 
@@ -81,9 +69,6 @@ object Tuple5 {
   def apply[T1, T2, T3, T4, T5](_1: T1, _2: T2, _3: T3, _4: T4, _5: T5): Tuple5[T1, T2, T3, T4, T5] =
     new Tuple5(_1, _2, _3, _4, _5)
 
-  @inline def unapply[T1, T2, T3, T4, T5](t: Tuple5[T1, T2, T3, T4, T5]): Some[(T1, T2, T3, T4, T5)] =
-    Some((t._1, t._2, t._3, t._4, t._5))
-
   @inline implicit def fromScalaTuple5[T1, T2, T3, T4, T5](t: (T1, T2, T3, T4, T5)): Tuple5[T1, T2, T3, T4, T5] =
     apply(t._1, t._2, t._3, t._4, t._5)
 
@@ -96,9 +81,6 @@ final class Tuple6[+T1, +T2, +T3, +T4, +T5, +T6](val _1: T1, val _2: T2, val _3:
 object Tuple6 {
   def apply[T1, T2, T3, T4, T5, T6](_1: T1, _2: T2, _3: T3, _4: T4, _5: T5, _6: T6): Tuple6[T1, T2, T3, T4, T5, T6] =
     new Tuple6(_1, _2, _3, _4, _5, _6)
-
-  @inline def unapply[T1, T2, T3, T4, T5, T6](t: Tuple6[T1, T2, T3, T4, T5, T6]): Some[(T1, T2, T3, T4, T5, T6)] =
-    Some((t._1, t._2, t._3, t._4, t._5, t._6))
 
   @inline implicit def fromScalaTuple6[T1, T2, T3, T4, T5, T6](t: (T1, T2, T3, T4, T5, T6)): Tuple6[T1, T2, T3, T4, T5, T6] =
     apply(t._1, t._2, t._3, t._4, t._5, t._6)
@@ -117,9 +99,6 @@ object Tuple7 {
   ): Tuple7[T1, T2, T3, T4, T5, T6, T7] =
     new Tuple7(_1, _2, _3, _4, _5, _6, _7)
 
-  @inline def unapply[T1, T2, T3, T4, T5, T6, T7](t: Tuple7[T1, T2, T3, T4, T5, T6, T7]): Some[(T1, T2, T3, T4, T5, T6, T7)] =
-    Some((t._1, t._2, t._3, t._4, t._5, t._6, t._7))
-
   @inline implicit def fromScalaTuple7[T1, T2, T3, T4, T5, T6, T7](t: (T1, T2, T3, T4, T5, T6, T7)): Tuple7[T1, T2, T3, T4, T5, T6, T7] =
     apply(t._1, t._2, t._3, t._4, t._5, t._6, t._7)
 
@@ -136,9 +115,6 @@ object Tuple8 {
     _1: T1, _2: T2, _3: T3, _4: T4, _5: T5, _6: T6, _7: T7, _8: T8
   ): Tuple8[T1, T2, T3, T4, T5, T6, T7, T8] =
     new Tuple8(_1, _2, _3, _4, _5, _6, _7, _8)
-
-  @inline def unapply[T1, T2, T3, T4, T5, T6, T7, T8](t: Tuple8[T1, T2, T3, T4, T5, T6, T7, T8]): Some[(T1, T2, T3, T4, T5, T6, T7, T8)] =
-    Some((t._1, t._2, t._3, t._4, t._5, t._6, t._7, t._8))
 
   @inline implicit def fromScalaTuple8[T1, T2, T3, T4, T5, T6, T7, T8](t: (T1, T2, T3, T4, T5, T6, T7, T8)): Tuple8[T1, T2, T3, T4, T5, T6, T7, T8] =
     apply(t._1, t._2, t._3, t._4, t._5, t._6, t._7, t._8)
@@ -157,9 +133,6 @@ object Tuple9 {
   ): Tuple9[T1, T2, T3, T4, T5, T6, T7, T8, T9] =
     new Tuple9(_1, _2, _3, _4, _5, _6, _7, _8, _9)
 
-  @inline def unapply[T1, T2, T3, T4, T5, T6, T7, T8, T9](t: Tuple9[T1, T2, T3, T4, T5, T6, T7, T8, T9]): Some[(T1, T2, T3, T4, T5, T6, T7, T8, T9)] =
-    Some((t._1, t._2, t._3, t._4, t._5, t._6, t._7, t._8, t._9))
-
   @inline implicit def fromScalaTuple9[T1, T2, T3, T4, T5, T6, T7, T8, T9](t: (T1, T2, T3, T4, T5, T6, T7, T8, T9)): Tuple9[T1, T2, T3, T4, T5, T6, T7, T8, T9] =
     apply(t._1, t._2, t._3, t._4, t._5, t._6, t._7, t._8, t._9)
 
@@ -176,9 +149,6 @@ object Tuple10 {
     _1: T1, _2: T2, _3: T3, _4: T4, _5: T5, _6: T6, _7: T7, _8: T8, _9: T9, _10: T10
   ): Tuple10[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10] =
     new Tuple10(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10)
-
-  @inline def unapply[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10](t: Tuple10[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10]): Some[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)] =
-    Some((t._1, t._2, t._3, t._4, t._5, t._6, t._7, t._8, t._9, t._10))
 
   @inline implicit def fromScalaTuple10[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10](t: (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)): Tuple10[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10] =
     apply(t._1, t._2, t._3, t._4, t._5, t._6, t._7, t._8, t._9, t._10)
