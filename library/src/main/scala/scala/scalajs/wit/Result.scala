@@ -19,7 +19,7 @@ final class Ok[A](val value: A) extends Result[A, Nothing] {
     other match {
       case that: Ok[_] =>
         if (this.value == null) that.value == null
-        else this.value.equals(that.value)
+        else this.value == that.value
       case _ => false
     }
   }
@@ -40,7 +40,7 @@ final class Err[B](val value: B) extends Result[Nothing, B] {
     other match {
       case that: Err[_] =>
         if (this.value == null) that.value == null
-        else this.value.equals(that.value)
+        else this.value == that.value
       case _ => false
     }
   }
