@@ -2367,7 +2367,6 @@ object Build {
 
                 // javalib/util
                 !endsWith(f, "/FormatterTest.scala") &&
-                !endsWith(f, "/ArraysTest.scala") && // Arrays.deepEquals
                 !endsWith(f, "/IntConsumerTest.scala") && // Long#StringRadixInfos
                 !endsWith(f, "/DateTest.scala") && // js.Date
                 !endsWith(f, "/PropertiesTest.scala") && // Date.toString
