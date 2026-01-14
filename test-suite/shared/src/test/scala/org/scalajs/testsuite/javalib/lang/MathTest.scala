@@ -606,6 +606,38 @@ class MathTest {
       assertSameDouble(-x, rint(-x))
   }
 
+  @Test def roundFloat(): Unit = {
+    assertEquals(0, Math.round(Float.NaN))
+    assertEquals(0, Math.round(0.0f))
+    assertEquals(Int.MinValue, Math.round(Float.NegativeInfinity))
+    assertEquals(Int.MaxValue, Math.round(Float.PositiveInfinity))
+    assertEquals(Int.MinValue, Math.round(Int.MinValue.toFloat - 1.0f))
+    assertEquals(Int.MaxValue, Math.round(Int.MaxValue.toFloat + 1.0f))
+
+    assertEquals(1, Math.round(0.5f))
+    assertEquals(2, Math.round(1.5f))
+    assertEquals(0, Math.round(-0.5f))
+    assertEquals(-1, Math.round(-1.5f))
+    assertEquals(5, Math.round(4.6f))
+    assertEquals(-5, Math.round(-4.6f))
+  }
+
+  @Test def roundDouble(): Unit = {
+    assertEquals(0L, Math.round(Double.NaN))
+    assertEquals(0, Math.round(0.0))
+    assertEquals(Long.MinValue, Math.round(Double.NegativeInfinity))
+    assertEquals(Long.MaxValue, Math.round(Double.PositiveInfinity))
+    assertEquals(Long.MinValue, Math.round(Long.MinValue.toDouble - 1.0))
+    assertEquals(Long.MaxValue, Math.round(Long.MaxValue.toDouble + 1.0))
+
+    assertEquals(1L, Math.round(0.5))
+    assertEquals(2L, Math.round(1.5))
+    assertEquals(0L, Math.round(-0.5))
+    assertEquals(-1L, Math.round(-1.5))
+    assertEquals(5L, Math.round(4.6))
+    assertEquals(-5L, Math.round(-4.6))
+  }
+
   @Test def addExact(): Unit = {
     assertEquals(0, Math.addExact(0, 0))
     assertEquals(1, Math.addExact(0, 1))
