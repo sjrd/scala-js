@@ -225,8 +225,37 @@ object Math {
     }
   }
 
-  @inline def round(a: scala.Float): scala.Int = js.Math.round(a).toInt
-  @inline def round(a: scala.Double): scala.Long = js.Math.round(a).toLong
+  @inline def round(a: scala.Float): scala.Int = {
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      if (Float.isNaN(a)) {
+        0
+      } else if (a <= Int.MinValue.toFloat) {
+        Int.MinValue
+      } else if (a >= Int.MaxValue.toFloat) {
+        Int.MaxValue
+      } else {
+        floor(a.toDouble + 0.5).toInt
+      }
+    } {
+      js.Math.round(a).toInt
+    }
+  }
+
+  @inline def round(a: scala.Double): scala.Long = {
+    linkTimeIf(LinkingInfo.targetPureWasm) {
+      if (Double.isNaN(a)) {
+        0L
+      } else if (a <= scala.Long.MinValue.toDouble) {
+        scala.Long.MinValue
+      } else if (a >= scala.Long.MaxValue.toDouble) {
+        scala.Long.MaxValue
+      } else {
+        floor(a + 0.5).toLong
+      }
+    } {
+      js.Math.round(a).toLong
+    }
+  }
 
   // Wasm intrinsic
   @inline def sqrt(a: scala.Double): scala.Double =
