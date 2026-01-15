@@ -2363,7 +2363,6 @@ object Build {
 
                 // javalib/lang
                 !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
-                !endsWith(f, "/lang/SystemPropertiesTest.scala") && // dictionary in SystemProperties
 
                 // javalib/util
                 !endsWith(f, "/FormatterTest.scala") &&
