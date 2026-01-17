@@ -311,8 +311,30 @@ private[lang] object UnicodeData {
     }
   }
 
-  @noinline def isIdeographic(cp: Int): scala.Boolean =
-    adHocProperty(cp, ideographicRanges)
+  @noinline def isIdeographic(cp: Int): scala.Boolean = {
+    val ranges = ideographicRanges
+    if (cp < 0) {
+      (ranges.length & 1) != 0
+    } else {
+      import java.util.ScalaOps._
+      val len = 32 // ranges.length
+      System.out.println("---")
+      System.out.println(s"cp ${Integer.toHexString(cp)} -- length $len")
+      var m = len >>> 1
+      var radius = m // ((len - -1) + 1) >>> 1
+      val iters = 32 - Integer.numberOfLeadingZeros(len - 1)
+      for (_ <- 0 until iters) {
+        System.out.println(s"$radius -- $m")
+        System.out.println(s"   -- ${Integer.toHexString(ranges(m))}")
+        radius = radius >>> 1 // (radius + 1) >>> 1
+        val diff = (cp - ranges(m)) >> 31
+        m = m - (diff & radius) + (~diff & radius)
+      }
+      System.out.println(s"${Integer.toHexString(cp)} -> $m -> ${(m & 1) == 0}")
+      (m & 1) == 0
+    }
+    //adHocProperty(cp, ideographicRanges)
+  }
 
   private final val UnicodeIDStartTypes =
     AllLetterTypes | LetterNumberType
