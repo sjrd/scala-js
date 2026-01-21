@@ -54,6 +54,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   import coreSpec.wasmFeatures.targetPureWasm
 
   val stringType = if (targetPureWasm) RefType(genTypeID.wasmString) else RefType.extern
+
   val nullableStringType =
     if (targetPureWasm) RefType.nullable(genTypeID.wasmString)
     else RefType.externref
@@ -73,8 +74,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   )
 
   private def charCodeForOriginalName(baseRef: NonArrayTypeRef): Char = baseRef match {
-    case baseRef: PrimRef            => baseRef.charCode
-    case _: ClassRef                 => 'O'
+    case baseRef: PrimRef      => baseRef.charCode
+    case _: ClassRef           => 'O'
     case WitResourceTypeRef(_) => 'O'
   }
 
@@ -93,36 +94,37 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     def make(id: FieldID, tpe: Type, isMutable: Boolean): StructField =
       StructField(id, OriginalName(id.toString()), tpe, isMutable)
 
-    val nameFields =
-      if (targetPureWasm)
+    val nameFields = {
+      if (targetPureWasm) {
         List(
           make(nameOffset, Int32, isMutable = false),
           make(nameSize, Int32, isMutable = false),
           make(nameStringIndex, Int32, isMutable = false),
           make(name, RefType.nullable(genTypeID.wasmString), isMutable = true)
         )
-      else List(make(name, RefType.externref, isMutable = true))
+      } else List(make(name, RefType.externref, isMutable = true))
+    }
 
     nameFields :::
-    List(
-      make(kind, Int32, isMutable = false),
-      make(specialInstanceTypes, Int32, isMutable = false),
-      make(strictAncestors, nullable(genTypeID.typeDataArray), isMutable = false),
-      make(componentType, nullable(genTypeID.typeData), isMutable = false),
-      make(classOfValue, nullable(genTypeID.ClassStruct), isMutable = true),
-      make(arrayOf, nullable(genTypeID.ObjectVTable), isMutable = true),
-      make(cloneFunction, nullable(genTypeID.cloneFunctionType), isMutable = false),
-      make(
-        isJSClassInstance,
-        nullable(genTypeID.isJSClassInstanceFuncType),
-        isMutable = false
-      ),
-      make(
-        reflectiveProxies,
-        RefType(genTypeID.reflectiveProxies),
-        isMutable = false
+      List(
+        make(kind, Int32, isMutable = false),
+        make(specialInstanceTypes, Int32, isMutable = false),
+        make(strictAncestors, nullable(genTypeID.typeDataArray), isMutable = false),
+        make(componentType, nullable(genTypeID.typeData), isMutable = false),
+        make(classOfValue, nullable(genTypeID.ClassStruct), isMutable = true),
+        make(arrayOf, nullable(genTypeID.ObjectVTable), isMutable = true),
+        make(cloneFunction, nullable(genTypeID.cloneFunctionType), isMutable = false),
+        make(
+          isJSClassInstance,
+          nullable(genTypeID.isJSClassInstanceFuncType),
+          isMutable = false
+        ),
+        make(
+          reflectiveProxies,
+          RefType(genTypeID.reflectiveProxies),
+          isMutable = false
+        )
       )
-    )
   }
 
   /** Generates a sequence of instructions that throw the `anyref` on the stack.
@@ -409,7 +411,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     addHelperImport(genFunctionID.stringBuiltins.codePointAt, List(externref, Int32), List(Int32))
     addHelperImport(genFunctionID.stringBuiltins.length, List(externref), List(Int32))
     addHelperImport(genFunctionID.stringBuiltins.concat, List(externref, externref), List(extern))
-    addHelperImport(genFunctionID.stringBuiltins.substring, List(externref, Int32, Int32), List(extern))
+    addHelperImport(
+        genFunctionID.stringBuiltins.substring, List(externref, Int32, Int32), List(extern))
     addHelperImport(genFunctionID.stringBuiltins.equals, List(externref, externref), List(Int32))
   }
 
@@ -560,7 +563,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
               fb += I32And
             }
             fb += Return
-          },
+          }
         ) { () =>
           genRefTestBoth(RefType.eqref)
           fb.ifThenElse(Int32) {
@@ -684,7 +687,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     addEssentialImport(genFunctionID.wasmEssentials.currentTimeMillis, Nil, List(Float64))
     addEssentialImport(genFunctionID.wasmEssentials.random, Nil, List(Float64))
 
-    addEssentialImport(genFunctionID.wasmEssentials.scalajsCom.send, List(RefType(genTypeID.i16Array)), Nil)
+    addEssentialImport(
+        genFunctionID.wasmEssentials.scalajsCom.send, List(RefType(genTypeID.i16Array)), Nil)
     addEssentialImport(genFunctionID.wasmEssentials.scalajsCom.init, List(RefType.func), Nil)
   }
 
@@ -716,15 +720,16 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     )
 
     for ((primRef, kind) <- primRefsWithKinds) {
-      val nameValue =
-        if (targetPureWasm)
+      val nameValue = {
+        if (targetPureWasm) {
           ctx.stringPool.getConstantStringDataInstr(primRef.displayName) :+
-              RefNull(HeapType(genTypeID.wasmString))
-        else ctx.stringPool.getConstantStringDataInstr(primRef.displayName)
+          RefNull(HeapType(genTypeID.wasmString))
+        } else ctx.stringPool.getConstantStringDataInstr(primRef.displayName)
+      }
 
       val instrs: List[Instr] = {
         nameValue ::: I32Const(kind) :: commonFieldValues :::
-          StructNew(genTypeID.typeData) :: Nil
+        StructNew(genTypeID.typeData) :: Nil
       }
 
       ctx.addGlobal(
@@ -744,15 +749,16 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       (genGlobalID.bZeroChar, SpecialNames.CharBoxClass, I32Const(0)),
       (genGlobalID.bZeroLong, SpecialNames.LongBoxClass, I64Const(0))
     ) ++ (if (targetPureWasm) List(
-      (genGlobalID.bZeroInteger, SpecialNames.IntegerBoxClass, I32Const(0)),
-      (genGlobalID.bZeroFloat, SpecialNames.DoubleBoxClass, F64Const(0)),
-      (genGlobalID.bZeroDouble, SpecialNames.DoubleBoxClass, F64Const(0))
-    ) else Nil)
+            (genGlobalID.bZeroInteger, SpecialNames.IntegerBoxClass, I32Const(0)),
+            (genGlobalID.bZeroFloat, SpecialNames.DoubleBoxClass, F64Const(0)),
+            (genGlobalID.bZeroDouble, SpecialNames.DoubleBoxClass, F64Const(0))
+          )
+          else Nil)
 
     for ((globalID, boxClassName, zeroValueInstr) <- primTypesWithBoxClasses) {
       val boxStruct = genTypeID.forClass(boxClassName)
       val instrs: List[Instr] = List(
-        GlobalGet(genGlobalID.forVTable(boxClassName)),
+        GlobalGet(genGlobalID.forVTable(boxClassName))
       ) :::
         (if (targetPureWasm) List(I32Const(0)) else Nil) :::
         List(
@@ -880,55 +886,55 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     }
   }
 
- /** Memory allocation using a global stack pointer.
+  /** Memory allocation using a global stack pointer.
    *
-   * Instead of using dynamic memory allocation, memory management can be performed using a global
-   * stack pointer. The free memory is tracked by a global variable `stackPointer`.
-   * `malloc` simply increments `stackPointer` by `nbytes` (+ 8-byte alignment).
-   * When the allocated memory is no longer needed, `stackPointer` is restored to its previous value.
+   *  Instead of using dynamic memory allocation, memory management can be performed using a global
+   *  stack pointer. The free memory is tracked by a global variable `stackPointer`.
+   *  `malloc` simply increments `stackPointer` by `nbytes` (+ 8-byte alignment).
+   *  When the allocated memory is no longer needed, `stackPointer` is restored to its previous value.
    *
-   * This memory management model is simple and efficient.
-   * Given that memory allocation mainly occurs when interacting with external components in the Component Model,
+   *  This memory management model is simple and efficient.
+   *  Given that memory allocation mainly occurs when interacting with external components in the Component Model,
    *
-   * When calling an external function, `stackPointer` is saved before the call and restored
-   * afterward.
-   * However, issues arise when a function exported via the Component Model is called.
+   *  When calling an external function, `stackPointer` is saved before the call and restored
+   *  afterward.
+   *  However, issues arise when a function exported via the Component Model is called.
    *
-   * ## Problem with stack pointer based memory management
-   * When the VM passes arguments to an exported function, it may require additional memory (e.g.,
-   * for strings, lists, or when the argument count exceeds 16 in core Wasm).
-   * In such cases, the VM uses the exported `cabi_realloc` function to allocate memory and passes the memory offset as
-   * an argument. These allocations occur before the function call itself.
-   * In that scenario, it's difficult to determine which address to restore the stack pointer,
-   * since we cannot save the stack pointer at callee site.
+   *  ## Problem with stack pointer based memory management
+   *  When the VM passes arguments to an exported function, it may require additional memory (e.g.,
+   *  for strings, lists, or when the argument count exceeds 16 in core Wasm).
+   *  In such cases, the VM uses the exported `cabi_realloc` function to allocate memory and passes the memory offset as
+   *  an argument. These allocations occur before the function call itself.
+   *  In that scenario, it's difficult to determine which address to restore the stack pointer,
+   *  since we cannot save the stack pointer at callee site.
    *
-   * ## Possible workaround for the problem
-   * Ideally, the caller should save the stack pointer, but since the caller is the VM, the language
-   * cannot enforce such an operation to VM.
+   *  ## Possible workaround for the problem
+   *  Ideally, the caller should save the stack pointer, but since the caller is the VM, the language
+   *  cannot enforce such an operation to VM.
    *
-   * An alternative approach is to save the stack pointer within `cabi_realloc`.
-   * However, determining which address to restore the stack pointer is problematic because `realloc`
-   * calls are not directly linked to a specific function invocation.
-   * It is not sufficient to remember only the most recent value, because multiple `realloc` calls
-   * may occur before the function execution.
+   *  An alternative approach is to save the stack pointer within `cabi_realloc`.
+   *  However, determining which address to restore the stack pointer is problematic because `realloc`
+   *  calls are not directly linked to a specific function invocation.
+   *  It is not sufficient to remember only the most recent value, because multiple `realloc` calls
+   *  may occur before the function execution.
    *
-   * ## Our workaround
-   * Our workaround is that, find a minimum pointer value to restore from the memory offset
-   * values given as arguments of the exported function.
-   * For example, the memory offset of string might be the offset to restore after function call.
+   *  ## Our workaround
+   *  Our workaround is that, find a minimum pointer value to restore from the memory offset
+   *  values given as arguments of the exported function.
+   *  For example, the memory offset of string might be the offset to restore after function call.
    *
-   * A challenge with this approach is that when storing a string, `realloc` may allocate a certain
-   * memory size initially and later modify it again with another `realloc` call.
-   * However, for UTF-16 system like Scala, the Canonical ABI specification states that `realloc` does not
-   * increase memory size with `realloc` when storing a string (just shrink it).
-   * At least of the current spec: https://github.com/WebAssembly/component-model/commit/2489e3d614a0f6f95089e8d1a71ddc0708b68851
+   *  A challenge with this approach is that when storing a string, `realloc` may allocate a certain
+   *  memory size initially and later modify it again with another `realloc` call.
+   *  However, for UTF-16 system like Scala, the Canonical ABI specification states that `realloc` does not
+   *  increase memory size with `realloc` when storing a string (just shrink it).
+   *  At least of the current spec: https://github.com/WebAssembly/component-model/commit/2489e3d614a0f6f95089e8d1a71ddc0708b68851
    *
-   * If our `realloc` implementation does not copy existing memory segments when shrinking,
-   * then the memory offsets passed as arguments will always include the correct memory address to restore.
+   *  If our `realloc` implementation does not copy existing memory segments when shrinking,
+   *  then the memory offsets passed as arguments will always include the correct memory address to restore.
    *
-   * By resetting the stack pointer to the minimum of these memory addresses in `post-return`,
-   * it should be possible to free memory allocated by the VM when calling an externally exported
-   * function.
+   *  By resetting the stack pointer to the minimum of these memory addresses in `post-return`,
+   *  it should be possible to free memory allocated by the VM when calling an externally exported
+   *  function.
    */
   private def genMemoryAndAllocator()(implicit ctx: WasmContext): Unit = {
     ctx.moduleBuilder.addMemory(
@@ -1132,7 +1138,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   }
 
   private def genUnboxBoolean()(implicit ctx: WasmContext): Unit = {
-    assert(true /* isWASI */) // scalastyle:ignore
+    assert(true /* isWASI */ ) // scalastyle:ignore
     val fb = newFunctionBuilder(genFunctionID.unbox(BooleanRef))
     val xParam = fb.addParam("x", RefType.i31)
     fb.setResultType(Int32)
@@ -1210,7 +1216,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.buildAndAddToModule()
   }
 
-  private def genTypeTest(functionID: FunctionID, targetTpe: PrimType)(implicit ctx: WasmContext): Unit = {
+  private def genTypeTest(functionID: FunctionID, targetTpe: PrimType)(
+      implicit ctx: WasmContext): Unit = {
     assert(targetPureWasm)
 
     val fb = newFunctionBuilder(functionID)
@@ -1219,7 +1226,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
     val boxClass = targetTpe match {
       case BooleanType => SpecialNames.BooleanBoxClass
-      case _ => throw new AssertionError(s"Invalid type: $targetTpe")
+      case _           => throw new AssertionError(s"Invalid type: $targetTpe")
     }
     fb += LocalGet(xParam)
     fb += RefTest(RefType(genTypeID.forClass(boxClass)))
@@ -1235,13 +1242,13 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.setResultType(RefType.any)
 
     val boxClass = targetTpe match {
-      case IntType => SpecialNames.IntegerBoxClass
-      case FloatType => SpecialNames.DoubleBoxClass
-      case DoubleType => SpecialNames.DoubleBoxClass
-      case CharType => SpecialNames.CharBoxClass
-      case LongType => SpecialNames.LongBoxClass
+      case IntType     => SpecialNames.IntegerBoxClass
+      case FloatType   => SpecialNames.DoubleBoxClass
+      case DoubleType  => SpecialNames.DoubleBoxClass
+      case CharType    => SpecialNames.CharBoxClass
+      case LongType    => SpecialNames.LongBoxClass
       case BooleanType => SpecialNames.BooleanBoxClass
-      case _ => throw new AssertionError(s"Invalid targetTpe: $targetTpe")
+      case _           => throw new AssertionError(s"Invalid targetTpe: $targetTpe")
     }
 
     fb += GlobalGet(genGlobalID.forVTable(boxClass))
@@ -1252,7 +1259,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.buildAndAddToModule()
   }
 
-  private def genUnbox(functionID: FunctionID, targetTpe: PrimType)(implicit ctx: WasmContext): Unit = {
+  private def genUnbox(functionID: FunctionID, targetTpe: PrimType)(
+      implicit ctx: WasmContext): Unit = {
     assert(targetPureWasm)
     val fb = newFunctionBuilder(functionID)
     val xParam = fb.addParam("x", RefType.anyref)
@@ -1260,11 +1268,11 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.setResultType(resultType)
 
     val boxClass = targetTpe match {
-      case IntType => SpecialNames.IntegerBoxClass
-      case CharType => SpecialNames.CharBoxClass
-      case LongType => SpecialNames.LongBoxClass
+      case IntType     => SpecialNames.IntegerBoxClass
+      case CharType    => SpecialNames.CharBoxClass
+      case LongType    => SpecialNames.LongBoxClass
       case BooleanType => SpecialNames.BooleanBoxClass
-      case _ => throw new AssertionError(s"Invalid targetTpe: $targetTpe")
+      case _           => throw new AssertionError(s"Invalid targetTpe: $targetTpe")
     }
     val fieldName = FieldName(boxClass, SpecialNames.valueFieldSimpleName)
 
@@ -1297,15 +1305,19 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.block(FunctionType(List(RefType.anyref), List(resultType))) { doneLabel =>
       fb.block(FunctionType(List(RefType.anyref), Nil)) { isNullLabel =>
         fb.block(FunctionType(List(RefType.anyref), List(RefType.i31))) { isI31Label =>
-          fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass))))) { isDoubleLabel =>
-            fb += BrOnNull(isNullLabel)
-            fb += BrOnCast(isI31Label, RefType.anyref, RefType.i31)
-            fb += BrOnCast(isDoubleLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))
-            fb += Unreachable
+          fb.block(FunctionType(
+              List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass))))) {
+            isDoubleLabel =>
+              fb += BrOnNull(isNullLabel)
+              fb += BrOnCast(isI31Label, RefType.anyref, RefType.i31)
+              fb += BrOnCast(isDoubleLabel, RefType.anyref,
+                  RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))
+              fb += Unreachable
           } // DoubleBoxClass
           fb += StructGet(
             genTypeID.forClass(SpecialNames.DoubleBoxClass),
-            genFieldID.forClassInstanceField(FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
+            genFieldID.forClassInstanceField(
+                FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
           )
           fb += F32DemoteF64
           fb += Br(doneLabel)
@@ -1330,23 +1342,31 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.block(FunctionType(List(RefType.anyref), List(resultType))) { doneLabel =>
       fb.block(FunctionType(List(RefType.anyref), Nil)) { isNullLabel =>
         fb.block(FunctionType(List(RefType.anyref), List(RefType.i31))) { isI31Label =>
-          fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass))))) { isIntLabel =>
-            fb.block(FunctionType(List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass))))) { isDoubleLabel =>
-              fb += BrOnNull(isNullLabel)
-              fb += BrOnCast(isI31Label, RefType.anyref, RefType.i31)
-              fb += BrOnCast(isIntLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass)))
-              fb += BrOnCast(isDoubleLabel, RefType.anyref, RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))
-              fb += Unreachable
-            } // DoubleBoxClass
-            fb += StructGet(
-              genTypeID.forClass(SpecialNames.DoubleBoxClass),
-              genFieldID.forClassInstanceField(FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
-            )
-            fb += Br(doneLabel)
+          fb.block(FunctionType(
+              List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass))))) {
+            isIntLabel =>
+              fb.block(FunctionType(
+                  List(RefType.anyref), List(RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass))))) {
+                isDoubleLabel =>
+                  fb += BrOnNull(isNullLabel)
+                  fb += BrOnCast(isI31Label, RefType.anyref, RefType.i31)
+                  fb += BrOnCast(isIntLabel, RefType.anyref,
+                      RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass)))
+                  fb += BrOnCast(isDoubleLabel, RefType.anyref,
+                      RefType(genTypeID.forClass(SpecialNames.DoubleBoxClass)))
+                  fb += Unreachable
+              } // DoubleBoxClass
+              fb += StructGet(
+                genTypeID.forClass(SpecialNames.DoubleBoxClass),
+                genFieldID.forClassInstanceField(
+                    FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
+              )
+              fb += Br(doneLabel)
           } // IntegerBoxClass
           fb += StructGet(
             genTypeID.forClass(SpecialNames.IntegerBoxClass),
-            genFieldID.forClassInstanceField(FieldName(SpecialNames.IntegerBoxClass, SpecialNames.valueFieldSimpleName))
+            genFieldID.forClassInstanceField(
+                FieldName(SpecialNames.IntegerBoxClass, SpecialNames.valueFieldSimpleName))
           )
           fb += F64ConvertI32S
           fb += Br(doneLabel)
@@ -1387,7 +1407,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   }
 
   private def genTestByteOrShort(typeRef: PrimRef, signExtend: SimpleInstr)(
-        implicit ctx: WasmContext): Unit = {
+      implicit ctx: WasmContext): Unit = {
 
     val fb = newFunctionBuilder(genFunctionID.typeTest(typeRef))
     val xParam = fb.addParam("x", RefType.anyref)
@@ -1518,9 +1538,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       fb += Return
     }
     for (t <- List(
-        SpecialNames.IntegerBoxClass,
-        SpecialNames.DoubleBoxClass
-    )) {
+          SpecialNames.IntegerBoxClass,
+          SpecialNames.DoubleBoxClass
+        )) {
       fb += LocalGet(xParam)
       fb += RefTest(RefType(genTypeID.forClass(t)))
       fb.ifThen() {
@@ -1575,7 +1595,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
     //   fb += LocalGet(str)
     // }
-
 
     fb.buildAndAddToModule()
   }
@@ -1660,13 +1679,11 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
           genArrayTypeDataName()
         } {
           // it is not an array; its name is stored in nameData
-          for (
-            idx <- List(
-              genFieldID.typeData.nameOffset,
-              genFieldID.typeData.nameSize,
-              genFieldID.typeData.nameStringIndex
-            )
-          ) {
+          for (idx <- List(
+                genFieldID.typeData.nameOffset,
+                genFieldID.typeData.nameSize,
+                genFieldID.typeData.nameStringIndex
+              )) {
             fb += LocalGet(typeDataParam)
             fb += StructGet(genTypeID.typeData, idx)
           }
@@ -1776,9 +1793,12 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
                 fb += LocalGet(valueParam)
                 fb += BrOnCastFail(notOurObjectLabel, anyref, objectType)
 
-                fb += BrOnCast(isLongLabel, objectType, RefType(genTypeID.forClass(SpecialNames.LongBoxClass)))
-                fb += BrOnCast(isCharLabel, objectType, RefType(genTypeID.forClass(SpecialNames.CharBoxClass)))
-                fb += BrOnCast(isIntegerLabel, objectType, RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass)))
+                fb += BrOnCast(
+                    isLongLabel, objectType, RefType(genTypeID.forClass(SpecialNames.LongBoxClass)))
+                fb += BrOnCast(
+                    isCharLabel, objectType, RefType(genTypeID.forClass(SpecialNames.CharBoxClass)))
+                fb += BrOnCast(isIntegerLabel, objectType,
+                    RefType(genTypeID.forClass(SpecialNames.IntegerBoxClass)))
                 fb += BrOnCast(isDoubleLabel, objectType, doubleBoxType)
 
                 // Get and return the class name
@@ -1789,7 +1809,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
               // if doubleValue.toFloat.toDouble == doubleValue
               fb += StructGet(
                 genTypeID.forClass(SpecialNames.DoubleBoxClass),
-                genFieldID.forClassInstanceField(FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
+                genFieldID.forClassInstanceField(
+                    FieldName(SpecialNames.DoubleBoxClass, SpecialNames.valueFieldSimpleName))
               )
               fb += LocalTee(doubleValueLocal)
               fb += F32DemoteF64
@@ -1826,8 +1847,10 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
             fb += BrOnCastFail(notOurObjectLabel, anyref, objectType)
 
             // If is a long or char box, jump out to the appropriate label
-            fb += BrOnCast(isLongLabel, objectType, RefType(genTypeID.forClass(SpecialNames.LongBoxClass)))
-            fb += BrOnCast(isCharLabel, objectType, RefType(genTypeID.forClass(SpecialNames.CharBoxClass)))
+            fb += BrOnCast(
+                isLongLabel, objectType, RefType(genTypeID.forClass(SpecialNames.LongBoxClass)))
+            fb += BrOnCast(
+                isCharLabel, objectType, RefType(genTypeID.forClass(SpecialNames.CharBoxClass)))
 
             // Get and return the class name
             fb += StructGet(genTypeID.ObjectStruct, genFieldID.objStruct.vtable)
@@ -1887,8 +1910,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.buildAndAddToModule()
   }
 
-  /** Generates the `asInstance` functions for primitive types.
-   */
+  /** Generates the `asInstance` functions for primitive types. */
   private def genPrimitiveAsInstances()(implicit ctx: WasmContext): Unit = {
     val primTypesWithAsInstances: List[PrimType] = List(
       UndefType,
@@ -1930,7 +1952,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       val boxClass = primType match {
         case CharType => SpecialNames.CharBoxClass
         case LongType => SpecialNames.LongBoxClass
-        case _ => throw new AssertionError(s"Invalid primType: $primType")
+        case _        => throw new AssertionError(s"Invalid primType: $primType")
       }
       val structTypeID = genTypeID.forClass(boxClass)
 
@@ -2263,8 +2285,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val fb = newFunctionBuilder(genFunctionID.throwNullPointerException)
 
     maybeWrapInUBE(fb, semantics.nullPointers) {
-      genNewScalaClass(fb, NullPointerExceptionClass, NoArgConstructorName) {
-      }
+      genNewScalaClass(fb, NullPointerExceptionClass, NoArgConstructorName) {}
     }
     genThrow(fb, fakeResult = Nil)
 
@@ -2286,8 +2307,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val underlyingTypeID = genTypeID.underlyingOf(arrayTypeRef)
 
     val elemWasmType = baseRef match {
-      case PrimRef(tpe) => transformSingleType(tpe)
-      case ClassRef(_)  => anyref
+      case PrimRef(tpe)          => transformSingleType(tpe)
+      case ClassRef(_)           => anyref
       case WitResourceTypeRef(_) => anyref
     }
 
@@ -2346,8 +2367,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val underlyingTypeID = genTypeID.underlyingOf(arrayTypeRef)
 
     val elemWasmType = baseRef match {
-      case PrimRef(tpe)                => transformSingleType(tpe)
-      case ClassRef(_)                 => anyref
+      case PrimRef(tpe)          => transformSingleType(tpe)
+      case ClassRef(_)           => anyref
       case WitResourceTypeRef(_) => anyref
     }
 
@@ -2448,9 +2469,10 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
      * Filter out the ones that do not have run-time type info at all, as
      * we do for other classes.
      */
-    val strictAncestors =
+    val strictAncestors = {
       List(ObjectClass, CloneableClass, SerializableClass)
         .filter(name => ctx.getClassInfoOption(name).exists(_.hasRuntimeTypeInfo))
+    }
 
     val fb = newFunctionBuilder(genFunctionID.specificArrayTypeData)
     val typeDataParam = fb.addParam("typeData", typeDataType)
@@ -3495,7 +3517,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
    *
    *  For `String` and `Double`, we actually call the hijacked class methods, as they are a bit
    *  involved. For `Boolean` and `Void`, we hard-code a copy here.
-  */
+   */
   private def genIdentityHashCode()(implicit ctx: WasmContext): Unit = {
     import MemberNamespace.Public
     import SpecialNames.hashCodeMethodName
@@ -3575,27 +3597,27 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
             fb += Return
           }
         ) ++ (if (!targetPureWasm) {
-          List(
-            List(JSValueTypeBigInt) -> { () =>
-              fb += LocalGet(objNonNullLocal)
-              fb += Call(genFunctionID.bigintHashCode)
-              fb += Return
-            },
-            List(JSValueTypeSymbol) -> { () =>
-              fb.block() { descriptionIsNullLabel =>
-                fb += LocalGet(objNonNullLocal)
-                fb += Call(genFunctionID.symbolDescription)
-                fb += BrOnNull(descriptionIsNullLabel)
-                fb += Call(
-                  genFunctionID.forMethod(Public, BoxedStringClass, hashCodeMethodName)
+                List(
+                  List(JSValueTypeBigInt) -> { () =>
+                    fb += LocalGet(objNonNullLocal)
+                    fb += Call(genFunctionID.bigintHashCode)
+                    fb += Return
+                  },
+                  List(JSValueTypeSymbol) -> { () =>
+                    fb.block() { descriptionIsNullLabel =>
+                      fb += LocalGet(objNonNullLocal)
+                      fb += Call(genFunctionID.symbolDescription)
+                      fb += BrOnNull(descriptionIsNullLabel)
+                      fb += Call(
+                        genFunctionID.forMethod(Public, BoxedStringClass, hashCodeMethodName)
+                      )
+                      fb += Return
+                    }
+                    fb += I32Const(0)
+                    fb += Return
+                  }
                 )
-                fb += Return
-              }
-              fb += I32Const(0)
-              fb += Return
-            }
-          )
-        } else Nil): _*
+              } else Nil): _*
       ) { () =>
         // JSValueTypeOther -- fall through to using idHashCodeMap
         ()
@@ -4479,8 +4501,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.loop() { loop =>
       fb += LocalGet(tmp)
       fb += I64Eqz
-      fb.ifThenElse() {
-      } {
+      fb.ifThenElse() {} {
         // array store: result[i] = (tmp % 10L).toInt + '0'.toInt
         fb += LocalGet(result)
         fb += LocalGet(iLocal)
@@ -4558,8 +4579,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   }
 
   /** Get the type of the given Wasm type of `x` without JS,
-    * the return value should be compatible with jsValueType.
-    */
+   *  the return value should be compatible with jsValueType.
+   */
   private def genScalaValueType()(implicit ctx: WasmContext): Unit = {
     assert(targetPureWasm)
     val fb = newFunctionBuilder(genFunctionID.scalaValueType)
@@ -4602,7 +4623,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   //       (param $newSize i32)
   //       (result i32))
   private def genRealloc()(implicit ctx: WasmContext): Unit = {
-    assert(true /*isWASI*/) // scalastyle:ignore
+    assert(true /*isWASI*/ ) // scalastyle:ignore
     val fb = newFunctionBuilder(genFunctionID.realloc)
     val originalPtr = fb.addParam("originalPtr", Int32)
     val originalSize = fb.addParam("originalSize", Int32)
@@ -4645,8 +4666,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       fb += LocalGet(originalPtr)
       fb += Return
     }
-
-
 
     fb += LocalGet(newSize)
     fb += Call(genFunctionID.malloc)

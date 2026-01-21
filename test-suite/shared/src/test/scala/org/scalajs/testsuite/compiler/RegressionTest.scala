@@ -75,9 +75,8 @@ class RegressionTest {
     assertEquals(39, strQuotes.charAt(1).toInt)
   }
 
-  @Test def emitStaticCallsWhenForwardingToAnotherConstructor_Issue66(): Unit = {
+  @Test def emitStaticCallsWhenForwardingToAnotherConstructor_Issue66(): Unit =
     new Bug66B("", "")
-  }
 
   @Test def callSubSequenceOnNonStringCharSequences_Issue55(): Unit = {
     val arr: CharSequence = java.nio.CharBuffer.wrap(Array('a', 'b', 'c', 'd'))
@@ -112,13 +111,13 @@ class RegressionTest {
         executingInPureWebAssembly)
 
     LinkingInfo.linkTimeIf(!LinkingInfo.targetPureWasm) {
-    val a = scala.collection.mutable.Buffer.empty[Int]
-    a.insert(0, 0)
-    a.remove(0)
-    for (i <- 0 to 10) {
-      a.insert(a.length / 2, i)
-    }
-    assertEquals("1, 3, 5, 7, 9, 10, 8, 6, 4, 2, 0", a.mkString(", "))
+      val a = scala.collection.mutable.Buffer.empty[Int]
+      a.insert(0, 0)
+      a.remove(0)
+      for (i <- 0 to 10) {
+        a.insert(a.length / 2, i)
+      }
+      assertEquals("1, 3, 5, 7, 9, 10, 8, 6, 4, 2, 0", a.mkString(", "))
     } {}
   }
 
@@ -411,12 +410,12 @@ class RegressionTest {
   }
 
   @Test def switchMatchWith2GuardsForTheSameValue_Issue1589(): Unit = {
-    @noinline def genB(): Int = 0xE1
+    @noinline def genB(): Int = 0xe1
     val b = genB()
     val x = b >> 4 match {
-      case 0xE if b == 0xE0 =>
+      case 0xe if b == 0xe0 =>
         4
-      case 0xE if b == 0xE1 =>
+      case 0xe if b == 0xe1 =>
         5
     }
     assertEquals(5, x)
@@ -848,9 +847,8 @@ class RegressionTest {
     assertEquals('a', d)
   }
 
-  @Test def nestedObjectNamedClass_Issue3888(): Unit = {
+  @Test def nestedObjectNamedClass_Issue3888(): Unit =
     assertEquals(6, `class`.foo(5))
-  }
 
   @Test def gccCrashWithLetConst_Issue4098(): Unit = {
     val set = new java.util.HashSet[String]()
@@ -1000,6 +998,7 @@ object RegressionTest {
     def this(e: Object) = this("", e)
     def this(s: String) = this(s, "")
   }
+
   class Bug66B(s: String, e: Object) extends Bug66A(s)
 
   class Bug1955 {

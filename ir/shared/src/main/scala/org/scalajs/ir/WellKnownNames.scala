@@ -43,16 +43,16 @@ object WellKnownNames {
 
   /** The set of all hijacked classes. */
   val HijackedClasses: Set[ClassName] = Set(
-      BoxedUnitClass,
-      BoxedBooleanClass,
-      BoxedCharacterClass,
-      BoxedByteClass,
-      BoxedShortClass,
-      BoxedIntegerClass,
-      BoxedLongClass,
-      BoxedFloatClass,
-      BoxedDoubleClass,
-      BoxedStringClass
+    BoxedUnitClass,
+    BoxedBooleanClass,
+    BoxedCharacterClass,
+    BoxedByteClass,
+    BoxedShortClass,
+    BoxedIntegerClass,
+    BoxedLongClass,
+    BoxedFloatClass,
+    BoxedDoubleClass,
+    BoxedStringClass
   )
 
   /** Map from hijacked classes to their respective primitive types. */
@@ -158,10 +158,13 @@ object WellKnownNames {
   // Component Models
   final val ComponentResultClass: ClassName =
     ClassName("scala.scalajs.wit.Result")
+
   final val ComponentResultOkClass: ClassName =
     ClassName("scala.scalajs.wit.Ok")
+
   final val ComponentResultErrClass: ClassName =
     ClassName("scala.scalajs.wit.Err")
+
   final val WitVariantValueFieldName: SimpleFieldName =
     SimpleFieldName("value")
 

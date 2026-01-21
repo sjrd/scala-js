@@ -129,9 +129,8 @@ object Printers {
       }
     }
 
-    def printArgs(args: List[TreeOrJSSpread]): Unit = {
+    def printArgs(args: List[TreeOrJSSpread]): Unit =
       printRow(args, "(", ", ", ")")
-    }
 
     def printAnyNode(node: IRNode): Unit = {
       node match {
@@ -224,7 +223,7 @@ object Printers {
 
           printBlock(thenp)
           elsep match {
-            case Skip() => ()
+            case Skip()      => ()
             case If(_, _, _) =>
               print(" else ")
               print(elsep)
@@ -483,7 +482,7 @@ object Printers {
           print(')')
 
         case BinaryOp(BinaryOp.Double_-,
-            IntLiteral(0) | FloatLiteral(0.0f) | DoubleLiteral(0.0), rhs) =>
+                IntLiteral(0) | FloatLiteral(0.0f) | DoubleLiteral(0.0), rhs) =>
           print("(-")
           print(rhs)
           print(')')
@@ -974,7 +973,7 @@ object Printers {
           print("<component-function-apply>")
           receiver match {
             case Some(receiver) => print(receiver)
-            case None => print(className)
+            case None           => print(className)
           }
           print(".")
           print(method)
@@ -1003,15 +1002,15 @@ object Printers {
       }
       print(classDef.optimizerHints)
       kind match {
-        case ClassKind.Class               => print("class ")
-        case ClassKind.ModuleClass         => print("module class ")
-        case ClassKind.Interface           => print("interface ")
-        case ClassKind.AbstractJSType      => print("abstract js type ")
-        case ClassKind.HijackedClass       => print("hijacked class ")
-        case ClassKind.JSClass             => print("js class ")
-        case ClassKind.JSModuleClass       => print("js module class ")
-        case ClassKind.NativeJSClass       => print("native js class ")
-        case ClassKind.NativeJSModuleClass => print("native js module class ")
+        case ClassKind.Class                            => print("class ")
+        case ClassKind.ModuleClass                      => print("module class ")
+        case ClassKind.Interface                        => print("interface ")
+        case ClassKind.AbstractJSType                   => print("abstract js type ")
+        case ClassKind.HijackedClass                    => print("hijacked class ")
+        case ClassKind.JSClass                          => print("js class ")
+        case ClassKind.JSModuleClass                    => print("js module class ")
+        case ClassKind.NativeJSClass                    => print("native js class ")
+        case ClassKind.NativeJSModuleClass              => print("native js module class ")
         case ClassKind.NativeWasmComponentResourceClass => print("native wasm resource class ")
       }
       print(name)
@@ -1040,8 +1039,10 @@ object Printers {
         print(spec)
       }
       print(" ")
-      printColumn(fields ::: methods ::: jsConstructor.toList :::
-          jsMethodProps ::: jsNativeMembers ::: witNativeMembers ::: topLevelExportDefs, "{", "", "}")
+      printColumn(
+          fields ::: methods ::: jsConstructor.toList :::
+          jsMethodProps ::: jsNativeMembers ::: witNativeMembers ::: topLevelExportDefs,
+          "{", "", "}")
     }
 
     def print(memberDef: MemberDef): Unit = {
@@ -1127,7 +1128,7 @@ object Printers {
           print(jsNativeLoadSpec)
 
         case WitNativeMemberDef(flags, module, name,
-            method, tpe) =>
+                method, tpe) =>
           // TODO
       }
     }

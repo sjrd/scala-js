@@ -28,9 +28,8 @@ object TypeTransformer {
    *  This method cannot be used for `void` and `nothing`, since they are not
    *  valid types for fields.
    */
-  def transformFieldType(tpe: Type)(implicit ctx: WasmContext): watpe.Type = {
+  def transformFieldType(tpe: Type)(implicit ctx: WasmContext): watpe.Type =
     transformSingleType(tpe)
-  }
 
   /** Transforms an IR type for a parameter definition.
    *
@@ -115,15 +114,15 @@ object TypeTransformer {
             watpe.HeapType(genTypeID.wasmString)
           else
             watpe.HeapType.Extern // for all the JS string builtin functions
-        }
-        else if (info.isAncestorOfHijackedClass)
+        } else if (info.isAncestorOfHijackedClass) {
           watpe.HeapType.Any
-        else if (!info.hasInstances)
+        } else if (!info.hasInstances) {
           watpe.HeapType.None
-        else if (info.isInterface)
+        } else if (info.isInterface) {
           watpe.HeapType(genTypeID.ObjectStruct)
-        else
+        } else {
           watpe.HeapType(genTypeID.forClass(className))
+        }
 
       case None =>
         watpe.HeapType.None
@@ -158,7 +157,7 @@ object TypeTransformer {
           watpe.RefType(genTypeID.wasmString)
         else
           watpe.RefType.extern
-      case NullType    => watpe.RefType.nullref
+      case NullType => watpe.RefType.nullref
 
       case VoidType | NothingType =>
         throw new IllegalArgumentException(
