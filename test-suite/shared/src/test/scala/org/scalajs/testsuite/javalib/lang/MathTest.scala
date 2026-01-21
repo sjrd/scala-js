@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.Assert._
 import org.junit.Assume._
 
+import java.lang.{Double => JDouble}
 import java.lang.Math
 
 // Imported under different names for historical reasons
@@ -518,6 +519,123 @@ class MathTest {
     assertEquals(1.0, Math.tanh(Double.PositiveInfinity), 0.01)
     assertEquals(-1.0, Math.tanh(Double.NegativeInfinity), 0.01)
     assertTrue(Math.tanh(Double.NaN).isNaN)
+  }
+
+  @Test def IEEEremainder(): Unit = {
+    import Double.{NaN, PositiveInfinity, NegativeInfinity}
+    import Math.{IEEEremainder => rem}
+
+    // Specials
+
+    /* JavaDoc:
+     * > If either argument is NaN, or the first argument is infinite, or the
+     * > second argument is positive zero or negative zero, then the result is NaN.
+     */
+
+    for (x <- List(0.0, -0.0, NaN, PositiveInfinity, NegativeInfinity, 5.0, -5.0)) {
+      assertSameDouble(NaN, rem(NaN, x))
+      assertSameDouble(NaN, rem(x, NaN))
+      assertSameDouble(NaN, rem(PositiveInfinity, x))
+      assertSameDouble(NaN, rem(NegativeInfinity, x))
+      assertSameDouble(NaN, rem(x, +0.0))
+      assertSameDouble(NaN, rem(x, -0.0))
+    }
+
+    /* JavaDoc:
+     * > If the first argument is finite and the second argument is infinite,
+     * > then the result is the same as the first argument.
+     */
+
+    for (x <- List(0.0, -0.0, 5.0, -5.0)) {
+      assertSameDouble(x, rem(x, PositiveInfinity))
+      assertSameDouble(x, rem(x, NegativeInfinity))
+    }
+
+    /* Regular values. Tests ported from Python:
+     * https://github.com/python/cpython/blob/4ef30a5871db2043712945e64f33af81938d68dc/Lib/test/test_math.py#L1779-L1864
+     * Licensed under the Python Software Foundation License Version 2.
+     */
+
+    // triples (x, y, remainder(x, y)) in hexadecimal form.
+    val testCases: List[(String, String, String)] = List(
+      // Remainders modulo 1, showing the ties-to-even behaviour.
+      ("-0x4.0p0", "1.0", "-0x0.0p0"),
+      ("-0x3.8p0", "1.0", " 0x0.8p0"),
+      ("-0x3.0p0", "1.0", "-0x0.0p0"),
+      ("-0x2.8p0", "1.0", "-0x0.8p0"),
+      ("-0x2.0p0", "1.0", "-0x0.0p0"),
+      ("-0x1.8p0", "1.0", " 0x0.8p0"),
+      ("-0x1.0p0", "1.0", "-0x0.0p0"),
+      ("-0x0.8p0", "1.0", "-0x0.8p0"),
+      ("-0x0.0p0", "1.0", "-0x0.0p0"),
+      (" 0x0.0p0", "1.0", " 0x0.0p0"),
+      (" 0x0.8p0", "1.0", " 0x0.8p0"),
+      (" 0x1.0p0", "1.0", " 0x0.0p0"),
+      (" 0x1.8p0", "1.0", "-0x0.8p0"),
+      (" 0x2.0p0", "1.0", " 0x0.0p0"),
+      (" 0x2.8p0", "1.0", " 0x0.8p0"),
+      (" 0x3.0p0", "1.0", " 0x0.0p0"),
+      (" 0x3.8p0", "1.0", "-0x0.8p0"),
+      (" 0x4.0p0", "1.0", " 0x0.0p0"),
+
+      // Reductions modulo 2*pi
+      ("0x0.0p+0", "0x1.921fb54442d18p+2", "0x0.0p+0"),
+      ("0x1.921fb54442d18p+0", "0x1.921fb54442d18p+2", " 0x1.921fb54442d18p+0"),
+      ("0x1.921fb54442d17p+1", "0x1.921fb54442d18p+2", " 0x1.921fb54442d17p+1"),
+      ("0x1.921fb54442d18p+1", "0x1.921fb54442d18p+2", " 0x1.921fb54442d18p+1"),
+      ("0x1.921fb54442d19p+1", "0x1.921fb54442d18p+2", "-0x1.921fb54442d17p+1"),
+      ("0x1.921fb54442d17p+2", "0x1.921fb54442d18p+2", "-0x0.0000000000001p+2"),
+      ("0x1.921fb54442d18p+2", "0x1.921fb54442d18p+2", " 0x0p0"),
+      ("0x1.921fb54442d19p+2", "0x1.921fb54442d18p+2", " 0x0.0000000000001p+2"),
+      ("0x1.2d97c7f3321d1p+3", "0x1.921fb54442d18p+2", " 0x1.921fb54442d14p+1"),
+      ("0x1.2d97c7f3321d2p+3", "0x1.921fb54442d18p+2", "-0x1.921fb54442d18p+1"),
+      ("0x1.2d97c7f3321d3p+3", "0x1.921fb54442d18p+2", "-0x1.921fb54442d14p+1"),
+      ("0x1.921fb54442d17p+3", "0x1.921fb54442d18p+2", "-0x0.0000000000001p+3"),
+      ("0x1.921fb54442d18p+3", "0x1.921fb54442d18p+2", " 0x0p0"),
+      ("0x1.921fb54442d19p+3", "0x1.921fb54442d18p+2", " 0x0.0000000000001p+3"),
+      ("0x1.f6a7a2955385dp+3", "0x1.921fb54442d18p+2", " 0x1.921fb54442d14p+1"),
+      ("0x1.f6a7a2955385ep+3", "0x1.921fb54442d18p+2", " 0x1.921fb54442d18p+1"),
+      ("0x1.f6a7a2955385fp+3", "0x1.921fb54442d18p+2", "-0x1.921fb54442d14p+1"),
+      ("0x1.1475cc9eedf00p+5", "0x1.921fb54442d18p+2", " 0x1.921fb54442d10p+1"),
+      ("0x1.1475cc9eedf01p+5", "0x1.921fb54442d18p+2", "-0x1.921fb54442d10p+1"),
+
+      // Symmetry with respect to signs.
+      (" 0x1.0p0", " 0x0.cp0", " 0x0.4p0"),
+      ("-0x1.0p0", " 0x0.cp0", "-0x0.4p0"),
+      (" 0x1.0p0", "-0x0.cp0", " 0x0.4p0"),
+      ("-0x1.0p0", "-0x0.cp0", "-0x0.4p0"),
+      (" 0x1.4p0", " 0x0.cp0", "-0x0.4p0"),
+      ("-0x1.4p0", " 0x0.cp0", " 0x0.4p0"),
+      (" 0x1.4p0", "-0x0.cp0", "-0x0.4p0"),
+      ("-0x1.4p0", "-0x0.cp0", " 0x0.4p0"),
+
+      // Huge modulus, to check that the underlying algorithm doesn't rely on 2.0 * modulus being representable.
+      ("0x1.dp+1023", "0x1.4p+1023", " 0x0.9p+1023"),
+      ("0x1.ep+1023", "0x1.4p+1023", "-0x0.ap+1023"),
+      ("0x1.fp+1023", "0x1.4p+1023", "-0x0.9p+1023")
+    )
+
+    for ((xStr, yStr, expectedStr) <- testCases) {
+      val x = JDouble.parseDouble(xStr)
+      val y = JDouble.parseDouble(yStr)
+      val expected = JDouble.parseDouble(expectedStr)
+      assertSameDouble(s"$x rem $y", expected, rem(x, y))
+    }
+
+    /* Test tiny subnormal modulus: there's potential for
+     * getting the implementation wrong here (for example,
+     * by assuming that modulus/2 is exactly representable).
+     */
+    for (n <- -25 to 25 if n != 0) {
+      val y = n * Double.MinPositiveValue
+      for (m <- 0 until 100) {
+        val x = m * Double.MinPositiveValue
+        val expectedInt = m - n * Math.rint(m.toDouble / n.toDouble).toInt
+        val expected = expectedInt * Double.MinPositiveValue
+        assertSameDouble(s"$m, $n, $x rem $y", expected, rem(x, y))
+        assertSameDouble(s"$m, $n, -$x rem $y", -expected, rem(-x, y))
+      }
+    }
   }
 
   @Test def rintForDouble(): Unit = {

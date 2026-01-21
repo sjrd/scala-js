@@ -57,6 +57,71 @@ object Math {
   @inline def min(a: scala.Float, b: scala.Float): scala.Float = js.Math.min(a, b).toFloat
   @inline def min(a: scala.Double, b: scala.Double): scala.Double = js.Math.min(a, b)
 
+  def IEEEremainder(f1: scala.Double, f2: scala.Double): scala.Double = {
+    /* Inspired by the algorithm of fdlibm:
+     * https://github.com/freemint/fdlibm/blob/46a0b20e7094cb2946be02f905a6bdea9933cf29/e_remainder.c
+     *
+     * Dramatically simplified and reorganized to use fewer branches and
+     * fewer bit manipulations (none on JS).
+     */
+
+    val p = abs(f2)
+    val x = abs(f1) % (p + p) // now x < 2p; works even if p+p overflows
+
+    /* fmod, aka %, returns NaN in exactly the same cases as IEEEremainder.
+     * We will let it propagate without explicitly testing for it.
+     */
+
+    /* We'll need `x - p` in a val more often than not.
+     * Compute it ahead of the branches to reduce code size.
+     */
+    val xMp = x - p
+
+    val res = if (p < 2.0 * Double.MIN_NORMAL) {
+      // Unlikely branch (p is tiny); here we know that x + x cannot overflow
+      if (x + x > p) {
+        if (xMp + xMp >= p)
+          xMp - p
+        else
+          xMp
+      } else {
+        x
+      }
+    } else {
+      // Here we know that 0.5 * p is exact (it can be Infinity)
+      val pHalf = 0.5 * p
+      if (x > pHalf) {
+        if (xMp >= pHalf)
+          xMp - p
+        else
+          xMp
+      } else {
+        x
+      }
+    }
+
+    // Invert the sign of the result if the original `f1` was negative
+    if (LinkingInfo.isWebAssembly) {
+      // Do this in a branchless way by manipulating bits
+      val signBit = scala.Long.MinValue
+      Double.longBitsToDouble(
+          Double.doubleToRawLongBits(res) ^ (Double.doubleToRawLongBits(f1) & signBit))
+    } else {
+      // On JS, the 3 bit conversions are not that cheap; stay in Double land
+      if (f1 == 0.0) {
+        /* In this case, res can only be NaN (if p is NaN) or +0.0 (otherwise).
+         * `f1 - +0.0` is an identity (returns f1) and `f1 - NaN` is NaN.
+         */
+        f1 - res
+      } else {
+        if (f1 < 0.0)
+          -res
+        else
+          res
+      }
+    }
+  }
+
   // Wasm intrinsics
   @inline def ceil(a: scala.Double): scala.Double = js.Math.ceil(a)
   @inline def floor(a: scala.Double): scala.Double = js.Math.floor(a)
