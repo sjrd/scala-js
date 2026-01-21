@@ -26,13 +26,13 @@ package java
 package lang
 
 import scala.scalajs.js
-import js.Dynamic.{ global => g }
+import js.Dynamic.{global => g}
 
 import scala.scalajs.LinkingInfo
 import scala.scalajs.LinkingInfo.{ESVersion, linkTimeIf}
 
 object Math {
-  final val E  = 2.718281828459045
+  final val E = 2.718281828459045
   final val PI = 3.141592653589793
 
   @inline private def assumingES6: scala.Boolean =
@@ -51,25 +51,27 @@ object Math {
   }
 
   // Wasm intrinsics
-  @inline def abs(a: scala.Float): scala.Float =
+  @inline def abs(a: scala.Float): scala.Float = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       Float.intBitsToFloat(Float.floatToIntBits(a) & ~Int.MinValue)
     } {
       js.Math.abs(a).toFloat
     }
+  }
 
-  @inline def abs(a: scala.Double): scala.Double =
+  @inline def abs(a: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       Double.longBitsToDouble(Double.doubleToLongBits(a) & ~scala.Long.MinValue)
     } {
       js.Math.abs(a)
     }
+  }
 
   @inline def max(a: scala.Int, b: scala.Int): scala.Int = if (a > b) a else b
   @inline def max(a: scala.Long, b: scala.Long): scala.Long = if (a > b) a else b
 
   // Wasm intrinsics
-  @inline def max(a: scala.Float, b: scala.Float): scala.Float =
+  @inline def max(a: scala.Float, b: scala.Float): scala.Float = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       if (a != a || b != b) {
         Float.NaN
@@ -84,8 +86,9 @@ object Math {
     } {
       js.Math.max(a, b).toFloat
     }
+  }
 
-  @inline def max(a: scala.Double, b: scala.Double): scala.Double =
+  @inline def max(a: scala.Double, b: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       if (a != a || b != b) {
         Double.NaN
@@ -100,12 +103,13 @@ object Math {
     } {
       js.Math.max(a, b)
     }
+  }
 
   @inline def min(a: scala.Int, b: scala.Int): scala.Int = if (a < b) a else b
   @inline def min(a: scala.Long, b: scala.Long): scala.Long = if (a < b) a else b
 
   // Wasm intrinsics
-  @inline def min(a: scala.Float, b: scala.Float): scala.Float =
+  @inline def min(a: scala.Float, b: scala.Float): scala.Float = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       if (a != a || b != b) {
         Float.NaN
@@ -120,8 +124,9 @@ object Math {
     } {
       js.Math.min(a, b).toFloat
     }
+  }
 
-  @inline def min(a: scala.Double, b: scala.Double): scala.Double =
+  @inline def min(a: scala.Double, b: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       if (a != a || b != b) {
         Double.NaN
@@ -136,14 +141,17 @@ object Math {
     } {
       js.Math.min(a, b)
     }
+  }
 
   // Wasm intrinsics
-  @inline def ceil(a: scala.Double): scala.Double =
+  @inline def ceil(a: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       -floor(-a)
     } {
       js.Math.ceil(a)
     }
+  }
+
   @inline def floor(a: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       floorWasm(a)
@@ -258,21 +266,24 @@ object Math {
   }
 
   // Wasm intrinsic
-  @inline def sqrt(a: scala.Double): scala.Double =
+  @inline def sqrt(a: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       StrictMath.sqrt(a)
     } {
       js.Math.sqrt(a)
     }
+  }
 
-  @inline def pow(a: scala.Double, b: scala.Double): scala.Double =
+  @inline def pow(a: scala.Double, b: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       StrictMath.pow(a, b)
     } {
       js.Math.pow(a, b)
     }
+  }
 
   @inline def exp(a: scala.Double): scala.Double = js.Math.exp(a)
+
   @inline def log(a: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       StrictMath.log(a)
@@ -280,7 +291,6 @@ object Math {
       js.Math.log(a)
     }
   }
-
 
   @inline def log10(a: scala.Double): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
@@ -312,12 +322,13 @@ object Math {
   @inline def atan(a: scala.Double): scala.Double = js.Math.atan(a)
   @inline def atan2(y: scala.Double, x: scala.Double): scala.Double = js.Math.atan2(y, x)
 
-  @inline def random(): scala.Double =
+  @inline def random(): scala.Double = {
     linkTimeIf(LinkingInfo.targetPureWasm) {
       WasmSystem.random()
     } {
       js.Math.random()
     }
+  }
 
   @inline def toDegrees(a: scala.Double): scala.Double = a * 180.0 / PI
   @inline def toRadians(a: scala.Double): scala.Double = a / 180.0 * PI
@@ -353,12 +364,12 @@ object Math {
       val sign = if (a < 0.0) -1.0 else 1.0
       val value = sign * a
 
-      //Initial Approximation
+      // Initial Approximation
       var x = 0.0
       var xi = pow(value, 0.3333333333333333)
 
-      //Halley's Method (http://metamerist.com/cbrt/cbrt.htm)
-      while (abs(x - xi) >= 1E-16) {
+      // Halley's Method (http://metamerist.com/cbrt/cbrt.htm)
+      while (abs(x - xi) >= 1e-16) {
         x = xi
         val x3 = pow(x, 3)
         val x3Plusa = x3 + value
@@ -589,14 +600,14 @@ object Math {
 
   @inline private def hypotImpl(a: scala.Double, b: scala.Double): scala.Double = {
     // http://en.wikipedia.org/wiki/Hypot#Implementation
-    if (abs(a) == scala.Double.PositiveInfinity || abs(b) == scala.Double.PositiveInfinity)
+    if (abs(a) == scala.Double.PositiveInfinity || abs(b) == scala.Double.PositiveInfinity) {
       scala.Double.PositiveInfinity
-    else if (Double.isNaN(a) || Double.isNaN(b))
+    } else if (Double.isNaN(a) || Double.isNaN(b)) {
       scala.Double.NaN
-    else if (a == 0 && b == 0)
+    } else if (a == 0 && b == 0) {
       0.0
-    else {
-      //To Avoid Overflow and UnderFlow
+    } else {
+      // To Avoid Overflow and UnderFlow
       // calculate |x| * sqrt(1 - (y/x)^2) instead of sqrt(x^2 + y^2)
       val x = abs(a)
       val y = abs(b)
@@ -615,7 +626,7 @@ object Math {
         a
       // Power Series http://en.wikipedia.org/wiki/Power_series
       // for small values of a, exp(a) = 1 + a + (a*a)/2
-      else if (abs(a) < 1E-5)
+      else if (abs(a) < 1e-5)
         a + 0.5 * a * a
       else
         exp(a) - 1.0
@@ -650,17 +661,17 @@ object Math {
     if (assumingES6 || !Utils.isUndefined(g.Math.tanh)) {
       js.Math.tanh(a)
     } else {
-      if (Double.isNaN(a) || a == 0.0)
+      if (Double.isNaN(a) || a == 0.0) {
         a
-      else if (abs(a) == scala.Double.PositiveInfinity)
+      } else if (abs(a) == scala.Double.PositiveInfinity) {
         signum(a)
-      else {
+      } else {
         // sinh(a) / cosh(a) =
         // 1 - 2 * (exp(-a)/ (exp(-a) + exp (a)))
         val expma = exp(-a)
-        if (expma == scala.Double.PositiveInfinity) //Infinity / Infinity
+        if (expma == scala.Double.PositiveInfinity) { // Infinity / Infinity
           -1.0
-        else {
+        } else {
           val expa = exp(a)
           val ret = expma / (expa + expma)
           1.0 - (2.0 * ret)

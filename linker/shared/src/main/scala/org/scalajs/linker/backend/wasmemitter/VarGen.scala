@@ -88,8 +88,7 @@ object VarGen {
         className: ClassName, methodName: MethodName)
         extends FunctionID
 
-    final case class forTableEntry(className: ClassName, methodName: MethodName)
-        extends FunctionID
+    final case class forTableEntry(className: ClassName, methodName: MethodName) extends FunctionID
 
     final case class forExport(exportedName: String) extends FunctionID
     final case class forTopLevelExportSetter(exportedName: String) extends FunctionID
@@ -128,7 +127,8 @@ object VarGen {
     case object start extends FunctionID
 
     final case class forComponentFunction(module: String,
-        name: WitFunctionName) extends FunctionID
+        name: WitFunctionName)
+        extends FunctionID
 
     final case object f32Fmod extends FunctionID
     final case object f64Fmod extends FunctionID
@@ -235,7 +235,8 @@ object VarGen {
     case object identityHashCode extends FunctionID
     case object searchReflectiveProxy extends FunctionID
 
-    private final case class SpecializedArrayCopyID(arrayBaseRef: NonArrayTypeRef) extends FunctionID
+    private final case class SpecializedArrayCopyID(arrayBaseRef: NonArrayTypeRef)
+        extends FunctionID
 
     def specializedArrayCopy(arrayTypeRef: ArrayTypeRef): FunctionID = {
       val baseRef = arrayTypeRef match {
@@ -267,6 +268,7 @@ object VarGen {
       // case object stringFromCharCode extends FunctionID
       case object stringConcat extends FunctionID
       case object stringEquals extends FunctionID
+
       /** Mutate the given `ref $wasmString` to have all concatenated characters in the `chars` field.
        *
        *  This function traverses the chain of concatenated strings (linked via `left'),
@@ -275,11 +277,14 @@ object VarGen {
        *  and also mutates `left' to null.
        */
       case object collapseString extends FunctionID
+
       /** Returns a full character array of the concatenated strings (by calling `collapseString`) */
       case object getWholeChars extends FunctionID
+
       /** Returns a charCode at the given index (calling `collapseString`) */
       case object charCodeAt extends FunctionID
     }
+
     case object scalaValueType extends FunctionID
 
     // Wasm essentials
@@ -290,6 +295,7 @@ object VarGen {
       case object nanoTime extends JSHelperFunctionID
       case object currentTimeMillis extends JSHelperFunctionID
       case object random extends JSHelperFunctionID
+
       object scalajsCom {
         case object send extends JSHelperFunctionID
         case object init extends JSHelperFunctionID
@@ -443,6 +449,7 @@ object VarGen {
     case object classData extends FieldID
 
     object typedClosure {
+
       /** The `data` field of a typed closure struct. */
       case object data extends FieldID
 
@@ -461,12 +468,14 @@ object VarGen {
        *  For string literals or after collapsing, this will hold the full string.
        */
       case object chars extends FieldID
+
       /** The total number of characters.
        *
        *  This number is the sum of the direct characters of this string in `chars'
        *  and those in the preceding strings linked by `left'.
        */
       case object length extends FieldID
+
       /** Link to the left string `A` in a concatenation of `A + B`.
        *
        *  This allows to defer the full character array allocation,

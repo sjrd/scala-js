@@ -31,26 +31,28 @@ class ArrayList[E] private (innerInit: AnyRef, private var _size: Int)
    * of the underlying Array for the Wasm implementation.
    */
 
-  private val innerJS: js.Array[E] =
+  private val innerJS: js.Array[E] = {
     linkTimeIf(!isWebAssembly) {
       innerInit.asInstanceOf[js.Array[E]]
     } {
       null
     }
+  }
 
-  private var innerWasm: Array[AnyRef] =
+  private var innerWasm: Array[AnyRef] = {
     linkTimeIf(isWebAssembly) {
       innerInit.asInstanceOf[Array[AnyRef]]
     } {
       null
     }
+  }
 
   def this(initialCapacity: Int) = {
     this(
       {
         if (initialCapacity < 0)
           throw new IllegalArgumentException
-        linkTimeIf(isWebAssembly){
+        linkTimeIf(isWebAssembly) {
           (new Array[AnyRef](initialCapacity)).asInstanceOf[AnyRef]
         } {
           new js.Array[E]
@@ -70,25 +72,25 @@ class ArrayList[E] private (innerInit: AnyRef, private var _size: Int)
   def trimToSize(): Unit = {
     linkTimeIf(isWebAssembly) {
       resizeTo(size())
-    } {
-    }
+    } {}
     // We ignore this in JS as js.Array doesn't support explicit pre-allocation
   }
 
   def ensureCapacity(minCapacity: Int): Unit = {
-    linkTimeIf (isWebAssembly) {
+    linkTimeIf(isWebAssembly) {
       if (innerWasm.length < minCapacity)
         resizeTo(roundUpToPowerOfTwo(minCapacity))
     } {}
     // We ignore this in JS as js.Array doesn't support explicit pre-allocation
   }
 
-  def size(): Int =
+  def size(): Int = {
     linkTimeIf(isWebAssembly) {
       _size
     } {
       innerJS.length
     }
+  }
 
   override def clone(): AnyRef = {
     linkTimeIf(isWebAssembly) {
@@ -155,13 +157,14 @@ class ArrayList[E] private (innerInit: AnyRef, private var _size: Int)
     }
   }
 
-  override def clear(): Unit =
+  override def clear(): Unit = {
     linkTimeIf(isWebAssembly) {
       Arrays.fill(innerWasm, null) // free references for GC
       _size = 0
     } {
       innerJS.length = 0
     }
+  }
 
   override def addAll(index: Int, c: Collection[_ <: E]): Boolean = {
     c match {
@@ -196,12 +199,10 @@ class ArrayList[E] private (innerInit: AnyRef, private var _size: Int)
   }
 
   // Wasm only
-  private def expand(): Unit = {
+  private def expand(): Unit =
     resizeTo(Math.max(innerWasm.length * 2, 16))
-  }
 
   // Wasm only
-  private def resizeTo(newCapacity: Int): Unit = {
+  private def resizeTo(newCapacity: Int): Unit =
     innerWasm = Arrays.copyOf(innerWasm, newCapacity)
-  }
 }

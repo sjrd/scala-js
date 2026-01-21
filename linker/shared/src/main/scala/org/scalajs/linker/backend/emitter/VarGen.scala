@@ -154,8 +154,9 @@ private[emitter] final class VarGen(jsGen: JSGen, nameGen: NameGen,
     }
 
     def genThen(receiver: Tree, expr: Tree) = {
-      Apply(genIdentBracketSelect(receiver, "then"), List(
-          genArrowFunction(List(ParamDef(module)), None, Return(expr))))
+      Apply(genIdentBracketSelect(receiver, "then"),
+          List(
+              genArrowFunction(List(ParamDef(module)), None, Return(expr))))
     }
 
     foldSameModule(scope) {
@@ -297,13 +298,14 @@ private[emitter] final class VarGen(jsGen: JSGen, nameGen: NameGen,
 
             if (mutable) {
               val x = Ident("x")
-              genDefineProperty(exportsVarRef, name, List(
-                  "get" -> Function(ClosureFlags.function, Nil, None, Return(VarRef(ident))),
-                  "set" -> Function(ClosureFlags.function, List(ParamDef(x)), None, {
+              genDefineProperty(exportsVarRef, name,
+                  List(
+                    "get" -> Function(ClosureFlags.function, Nil, None, Return(VarRef(ident))),
+                    "set" -> Function(ClosureFlags.function, List(ParamDef(x)), None, {
                       Assign(VarRef(ident), VarRef(x))
-                  }),
-                  "configurable" -> BooleanLiteral(true)
-              ))
+                    }),
+                    "configurable" -> BooleanLiteral(true)
+                  ))
             } else {
               WithGlobals(Assign(genBracketSelect(exportsVarRef, name), VarRef(ident)))
             }
@@ -403,15 +405,15 @@ private[emitter] final class VarGen(jsGen: JSGen, nameGen: NameGen,
 
     implicit object NonArrayTypeRefScope extends Scope[NonArrayTypeRef] {
       def subField(x: NonArrayTypeRef): String = x match {
-        case ClassRef(className)        => ClassScope.subField(className)
-        case x: PrimRef                 => PrimRefScope.subField(x)
-        case _:WitResourceTypeRef => throw new AssertionError(s"Unexpected component resource type")
+        case ClassRef(className) => ClassScope.subField(className)
+        case x: PrimRef          => PrimRefScope.subField(x)
+        case _: WitResourceTypeRef => throw new AssertionError(s"Unexpected component resource type")
       }
 
       def reprClass(x: Types.NonArrayTypeRef): Names.ClassName = x match {
-        case ClassRef(className)        => ClassScope.reprClass(className)
-        case x: PrimRef                 => PrimRefScope.reprClass(x)
-        case _:WitResourceTypeRef => throw new AssertionError(s"Unexpected component resource type")
+        case ClassRef(className) => ClassScope.reprClass(className)
+        case x: PrimRef          => PrimRefScope.reprClass(x)
+        case _: WitResourceTypeRef => throw new AssertionError(s"Unexpected component resource type")
       }
     }
   }

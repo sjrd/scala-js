@@ -659,55 +659,56 @@ private class FunctionEmitter private (
       else expectedType
 
     val generatedType: Type = tree match {
-      case t: Literal             => genLiteral(t, expectedTypeNoCast)
-      case t: UnaryOp             => genUnaryOp(t)
-      case t: BinaryOp            => genBinaryOp(t)
-      case t: VarRef              => genVarRef(t)
-      case t: LoadModule          => genLoadModule(t)
-      case t: StoreModule         => genStoreModule(t)
-      case t: ApplyStatically     => genApplyStatically(t)
-      case t: Apply               => genApply(t)
-      case t: ApplyStatic         => genApplyStatic(t)
-      case t: ApplyDynamicImport  => genApplyDynamicImport(t)
-      case t: ApplyTypedClosure   => genApplyTypedClosure(t)
-      case t: IsInstanceOf        => genIsInstanceOf(t)
-      case t: AsInstanceOf        => genAsInstanceOf(t)
-      case t: Block               => genBlock(t, expectedTypeNoCast)
-      case t: Labeled             => unwinding.genLabeled(t, expectedTypeNoCast)
-      case t: Return              => unwinding.genReturn(t)
-      case t: Select              => genSelect(t)
-      case t: SelectStatic        => genSelectStatic(t)
-      case t: Assign              => genAssign(t)
-      case t: VarDef              => genVarDef(t)
-      case t: New                 => genNew(t)
-      case t: If                  => genIf(t, expectedTypeNoCast)
-      case t: While               => genWhile(t)
-      case t: ForIn               => genForIn(t)
-      case t: TryCatch            => genTryCatch(t, expectedTypeNoCast)
-      case t: TryFinally          => unwinding.genTryFinally(t, expectedTypeNoCast)
-      case t: Match               => genMatch(t, expectedTypeNoCast)
-      case t: JSAwait             => genJSAwait(t)
-      case t: Debugger            => VoidType // ignore
-      case t: Skip                => VoidType
+      case t: Literal            => genLiteral(t, expectedTypeNoCast)
+      case t: UnaryOp            => genUnaryOp(t)
+      case t: BinaryOp           => genBinaryOp(t)
+      case t: VarRef             => genVarRef(t)
+      case t: LoadModule         => genLoadModule(t)
+      case t: StoreModule        => genStoreModule(t)
+      case t: ApplyStatically    => genApplyStatically(t)
+      case t: Apply              => genApply(t)
+      case t: ApplyStatic        => genApplyStatic(t)
+      case t: ApplyDynamicImport => genApplyDynamicImport(t)
+      case t: ApplyTypedClosure  => genApplyTypedClosure(t)
+      case t: IsInstanceOf       => genIsInstanceOf(t)
+      case t: AsInstanceOf       => genAsInstanceOf(t)
+      case t: Block              => genBlock(t, expectedTypeNoCast)
+      case t: Labeled            => unwinding.genLabeled(t, expectedTypeNoCast)
+      case t: Return             => unwinding.genReturn(t)
+      case t: Select             => genSelect(t)
+      case t: SelectStatic       => genSelectStatic(t)
+      case t: Assign             => genAssign(t)
+      case t: VarDef             => genVarDef(t)
+      case t: New                => genNew(t)
+      case t: If                 => genIf(t, expectedTypeNoCast)
+      case t: While              => genWhile(t)
+      case t: ForIn              => genForIn(t)
+      case t: TryCatch           => genTryCatch(t, expectedTypeNoCast)
+      case t: TryFinally         => unwinding.genTryFinally(t, expectedTypeNoCast)
+      case t: Match              => genMatch(t, expectedTypeNoCast)
+      case t: JSAwait            => genJSAwait(t)
+      case t: Debugger           => VoidType // ignore
+      case t: Skip               => VoidType
 
       // JavaScript expressions
-      case t: JSNew                if !targetPureWasm => genJSNew(t)
-      case t: JSSelect             if !targetPureWasm => genJSSelect(t, castTo = expectedType)
-      case t: JSFunctionApply      if !targetPureWasm => genJSFunctionApply(t, castTo = expectedType)
-      case t: JSMethodApply        if !targetPureWasm => genJSMethodApply(t, castTo = expectedType)
-      case t: JSImportCall         if !targetPureWasm => genJSImportCall(t)
-      case t: JSImportMeta         if !targetPureWasm => genJSImportMeta(t)
-      case t: LoadJSConstructor    if !targetPureWasm => genLoadJSConstructor(t)
-      case t: LoadJSModule         if !targetPureWasm => genLoadJSModule(t)
-      case t: SelectJSNativeMember if !targetPureWasm => genSelectJSNativeMember(t, castTo = expectedType)
-      case t: JSDelete             if !targetPureWasm => genJSDelete(t)
-      case t: JSUnaryOp            if !targetPureWasm => genJSUnaryOp(t, castTo = expectedType)
-      case t: JSBinaryOp           if !targetPureWasm => genJSBinaryOp(t, castTo = expectedType)
-      case t: JSArrayConstr        if !targetPureWasm => genJSArrayConstr(t)
-      case t: JSObjectConstr       if !targetPureWasm => genJSObjectConstr(t)
-      case t: JSGlobalRef          if !targetPureWasm => genJSGlobalRef(t, castTo = expectedType)
-      case t: JSTypeOfGlobalRef    if !targetPureWasm => genJSTypeOfGlobalRef(t, castTo = expectedType)
-      case t: Closure              => genClosure(t)
+      case t: JSNew if !targetPureWasm             => genJSNew(t)
+      case t: JSSelect if !targetPureWasm          => genJSSelect(t, castTo = expectedType)
+      case t: JSFunctionApply if !targetPureWasm   => genJSFunctionApply(t, castTo = expectedType)
+      case t: JSMethodApply if !targetPureWasm     => genJSMethodApply(t, castTo = expectedType)
+      case t: JSImportCall if !targetPureWasm      => genJSImportCall(t)
+      case t: JSImportMeta if !targetPureWasm      => genJSImportMeta(t)
+      case t: LoadJSConstructor if !targetPureWasm => genLoadJSConstructor(t)
+      case t: LoadJSModule if !targetPureWasm      => genLoadJSModule(t)
+      case t: SelectJSNativeMember if !targetPureWasm =>
+        genSelectJSNativeMember(t, castTo = expectedType)
+      case t: JSDelete if !targetPureWasm          => genJSDelete(t)
+      case t: JSUnaryOp if !targetPureWasm         => genJSUnaryOp(t, castTo = expectedType)
+      case t: JSBinaryOp if !targetPureWasm        => genJSBinaryOp(t, castTo = expectedType)
+      case t: JSArrayConstr if !targetPureWasm     => genJSArrayConstr(t)
+      case t: JSObjectConstr if !targetPureWasm    => genJSObjectConstr(t)
+      case t: JSGlobalRef if !targetPureWasm       => genJSGlobalRef(t, castTo = expectedType)
+      case t: JSTypeOfGlobalRef if !targetPureWasm => genJSTypeOfGlobalRef(t, castTo = expectedType)
+      case t: Closure                              => genClosure(t)
 
       // array
       case t: NewArray    => genNewArray(t)
@@ -715,11 +716,11 @@ private class FunctionEmitter private (
       case t: ArrayValue  => genArrayValue(t)
 
       // Non-native JS classes
-      case t: CreateJSClass     if !targetPureWasm => genCreateJSClass(t)
-      case t: JSPrivateSelect   if !targetPureWasm => genJSPrivateSelect(t)
-      case t: JSSuperSelect     if !targetPureWasm => genJSSuperSelect(t)
+      case t: CreateJSClass if !targetPureWasm     => genCreateJSClass(t)
+      case t: JSPrivateSelect if !targetPureWasm   => genJSPrivateSelect(t)
+      case t: JSSuperSelect if !targetPureWasm     => genJSSuperSelect(t)
       case t: JSSuperMethodCall if !targetPureWasm => genJSSuperMethodCall(t, castTo = expectedType)
-      case t: JSNewTarget       if !targetPureWasm => genJSNewTarget(t)
+      case t: JSNewTarget if !targetPureWasm       => genJSNewTarget(t)
 
       // Records (only generated by the optimizer)
       case t: RecordSelect => genRecordSelect(t)
@@ -762,7 +763,7 @@ private class FunctionEmitter private (
             expectedType match {
               case ClassType(BoxedStringClass, true) if !targetPureWasm =>
                 fb += wa.ExternConvertAny
-              case _                                 => ()
+              case _ => ()
             }
           case ByteType | ShortType =>
             fb += wa.RefI31
@@ -788,11 +789,12 @@ private class FunctionEmitter private (
         }
 
       case (StringType | ClassType(BoxedStringClass, _), _) =>
-        if (!targetPureWasm)
+        if (!targetPureWasm) {
           expectedType match {
             case ClassType(BoxedStringClass, _) => ()
             case _                              => fb += wa.AnyConvertExtern
           }
+        }
       case _ =>
         ()
     }
@@ -871,7 +873,7 @@ private class FunctionEmitter private (
               genTree(rhs, lhs.tpe)
               lhs.tpe match {
                 case ClassType(BoxedStringClass, _) if !targetPureWasm =>
-                    fb += wa.AnyConvertExtern
+                  fb += wa.AnyConvertExtern
                 case _ => ()
               }
             }
@@ -894,6 +896,7 @@ private class FunctionEmitter private (
               fb += wa.Call(genFunctionID.arraySetFor(arrayTypeRef))
               genForwardThrow()
             }
+
           case NothingType =>
             // unreachable
             ()
@@ -1197,7 +1200,7 @@ private class FunctionEmitter private (
             val receiverLocal = addSyntheticLocal(watpe.RefType.any)
 
             fb += wa.LocalSet(receiverLocal)
-            val argsLocals: List[wanme.LocalID] =
+            val argsLocals: List[wanme.LocalID] = {
               for ((arg, typeRef) <- args.zip(methodName.paramTypeRefs)) yield {
                 val tpe = ctx.inferTypeFromTypeRef(typeRef)
                 genTree(arg, tpe)
@@ -1205,6 +1208,7 @@ private class FunctionEmitter private (
                 fb += wa.LocalSet(localID)
                 localID
               }
+            }
             fb += wa.LocalGet(receiverLocal)
             argsLocals
           }
@@ -1426,11 +1430,9 @@ private class FunctionEmitter private (
           case Some(primReceiverType) =>
             if (receiver.tpe == primReceiverType) {
               genTreeAuto(receiver)
-            } else if (
-              targetPureWasm &&
-              receiver.tpe == ClassType(BoxedStringClass, false) &&
-              primReceiverType == StringType
-            ) {
+            } else if (targetPureWasm &&
+                receiver.tpe == ClassType(BoxedStringClass, false) &&
+                primReceiverType == StringType) {
               genTreeAuto(receiver)
             } else {
               genTreeToAny(receiver)
@@ -1661,7 +1663,7 @@ private class FunctionEmitter private (
 
       // Narrowing conversions
       case IntToChar =>
-        fb += wa.I32Const(0xFFFF)
+        fb += wa.I32Const(0xffff)
         fb += wa.I32And
       case IntToByte =>
         fb += wa.I32Extend8S
@@ -2091,8 +2093,10 @@ private class FunctionEmitter private (
   private def getElementaryBinaryOpInstr(op: BinaryOp.Code): wa.Instr = {
     import BinaryOp._
 
-    def fmodFunctionID(methodName: MethodName): wanme.FunctionID =
-      genFunctionID.forMethod(MemberNamespace.PublicStatic, SpecialNames.WasmRuntimeClass, methodName)
+    def fmodFunctionID(methodName: MethodName): wanme.FunctionID = {
+      genFunctionID.forMethod(
+          MemberNamespace.PublicStatic, SpecialNames.WasmRuntimeClass, methodName)
+    }
 
     (op: @switch) match {
       case Boolean_== => wa.I32Eq
@@ -2184,7 +2188,8 @@ private class FunctionEmitter private (
   }
 
   private def genToStringForConcat(tree: Tree): Unit = {
-    val stringType = if (targetPureWasm) watpe.RefType(genTypeID.wasmString) else watpe.RefType.extern
+    val stringType =
+      if (targetPureWasm) watpe.RefType(genTypeID.wasmString) else watpe.RefType.extern
     def genWithDispatch(isAncestorOfHijackedClass: Boolean): Unit = {
       // TODO Better codegen when non-nullable
 
@@ -2338,7 +2343,7 @@ private class FunctionEmitter private (
               fb += wa.Drop
               fb ++=
                 (if (primType == NullType) ctx.stringPool.getConstantStringInstr("null")
-                else ctx.stringPool.getConstantStringInstr("undefined"))
+                 else ctx.stringPool.getConstantStringInstr("undefined"))
             } else {
               fb += wa.Call(genFunctionID.jsValueToStringForConcat)
             }
@@ -2544,7 +2549,7 @@ private class FunctionEmitter private (
 
       case ArrayType(arrayTypeRef, false) =>
         arrayTypeRef match {
-          case ArrayTypeRef(ClassRef(ObjectClass) | _: PrimRef, 1) =>
+          case ArrayTypeRef(ClassRef(ObjectClass) | _:PrimRef, 1) =>
             // For primitive arrays and exactly Array[Object], a wa.RefTest is enough
             val structTypeID = genTypeID.forArrayClass(arrayTypeRef)
             fb += wa.RefTest(watpe.RefType(structTypeID))
@@ -2617,7 +2622,7 @@ private class FunctionEmitter private (
 
       case ArrayType(arrayTypeRef, true) =>
         arrayTypeRef match {
-          case ArrayTypeRef(ClassRef(ObjectClass) | _: PrimRef, 1) =>
+          case ArrayTypeRef(ClassRef(ObjectClass) | _:PrimRef, 1) =>
             // For primitive arrays and exactly Array[Object], we have a dedicated function
             fb += wa.Call(genFunctionID.asInstance(targetTpe))
             genForwardThrow()
@@ -3036,7 +3041,7 @@ private class FunctionEmitter private (
 
     genNewScalaClass(className, ctorName) {
       genArgs(args, ctorName)
-    } (tree.pos)
+    }(tree.pos)
 
     tree.tpe
   }
@@ -3494,7 +3499,8 @@ private class FunctionEmitter private (
           case DoubleType =>
             ctx.constantArrayPool.addArray64(elems) { (buffer, elem) =>
               // Explicitly use doubleToLongBits for determinism
-              buffer.putLong(java.lang.Double.doubleToLongBits(elem.asInstanceOf[DoubleLiteral].value))
+              buffer.putLong(
+                  java.lang.Double.doubleToLongBits(elem.asInstanceOf[DoubleLiteral].value))
             }
           case NothingType | NullType | VoidType =>
             throw new AssertionError(s"Invalid array type $arrayTypeRef at ${tree.pos}")
@@ -3607,9 +3613,10 @@ private class FunctionEmitter private (
       val (argsParamDefs, restParamDef) = builder.genJSParamDefs(params, restParam)
 
       val promisingFVarDef = if (flags.async) {
-        Some(js.VarDef(builder.newLocalIdent("pf"), Some({
-          js.Apply(js.DotSelect(builder.genGlobalRef("WebAssembly"), js.Ident("promising")), List(fRef))
-        })))
+        Some(js.VarDef(builder.newLocalIdent("pf"), Some {
+          js.Apply(
+              js.DotSelect(builder.genGlobalRef("WebAssembly"), js.Ident("promising")), List(fRef))
+        }))
       } else {
         None
       }
@@ -3617,11 +3624,11 @@ private class FunctionEmitter private (
       val ret = js.Return {
         js.Function(flags.withAsync(false), argsParamDefs, restParamDef, {
           js.Return(js.Apply(
-              promisingFVarDef.fold(fRef)(_.ref),
-              dataRef ::
-              (if (flags.arrow) Nil else List(js.This())) :::
-              argsParamDefs.map(_.ref) :::
-              restParamDef.map(_.ref).toList
+            promisingFVarDef.fold(fRef)(_.ref),
+            dataRef ::
+            (if (flags.arrow) Nil else List(js.This())) :::
+            argsParamDefs.map(_.ref) :::
+            restParamDef.map(_.ref).toList
           ))
         })
       }
@@ -3938,7 +3945,8 @@ private class FunctionEmitter private (
 
     (src.tpe, dest.tpe) match {
       case (ArrayType(srcArrayTypeRef, _), ArrayType(destArrayTypeRef, _))
-          if genTypeID.forArrayClass(srcArrayTypeRef) == genTypeID.forArrayClass(destArrayTypeRef) =>
+          if genTypeID.forArrayClass(srcArrayTypeRef) == genTypeID.forArrayClass(
+              destArrayTypeRef) =>
         // Generate a specialized arrayCopyT call
         fb += wa.Call(genFunctionID.specializedArrayCopy(srcArrayTypeRef))
         genForwardThrow()
@@ -4283,6 +4291,7 @@ private class FunctionEmitter private (
     }
 
     private object TryFinallyEntry {
+
       /** Cross info for a `TryFinally` entry.
        *
        *  @param destinationTagLocal
@@ -4291,8 +4300,8 @@ private class FunctionEmitter private (
        *    The cross label for this `TryFinally`.
        */
       sealed case class CrossInfo(
-        val destinationTagLocal: wanme.LocalID,
-        val crossLabel: wanme.LabelID
+          val destinationTagLocal: wanme.LocalID,
+          val crossLabel: wanme.LabelID
       )
     }
 
@@ -4325,6 +4334,7 @@ private class FunctionEmitter private (
     }
 
     private object LabeledEntry {
+
       /** Cross info for a `LabeledEntry`.
        *
        *  @param destinationTag
@@ -4339,9 +4349,9 @@ private class FunctionEmitter private (
        *    its result from the `resultLocal` instead of expecting it on the stack.
        */
       sealed case class CrossInfo(
-        destinationTag: Int,
-        resultLocals: List[wanme.LocalID],
-        crossLabel: wanme.LabelID
+          destinationTag: Int,
+          resultLocals: List[wanme.LocalID],
+          crossLabel: wanme.LabelID
       )
     }
 

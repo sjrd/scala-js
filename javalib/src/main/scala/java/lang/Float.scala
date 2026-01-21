@@ -86,6 +86,7 @@ object Float {
 
   @inline def valueOf(s: String): Float = valueOf(parseFloat(s))
 
+  // format: off
   private[this] lazy val parseFloatRegExp = RegExpImpl.impl.compile(
       "^" +
       "[\\x00-\\x20]*" +                 // optional whitespace
@@ -110,6 +111,7 @@ object Float {
       ")" +
       "[\\x00-\\x20]*" +                 // optional whitespace
       "$")
+  // format: on
 
   def parseFloat(s: String): scala.Float = {
     import RegExpImpl.impl
@@ -189,10 +191,12 @@ object Float {
       if (zDouble == scala.Double.PositiveInfinity) {
         // Magical constant = Float.MaxValue.toDouble + (Math.ulp(Float.MaxValue).toDouble / 2.0)
         val mid = 3.4028235677973366e38
-        if (z0 == mid)
-          parseFloatDecimalCorrection(integralPartStr, fractionalPartStr, exponentStr, MAX_VALUE, z, mid)
-        else
+        if (z0 == mid) {
+          parseFloatDecimalCorrection(
+              integralPartStr, fractionalPartStr, exponentStr, MAX_VALUE, z, mid)
+        } else {
           z
+        }
       } else if (zDouble < z0) {
         val zUp = Math.nextUp(z)
         val mid = (zDouble + zUp.toDouble) / 2.0

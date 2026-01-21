@@ -221,11 +221,12 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val classInfo = ctx.getClassInfo(className)
 
     val nameStr = runtimeClassNameOf(className)
-    val nameValue =
-      if (targetPureWasm)
+    val nameValue = {
+      if (targetPureWasm) {
         ctx.stringPool.getConstantStringDataInstr(nameStr) :+
-            wa.RefNull(watpe.HeapType(genTypeID.wasmString))
-      else ctx.stringPool.getConstantStringDataInstr(nameStr)
+        wa.RefNull(watpe.HeapType(genTypeID.wasmString))
+      } else ctx.stringPool.getConstantStringDataInstr(nameStr)
+    }
 
     val kind = className match {
       case ObjectClass         => KindObject
@@ -316,31 +317,31 @@ class ClassEmitter(coreSpec: CoreSpec) {
     (
       // name
       nameValue :::
-      List(
-        // kind
-        wa.I32Const(kind),
-        // specialInstanceTypes
-        wa.I32Const(classInfo.specialInstanceTypes)
-      ) ::: (
-        // strictAncestors
-        strictAncestorsTypeData
-      ) :::
-      List(
-        // componentType - always `null` since this method is not used for array types
-        wa.RefNull(watpe.HeapType(genTypeID.typeData)),
-        // the classOf instance - initially `null`; filled in by the `createClassOf` helper
-        wa.RefNull(watpe.HeapType(genTypeID.ClassStruct)),
-        // arrayOf, the typeData of an array of this type - initially `null`; filled in by `specificArrayTypeData`
-        wa.RefNull(watpe.HeapType(genTypeID.ObjectVTable)),
-        // clonefFunction - will be invoked from `clone()` method invokaion on the class
-        cloneFunction,
-        // isJSClassInstance - invoked from the `isInstance()` helper for JS types
-        isJSClassInstance
-      ) :::
-      // reflective proxies - used to reflective call on the class at runtime.
-      // Generated instructions create an array of reflective proxy structs, where each struct
-      // contains the ID of the reflective proxy and a reference to the actual method implementation.
-      reflectiveProxiesInstrs
+        List(
+          // kind
+          wa.I32Const(kind),
+          // specialInstanceTypes
+          wa.I32Const(classInfo.specialInstanceTypes)
+        ) ::: (
+          // strictAncestors
+          strictAncestorsTypeData
+        ) :::
+        List(
+          // componentType - always `null` since this method is not used for array types
+          wa.RefNull(watpe.HeapType(genTypeID.typeData)),
+          // the classOf instance - initially `null`; filled in by the `createClassOf` helper
+          wa.RefNull(watpe.HeapType(genTypeID.ClassStruct)),
+          // arrayOf, the typeData of an array of this type - initially `null`; filled in by `specificArrayTypeData`
+          wa.RefNull(watpe.HeapType(genTypeID.ObjectVTable)),
+          // clonefFunction - will be invoked from `clone()` method invokaion on the class
+          cloneFunction,
+          // isJSClassInstance - invoked from the `isInstance()` helper for JS types
+          isJSClassInstance
+        ) :::
+        // reflective proxies - used to reflective call on the class at runtime.
+        // Generated instructions create an array of reflective proxy structs, where each struct
+        // contains the ID of the reflective proxy and a reference to the actual method implementation.
+        reflectiveProxiesInstrs
     )
   }
 
@@ -531,7 +532,8 @@ class ClassEmitter(coreSpec: CoreSpec) {
 
     // itable and vtable slots
     val objectClassInfo = ctx.getClassInfo(ObjectClass)
-    val itableSlots = ClassEmitter.genItableSlots(objectClassInfo, List(SerializableClass, CloneableClass))
+    val itableSlots =
+      ClassEmitter.genItableSlots(objectClassInfo, List(SerializableClass, CloneableClass))
     val vtableSlots = objectClassInfo.tableEntries.map { methodName =>
       ctx.refFuncWithDeclaration(objectClassInfo.resolvedMethodInfos(methodName).tableEntryID)
     }
@@ -572,15 +574,16 @@ class ClassEmitter(coreSpec: CoreSpec) {
       val vtableGlobalID = genGlobalID.forArrayVTable(baseTypeRef)
 
       val nameStr = baseTypeRef match {
-        case baseTypeRef: PrimRef => "[" + baseTypeRef.charCode.toString()
-        case ClassRef(className)  => "[L" + runtimeClassNameOf(className) + ";"
+        case baseTypeRef: PrimRef          => "[" + baseTypeRef.charCode.toString()
+        case ClassRef(className)           => "[L" + runtimeClassNameOf(className) + ";"
         case WitResourceTypeRef(className) => "[W" + runtimeClassNameOf(className) + ";"
       }
-      val nameValue =
-        if (targetPureWasm)
+      val nameValue = {
+        if (targetPureWasm) {
           ctx.stringPool.getConstantStringDataInstr(nameStr) :+
-              wa.RefNull(watpe.HeapType(genTypeID.wasmString))
-        else ctx.stringPool.getConstantStringDataInstr(nameStr)
+          wa.RefNull(watpe.HeapType(genTypeID.wasmString))
+        } else ctx.stringPool.getConstantStringDataInstr(nameStr)
+      }
 
       val vtableInit: List[wa.Instr] = nameValue ::: List( // name
         wa.I32Const(KindArray), // kind = KindArray
@@ -626,7 +629,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
         isMutable = false
       )
     }.toList
-    val vtableFields =
+    val vtableFields = {
       classInfo.tableEntries.map { methodName =>
         watpe.StructField(
           genFieldID.forMethodTableEntry(methodName),
@@ -635,11 +638,13 @@ class ClassEmitter(coreSpec: CoreSpec) {
           isMutable = false
         )
       }
+    }
     val superType = clazz.superClass match {
       case None    => genTypeID.typeData
       case Some(s) => genTypeID.forVTable(s.name)
     }
-    val structType = watpe.StructType(ctx.coreLib.typeDataStructFields ::: itableSlotFields ::: vtableFields)
+    val structType =
+      watpe.StructType(ctx.coreLib.typeDataStructFields ::: itableSlotFields ::: vtableFields)
     val subType = watpe.SubType(
       typeID,
       makeDebugName(ns.VTable, className),
@@ -964,7 +969,8 @@ class ClassEmitter(coreSpec: CoreSpec) {
             fb += wa.Call(genFunctionID.throwModuleInitError)
 
             // the fake result is particularly awkward here
-            SWasmGen.genForwardThrowAlwaysAsReturn(fb, List(wa.Call(genFunctionID.newDefault(className))))
+            SWasmGen.genForwardThrowAlwaysAsReturn(
+                fb, List(wa.Call(genFunctionID.newDefault(className))))
           }
         }
 
@@ -1154,8 +1160,10 @@ class ClassEmitter(coreSpec: CoreSpec) {
       val superArgsFunctionRef = helperBuilder.addWasmInput("superArgs", watpe.RefType.func) {
         fb += ctx.refFuncWithDeclaration(superArgsFunctionID)
       }
-      val postSuperStatsFunctionRef = helperBuilder.addWasmInput("postSuperStats", watpe.RefType.func) {
-        fb += ctx.refFuncWithDeclaration(postSuperStatsFunctionID)
+      val postSuperStatsFunctionRef = {
+        helperBuilder.addWasmInput("postSuperStats", watpe.RefType.func) {
+          fb += ctx.refFuncWithDeclaration(postSuperStatsFunctionID)
+        }
       }
 
       def genDefineProperty(obj: js.Tree, name: js.Tree, value: js.Tree): js.Tree = {
@@ -1177,10 +1185,10 @@ class ClassEmitter(coreSpec: CoreSpec) {
       }
 
       def toJSPropertyName(tree: js.Tree): js.PropertyName = tree match {
-        case js.StringLiteral("constructor")                                  => js.ComputedName(tree)
+        case js.StringLiteral("constructor") => js.ComputedName(tree)
         case js.StringLiteral(name) if js.Ident.isValidJSIdentifierName(name) => js.Ident(name)
         case tree: js.StringLiteral                                           => tree
-        case _                                                                => js.ComputedName(tree)
+        case _ => js.ComputedName(tree)
       }
 
       val jsClassIdent = helperBuilder.newLocalIdent("cls")
@@ -1193,8 +1201,9 @@ class ClassEmitter(coreSpec: CoreSpec) {
           val preSuperEnv = helperBuilder.newLocalIdent("preSuperEnv")
           js.Block(
             // var preSuperEnv = preSuperStats(data, new.target, ...allParamRefs);
-            js.VarDef(preSuperEnv, Some(js.Apply(preSuperStatsFunctionRef,
-                dataRef :: js.NewTarget() :: allParamRefs))),
+            js.VarDef(preSuperEnv,
+                Some(js.Apply(preSuperStatsFunctionRef,
+                    dataRef :: js.NewTarget() :: allParamRefs))),
             // super(...superArgs(data, preSuperEnv, new.target, ...args));
             js.Apply(
               js.Super(),
@@ -1255,11 +1264,11 @@ class ClassEmitter(coreSpec: CoreSpec) {
             val (argsParamDefs, restParamDef) = helperBuilder.genJSParamDefs(params, restParam)
             val jsMethodDef = js.MethodDef(isStatic, nameRef, argsParamDefs, restParamDef, {
               js.Return(js.Apply(
-                  fRef,
-                  dataRef ::
-                  jsThisUnlessStatic :::
-                  argsParamDefs.map(_.ref) :::
-                  restParamDef.map(_.ref).toList
+                fRef,
+                dataRef ::
+                jsThisUnlessStatic :::
+                argsParamDefs.map(_.ref) :::
+                restParamDef.map(_.ref).toList
               ))
             })
 
@@ -1329,7 +1338,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
           case FieldDef(_, name, _, _) =>
             throw new AssertionError(
               s"Unexpected private static field ${name.name.nameString} "
-                + s"in JS class ${className.nameString}"
+              + s"in JS class ${className.nameString}"
             )
           case JSFieldDef(_, nameTree, _) =>
             helperBuilder.addInput(nameTree)
@@ -1519,13 +1528,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
 
     val isHijackedClass = clazz.kind == ClassKind.HijackedClass
 
-    val receiverType =
+    val receiverType = {
       if (namespace.isStatic)
         None
       else if (isHijackedClass)
         Some(transformPrimType(BoxedClassToPrimType(className)))
       else
         Some(transformClassType(className, nullable = false))
+    }
 
     val body = method.body.getOrElse(throw new Exception("abstract method cannot be transformed"))
 
@@ -1618,13 +1628,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
       isMutable = false
     )
 
-    val idHashCodeField =
+    val idHashCodeField = {
       watpe.StructField(
         genFieldID.objStruct.idHashCode,
         OriginalName(genFieldID.objStruct.idHashCode.toString()),
         watpe.Int32,
         isMutable = true
       )
+    }
 
     val handleField = watpe.StructField(
       genFieldID.handle,
@@ -1663,13 +1674,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
     val itableSlots = ClassEmitter.genItableSlots(objectClassInfo, Nil)
 
     val vtableSlots = objectClassInfo.tableEntries.map { methodName =>
-      val functionID =
+      val functionID = {
         if (methodName == MethodName("hashCode", Nil, IntRef))
           genFunctionID.forTableEntry(className, methodName)
         else if (methodName == MethodName("equals", List(ObjectRef), BooleanRef))
           genFunctionID.forTableEntry(className, methodName)
         else
           objectClassInfo.resolvedMethodInfos(methodName).tableEntryID
+      }
       ctx.refFuncWithDeclaration(functionID)
     }
 
@@ -1679,9 +1691,10 @@ class ClassEmitter(coreSpec: CoreSpec) {
     )
 
     val nameStr = "resource<" + runtimeClassNameOf(className) + ">"
-    val nameValue =
+    val nameValue = {
       ctx.stringPool.getConstantStringDataInstr(nameStr) :+
-          wa.RefNull(watpe.HeapType(genTypeID.wasmString))
+      wa.RefNull(watpe.HeapType(genTypeID.wasmString))
+    }
 
     val vtableInit: List[wa.Instr] = nameValue ::: List(
       wa.I32Const(KindClass),
@@ -1819,8 +1832,8 @@ class ClassEmitter(coreSpec: CoreSpec) {
 
   private def makeDebugName(namespace: UTF8String, typeRef: NonArrayTypeRef): OriginalName = {
     val encoded = typeRef match {
-      case typeRef: PrimRef    => UTF8String(typeRef.charCode.toString())
-      case ClassRef(className) => className.encoded
+      case typeRef: PrimRef              => UTF8String(typeRef.charCode.toString())
+      case ClassRef(className)           => className.encoded
       case WitResourceTypeRef(className) => UTF8String("W") ++ className.encoded
     }
     OriginalName(namespace ++ encoded)
@@ -1941,12 +1954,14 @@ object ClassEmitter {
    *  Resources use handle-based equality, so hashCode returns the handle value.
    *  This ensures that resources with the same handle have the same hashCode.
    */
-  private def genResourceHashCode(className: ClassName)(implicit ctx: WasmContext): wanme.FunctionID = {
+  private def genResourceHashCode(className: ClassName)(
+      implicit ctx: WasmContext): wanme.FunctionID = {
     implicit val noPos: Position = Position.NoPosition
     val methodName = MethodName("hashCode", Nil, IntRef)
     val functionID = genFunctionID.forTableEntry(className, methodName)
 
-    val fb = new FunctionBuilder(ctx.moduleBuilder, functionID, OriginalName(functionID.toString()), noPos)
+    val fb =
+      new FunctionBuilder(ctx.moduleBuilder, functionID, OriginalName(functionID.toString()), noPos)
     val thisParam = fb.addParam("this", watpe.RefType.any)
     fb.setResultType(watpe.Int32)
     fb.setFunctionType(ctx.tableFunctionType(methodName))
@@ -1970,7 +1985,8 @@ object ClassEmitter {
     val methodName = MethodName("equals", List(ObjectRef), BooleanRef)
     val functionID = genFunctionID.forTableEntry(className, methodName)
 
-    val fb = new FunctionBuilder(ctx.moduleBuilder, functionID, OriginalName(functionID.toString()), noPos)
+    val fb =
+      new FunctionBuilder(ctx.moduleBuilder, functionID, OriginalName(functionID.toString()), noPos)
     val thisParam = fb.addParam("this", watpe.RefType.any)
     val thatParam = fb.addParam("that", watpe.RefType.any)
     fb.setResultType(watpe.Int32)
@@ -1978,7 +1994,8 @@ object ClassEmitter {
 
     val resourceStructTypeID = genTypeID.forResourceClass(className)
     val thisResourceLocal = fb.addLocal("thisResource", watpe.RefType(resourceStructTypeID))
-    val thatResourceLocal = fb.addLocal("thatResource", watpe.RefType.nullable(watpe.HeapType(resourceStructTypeID)))
+    val thatResourceLocal =
+      fb.addLocal("thatResource", watpe.RefType.nullable(watpe.HeapType(resourceStructTypeID)))
 
     fb += wa.LocalGet(thisParam)
     fb += wa.RefCast(watpe.RefType(resourceStructTypeID))

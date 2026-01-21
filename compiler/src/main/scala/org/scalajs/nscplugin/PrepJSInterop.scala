@@ -22,19 +22,19 @@ import org.scalajs.ir.Trees.{JSGlobalRef, JSNativeLoadSpec}
 
 /** Prepares classes extending js.Any for JavaScript interop
  *
- * This phase does:
- * - Sanity checks for js.Any hierarchy
- * - Annotate subclasses of js.Any to be treated specially
- * - Rewrite calls to scala.Enumeration.Value (include name string)
- * - Create JSExport methods: Dummy methods that are propagated
+ *  This phase does:
+ *  - Sanity checks for js.Any hierarchy
+ *  - Annotate subclasses of js.Any to be treated specially
+ *  - Rewrite calls to scala.Enumeration.Value (include name string)
+ *  - Create JSExport methods: Dummy methods that are propagated
  *   through the whole compiler chain to mark exports. This allows
  *   exports to have the same semantics than methods.
  *
- * @author Tobias Schlatter
+ *  @author Tobias Schlatter
  */
 abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
-    extends plugins.PluginComponent with PrepJSExports[G]
-    with transform.Transform with CompatComponent {
+    extends plugins.PluginComponent with PrepJSExports[G] with transform.Transform
+    with CompatComponent {
 
   import PrepJSInterop._
 
@@ -63,6 +63,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
   class JSInteropPhase(prev: nsc.Phase) extends Phase(prev) {
     override def name: String = phaseName
     override def description: String = PrepJSInterop.this.description
+
     override def run(): Unit = {
       jsPrimitives.initPrepJSPrimitives()
       jsInterop.clearGlobalState()
@@ -74,11 +75,11 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     new JSInteropTransformer(unit)
 
   private object jsnme {
-    val hasNext  = newTermName("hasNext")
-    val next     = newTermName("next")
+    val hasNext = newTermName("hasNext")
+    val next = newTermName("next")
     val nextName = newTermName("nextName")
-    val Value    = newTermName("Value")
-    val Val      = newTermName("Val")
+    val Value = newTermName("Value")
+    val Val = newTermName("Val")
 
     val ArrowAssoc = newTermName("ArrowAssoc")
   }
@@ -321,7 +322,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
             case vd: ValDef if !vd.symbol.isLazy =>
               foundStatOrNonStaticVal = true
             case _: MemberDef =>
-            case _ =>
+            case _            =>
               foundStatOrNonStaticVal = true
           }
         }
@@ -331,7 +332,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
       val transformedBodyWithExports = exporters.get(clsSym).fold {
         transformedBody
       } { exports =>
-        assert(exports.nonEmpty, s"found empty exporters for $clsSym" )
+        assert(exports.nonEmpty, s"found empty exporters for $clsSym")
 
         // Reset interface flag: We're adding non-empty methods.
         clsSym.resetFlag(Flags.INTERFACE)
@@ -405,8 +406,9 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
                 |program is unlikely to function properly.""".stripMargin)
           super.transform(tree)
 
-        case tree if tree.symbol == ExecutionContext_global ||
-            tree.symbol == ExecutionContextImplicits_global =>
+        case tree
+            if tree.symbol == ExecutionContext_global ||
+              tree.symbol == ExecutionContextImplicits_global =>
           if (scalaJSOpts.warnGlobalExecutionContext) {
             global.runReporting.warning(tree.pos,
                 """The global execution context in Scala.js is based on JS Promises (microtasks).
@@ -491,19 +493,22 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
                   DynamicImportThunkClass.primaryConstructor, Nil, Nil)
 
               // class $anon extends DynamicImportThunk
-              val clsDef = ClassDef(clsSym, List(
-                  // def <init>() = { super.<init>(); () }
-                  DefDef(ctorSym, gen.mkUnitBlock(superCtorCall)),
-                  // def apply(): Any = body
-                  DefDef(applySym, newBody)))
+              val clsDef = ClassDef(clsSym,
+                  List(
+                      // def <init>() = { super.<init>(); () }
+                      DefDef(ctorSym, gen.mkUnitBlock(superCtorCall)),
+                      // def apply(): Any = body
+                      DefDef(applySym, newBody)))
 
               /* runtime.DynamicImport[A]({
                *   class $anon ...
                *   new $anon
                * })
                */
-              Apply(TypeApply(gen.mkAttributedRef(Runtime_dynamicImport),
-                  List(tpeArg)), List(Block(clsDef, New(clsSym))))
+              Apply(
+                  TypeApply(gen.mkAttributedRef(Runtime_dynamicImport),
+                      List(tpeArg)),
+                  List(Block(clsDef, New(clsSym))))
             }
           }
 
@@ -531,7 +536,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           if (scalaJSOpts.fixClassOf) {
             // Replace call by literal constant containing type
             if (typer.checkClassOrModuleType(tpeArg)) {
-              typer.typed { Literal(Constant(tpeArg.tpe.dealias.widen)) }
+              typer.typed(Literal(Constant(tpeArg.tpe.dealias.widen)))
             } else {
               reporter.error(tpeArg.pos, s"Type ${tpeArg} is not a class type")
               EmptyTree
@@ -585,7 +590,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
                   if currentRun.runDefinitions.isArrowAssoc(fun.symbol) =>
                 receiver match {
                   case Apply(TypeApply(Select(predef, jsnme.ArrowAssoc), _),
-                      List(propNameTree))
+                          List(propNameTree))
                       if predef.symbol == PredefModule =>
                     processPropName(propNameTree)
                   case _ =>
@@ -646,7 +651,8 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
       // Check that we do not have a case modifier
       if (implDef.mods.hasFlag(Flag.CASE)) {
-        reporter.error(implDef.pos, "Classes and objects extending " +
+        reporter.error(implDef.pos,
+            "Classes and objects extending " +
             "js.Any may not have a case modifier")
       }
 
@@ -740,9 +746,9 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
                 JSCallingConvention.of(membSym).displayName
               }
               "A member of a JS class is overriding another member with a different JS calling convention.\n\n" +
-              memberDefStringWithCallingConvention(low) + "\n" +
-              "    is conflicting with\n" +
-              memberDefStringWithCallingConvention(high) + "\n"
+                memberDefStringWithCallingConvention(low) + "\n" +
+                "    is conflicting with\n" +
+                memberDefStringWithCallingConvention(high) + "\n"
             }
 
             reporter.error(errorPos, msg)
@@ -790,15 +796,15 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           val isDrop = annot.symbol == WitResourceDropAnnotation
 
           if ((isResourceMethod || isDrop) && (
-              !sym.owner.isTraitOrInterface ||
-              !sym.owner.hasAnnotation(WitResourceImportAnnotation))) {
+                !sym.owner.isTraitOrInterface ||
+                  !sym.owner.hasAnnotation(WitResourceImportAnnotation))) {
             reporter.error(pos,
                 s"$annot is allowed in trait annotated with @WitResourceImport")
           } else if ((isStaticMethod || isConstructor) && (
-              !sym.owner.isModuleClass ||
-              sym.owner.companionClass == NoSymbol ||
-              !sym.owner.companionClass.isTraitOrInterface ||
-              !sym.owner.companionClass.hasAnnotation(WitResourceImportAnnotation))) {
+                !sym.owner.isModuleClass ||
+                  sym.owner.companionClass == NoSymbol ||
+                  !sym.owner.companionClass.isTraitOrInterface ||
+                  !sym.owner.companionClass.hasAnnotation(WitResourceImportAnnotation))) {
             reporter.error(pos,
                 s"$annot is allowed in companion object of trait annotated with @WitResourceImport")
           }
@@ -806,7 +812,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
       }
     }
 
-    private def checkWasmComponentFunction(pos: Position, sym: Symbol): Unit =
+    private def checkWasmComponentFunction(pos: Position, sym: Symbol): Unit = {
       checkAndGetWasmComponentFunctionAnnotOf(pos, sym).foreach { annot =>
         if (sym.isLocalToBlock) {
           reporter.error(pos,
@@ -863,6 +869,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           )
           jsInterop.storeWitFunctionType(sym, funcType)
         }
+      }
     }
 
     private def checkWasmWitResourceImport(pos: Position, sym: Symbol): Unit = {
@@ -922,7 +929,8 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
           if (hasResourceMethodAnnotation) {
             val methodType = member.tpe
-            val paramTypes = if (methodType.paramss.isEmpty) Nil else methodType.paramss.head.map(_.tpe)
+            val paramTypes =
+              if (methodType.paramss.isEmpty) Nil else methodType.paramss.head.map(_.tpe)
             val returnType = methodType.resultType
 
             paramTypes.foreach { paramType =>
@@ -998,14 +1006,14 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     private def checkWitVariantTrait(pos: Position, sym: Symbol): Unit = {
       if (!sym.isSealed) {
         reporter.error(pos,
-          "@WitVariant can only be used on sealed traits or sealed abstract classes")
+            "@WitVariant can only be used on sealed traits or sealed abstract classes")
         return
       }
 
       val cases = sym.sealedChildren.toList
       if (cases.isEmpty) {
         reporter.error(pos,
-          s"Component variant '${sym.name}' must have at least one case")
+            s"Component variant '${sym.name}' must have at least one case")
       } else {
         cases.foreach { caseSym =>
           validateWitVariantCase(caseSym)
@@ -1022,7 +1030,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         val primaryCtor = caseSym.primaryConstructor
         if (primaryCtor == NoSymbol) {
           reporter.error(caseSym.pos,
-            s"Component variant case '${caseSym.name}' has no primary constructor")
+              s"Component variant case '${caseSym.name}' has no primary constructor")
           return
         }
 
@@ -1030,7 +1038,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
         if (params.length > 1) {
           reporter.error(caseSym.pos,
-            s"Component variant case '${caseSym.name}' must have exactly one field, found ${params.length}.")
+              s"Component variant case '${caseSym.name}' must have exactly one field, found ${params.length}.")
         } else if (params.length == 1) {
           val param = params.head
           val fieldName = param.name.decoded
@@ -1039,10 +1047,10 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           // Validate field name must be "value"
           if (fieldName != "value") {
             reporter.error(param.pos,
-              s"Component variant case '${caseSym.name}' field must be named 'value', found '${fieldName}'.")
+                s"Component variant case '${caseSym.name}' field must be named 'value', found '${fieldName}'.")
           } else if (!isComponentModelCompatible(fieldType)) {
             reporter.error(param.pos,
-              s"Field '${param.name}' has type '${fieldType}' which is not compatible with Component Model. ")
+                s"Field '${param.name}' has type '${fieldType}' which is not compatible with Component Model. ")
           } else {
             jsInterop.storeWitVariantValueType(caseSym, fieldType)
           }
@@ -1052,7 +1060,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         }
       } else {
         reporter.error(caseSym.pos,
-          s"Component variant case '${caseSym.name}' must be a final class or object")
+            s"Component variant case '${caseSym.name}' must be a final class or object")
       }
     }
 
@@ -1085,8 +1093,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         dealiased.typeArgs.forall(isComponentModelCompatible)
       } else if (sym.fullName.startsWith("scala.scalajs.wit.Result")) {
         dealiased.typeArgs.forall(isComponentModelCompatible)
-      } else if (
-          sym.hasAnnotation(WitRecordAnnotation) ||
+      } else if (sym.hasAnnotation(WitRecordAnnotation) ||
           sym.hasAnnotation(WitVariantAnnotation) ||
           sym.hasAnnotation(WitFlagsAnnotation) ||
           sym.hasAnnotation(WitResourceImportAnnotation)) {
@@ -1155,7 +1162,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
         sym.getAnnotation(WitFlagsAnnotation).flatMap(_.intArg(0)) match {
           case Some(numFlags) if numFlags > 0 =>
-          case Some(numFlags) =>
+          case Some(numFlags)                 =>
             reporter.error(sym.pos,
                 s"@WitFlags numFlags parameter must be positive, found $numFlags")
           case None =>
@@ -1263,7 +1270,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
             case Some(Import(module, path)) =>
               Import(module, path :+ jsName)
             case Some(ImportWithGlobalFallback(
-                Import(module, modulePath), Global(globalRef, globalPath))) =>
+                    Import(module, modulePath), Global(globalRef, globalPath))) =>
               ImportWithGlobalFallback(
                   Import(module, modulePath :+ jsName),
                   Global(globalRef, globalPath :+ jsName))
@@ -1381,7 +1388,8 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
 
       sym.name match {
         case nme.apply if !sym.hasAnnotation(JSNameAnnotation) && jsInterop.isJSGetter(sym) =>
-          reporter.error(sym.pos, "A member named apply represents function " +
+          reporter.error(sym.pos,
+              "A member named apply represents function " +
               "application in JavaScript. A parameterless member should be " +
               "exported as a property. You must add @JSName(\"apply\")")
 
@@ -1391,7 +1399,8 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
               reporter.error(tree.pos,
                   s"@JSOperator methods with the name '${sym.nameString}' may not have any parameters")
             }
-          } else if (!sym.annotations.exists(annot => JSCallingConventionAnnots.contains(annot.symbol))) {
+          } else if (!sym.annotations.exists(
+                  annot => JSCallingConventionAnnots.contains(annot.symbol))) {
             reporter.warning(tree.pos,
                 s"Method '${sym.nameString}' should have an explicit @JSName or @JSOperator annotation " +
                 "because its name is one of the JavaScript operators")
@@ -1403,7 +1412,8 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
               reporter.error(tree.pos,
                   s"@JSOperator methods with the name '${sym.nameString}' must have exactly one parameter")
             }
-          } else if (!sym.annotations.exists(annot => JSCallingConventionAnnots.contains(annot.symbol))) {
+          } else if (!sym.annotations.exists(
+                  annot => JSCallingConventionAnnots.contains(annot.symbol))) {
             reporter.warning(tree.pos,
                 s"Method '${sym.nameString}' should have an explicit @JSName or @JSOperator annotation " +
                 "because its name is one of the JavaScript operators")
@@ -1415,12 +1425,14 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
               "because it is not one of the JavaScript operators")
 
         case nme.equals_ if sym.tpe.matches(Any_equals.tpe) =>
-          reporter.warning(sym.pos, "Overriding equals in a JS class does " +
+          reporter.warning(sym.pos,
+              "Overriding equals in a JS class does " +
               "not change how it is compared. To silence this warning, change " +
               "the name of the method and optionally add @JSName(\"equals\").")
 
         case nme.hashCode_ if sym.tpe.matches(Any_hashCode.tpe) =>
-          reporter.warning(sym.pos, "Overriding hashCode in a JS class does " +
+          reporter.warning(sym.pos,
+              "Overriding hashCode in a JS class does " +
               "not change its hash code. To silence this warning, change " +
               "the name of the method and optionally add @JSName(\"hashCode\").")
 
@@ -1523,7 +1535,8 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
               case (param :: _) :: _ if !isScalaRepeatedParamType(param.tpe) =>
                 // ok
               case _ =>
-                reporter.error(tree.pos, "@JSBracketCall methods must have at " +
+                reporter.error(tree.pos,
+                    "@JSBracketCall methods must have at " +
                     "least one non-repeated parameter")
             }
         }
@@ -1644,10 +1657,11 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
         tree.rhs match {
           case Block(List(Apply(trg, _)), Literal(Constant(())))
               if trg.symbol.isPrimaryConstructor &&
-                 trg.symbol.owner == sym.owner =>
+                trg.symbol.owner == sym.owner =>
             // everything is fine here
           case _ =>
-            reporter.error(tree.pos, "A secondary constructor of a class " +
+            reporter.error(tree.pos,
+                "A secondary constructor of a class " +
                 "extending js.Any may only call the primary constructor")
         }
       } else {
@@ -1702,7 +1716,8 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     }
 
     private def checkJSCallingConventionAnnots(sym: Symbol): Unit = {
-      val callingConvAnnots = sym.annotations.filter(annot => JSCallingConventionAnnots.contains(annot.symbol))
+      val callingConvAnnots =
+        sym.annotations.filter(annot => JSCallingConventionAnnots.contains(annot.symbol))
 
       callingConvAnnots match {
         case Nil =>
@@ -1914,13 +1929,12 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     private val intArg = resolve(IntClass)
     private val fullMeth = resolve(IntClass, StringClass)
 
-    /**
-     * Extractor object for calls to the targeted symbol that do not have an
-     * explicit name in the parameters
+    /** Extractor object for calls to the targeted symbol that do not have an
+     *  explicit name in the parameters
      *
-     * Extracts:
-     * - `sel: Select` where sel.symbol is targeted symbol (no arg)
-     * - Apply(meth, List(param)) where meth.symbol is targeted symbol (i: Int)
+     *  Extracts:
+     *  - `sel: Select` where sel.symbol is targeted symbol (no arg)
+     *  - Apply(meth, List(param)) where meth.symbol is targeted symbol (i: Int)
      */
     object NoName {
       def unapply(t: Tree): Option[Option[Tree]] = t match {
@@ -1948,16 +1962,15 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
   private object ScalaEnumValue
       extends ScalaEnumFctExtractors(getMemberMethod(ScalaEnumClass, jsnme.Value))
 
-  private object ScalaEnumVal
-      extends ScalaEnumFctExtractors(getMemberClass(ScalaEnumClass, jsnme.Val).tpe.member(nme.CONSTRUCTOR))
+  private object ScalaEnumVal extends ScalaEnumFctExtractors(
+          getMemberClass(ScalaEnumClass, jsnme.Val).tpe.member(nme.CONSTRUCTOR))
 
-  /**
-   * Construct a call to Enumeration.Value
-   * @param thisSym  ClassSymbol of enclosing class
-   * @param nameOrig Symbol of ValDef where this call will be placed
+  /** Construct a call to Enumeration.Value
+   *  @param thisSym  ClassSymbol of enclosing class
+   *  @param nameOrig Symbol of ValDef where this call will be placed
    *                 (determines the string passed to Value)
-   * @param intParam Optional tree with Int passed to Value
-   * @return Typed tree with appropriate call to Value
+   *  @param intParam Optional tree with Int passed to Value
+   *  @return Typed tree with appropriate call to Value
    */
   private def ScalaEnumValName(
       thisSym: Symbol,
@@ -1965,7 +1978,6 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
       intParam: Option[Tree]) = {
 
     val defaultName = nameOrig.asTerm.getterName.encoded
-
 
     // Construct the following tree
     //
@@ -2026,9 +2038,8 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
    * it's convenient for the purposes of PrepJSInterop. Actually @JSGlobalScope
    * objects do not receive a JS loading spec in their IR.
    */
-  private lazy val JSNativeLoadingSpecAnnots: Set[Symbol] = {
+  private lazy val JSNativeLoadingSpecAnnots: Set[Symbol] =
     Set(JSGlobalAnnotation, JSImportAnnotation, JSGlobalScopeAnnotation)
-  }
 
   private lazy val ScalaEnumClass = getRequiredClass("scala.Enumeration")
 
@@ -2041,7 +2052,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     val needsFix = {
       sym.isPrivate &&
       (wasPublicBeforeTyper(sym) ||
-          (sym.isAccessor && wasPublicBeforeTyper(sym.accessed)))
+        (sym.isAccessor && wasPublicBeforeTyper(sym.accessed)))
     }
     if (needsFix) {
       sym.resetFlag(Flag.PRIVATE)
@@ -2053,6 +2064,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
   }
 
   private def checkInternalAnnotations(sym: Symbol): Unit = {
+
     /** Returns true iff it is a compiler annotations. This does not include
      *  annotations inserted before the typer (such as `@WasPublicBeforeTyper`).
      */
@@ -2084,7 +2096,7 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     }
 
     annots match {
-      case Nil => None
+      case Nil         => None
       case head :: Nil =>
         Some(head)
       case head :: tail =>
@@ -2100,18 +2112,18 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
   private lazy val WasmComponentFunctionAnnots: Set[Symbol] =
     Set(WitImportAnnotation)
 
-  private lazy val WasmComponentResourceAnnots: Set[Symbol] =
+  private lazy val WasmComponentResourceAnnots: Set[Symbol] = {
     Set(
       WitResourceMethodAnnotation,
       WitResourceStaticMethodAnnotation,
       WitResourceConstructorAnnotation,
       WitResourceDropAnnotation
     )
+  }
 }
 
 object PrepJSInterop {
-  private final class OwnerKind private (private val baseKinds: Int)
-      extends AnyVal {
+  private final class OwnerKind private (private val baseKinds: Int) extends AnyVal {
 
     import OwnerKind._
 
@@ -2129,6 +2141,7 @@ object PrepJSInterop {
   }
 
   private object OwnerKind {
+
     /** No owner, i.e., we are at the top-level. */
     val None = new OwnerKind(0x00)
 
@@ -2136,20 +2149,28 @@ object PrepJSInterop {
 
     /** A Scala class/trait that does not extend Enumeration. */
     val NonEnumScalaClass = new OwnerKind(0x01)
+
     /** A Scala object that does not extend Enumeration. */
     val NonEnumScalaMod = new OwnerKind(0x02)
+
     /** A native JS class/trait, which extends js.Any. */
     val JSNativeClass = new OwnerKind(0x04)
+
     /** A native JS object, which extends js.Any. */
     val JSNativeMod = new OwnerKind(0x08)
+
     /** A non-native JS class/trait. */
     val JSClass = new OwnerKind(0x10)
+
     /** A non-native JS object. */
     val JSMod = new OwnerKind(0x20)
+
     /** A Scala class/trait that extends Enumeration. */
     val EnumClass = new OwnerKind(0x40)
+
     /** A Scala object that extends Enumeration. */
     val EnumMod = new OwnerKind(0x80)
+
     /** The Enumeration class itself. */
     val EnumImpl = new OwnerKind(0x100)
 
@@ -2157,8 +2178,10 @@ object PrepJSInterop {
 
     /** A Scala class/trait, possibly Enumeration-related. */
     val ScalaClass = NonEnumScalaClass | EnumClass | EnumImpl
+
     /** A Scala object, possibly Enumeration-related. */
     val ScalaMod = NonEnumScalaMod | EnumMod
+
     /** A Scala class, trait or object, i.e., anything not extending js.Any. */
     val ScalaThing = ScalaClass | ScalaMod
 
@@ -2167,8 +2190,10 @@ object PrepJSInterop {
 
     /** A native JS class/trait/object. */
     val JSNative = JSNativeClass | JSNativeMod
+
     /** A non-native JS class/trait/object. */
     val JSNonNative = JSClass | JSMod
+
     /** A JS type, i.e., something extending js.Any. */
     val JSType = JSNative | JSNonNative
 

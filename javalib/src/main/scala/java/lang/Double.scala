@@ -87,38 +87,41 @@ object Double {
 
   @inline def valueOf(s: String): Double = valueOf(parseDouble(s))
 
+  // scalafmt: { align.tokens."+" = [{ code = "+" }, { code = "//" }] }
   private[this] lazy val doubleStrPat = RegExpImpl.impl.compile(
-      "^" +
-      "[\\x00-\\x20]*" +  // optional whitespace
-      "(" +               // 1: entire input
-        "([+-]?)" +       // 2: optional sign
-        "(?:" +
-          "(NaN)|" +      // 3: NaN
-          "(Infinity)|" + // 4: Infinity
-          "(?:" +
-            "(" +         // 5: decimal notation
-              "(?:(\\d+)(?:\\.(\\d*))?|" + // 6-7: w/ digit before .
-                "\\.(\\d+))" +             // 8: w/o digit before .
-              "(?:[eE]([+-]?\\d+))?" +     // 9: optional exponent with sign
-            ")" +
-          ")" +
-          "[fFdD]?" +     // optional float / double specifier (ignored)
-        ")" +
-      ")" +
-      "[\\x00-\\x20]*" +  // optional whitespace
+      "^"                        +
+      "[\\x00-\\x20]*"           + // optional whitespace
+      "("                        + // 1: entire input
+      "([+-]?)"                  + // 2: optional sign
+      "(?:"                      +
+      "(NaN)|"                   + // 3: NaN
+      "(Infinity)|"              + // 4: Infinity
+      "(?:"                      +
+      "("                        + // 5: decimal notation
+      "(?:(\\d+)(?:\\.(\\d*))?|" + // 6-7: w/ digit before .
+      "\\.(\\d+))"               + // 8: w/o digit before .
+      "(?:[eE]([+-]?\\d+))?"     + // 9: optional exponent with sign
+      ")"                        +
+      ")"                        +
+      "[fFdD]?"                  + // optional float / double specifier (ignored)
+      ")"                        +
+      ")"                        +
+      "[\\x00-\\x20]*"           + // optional whitespace
       "$")
 
   private[this] lazy val doubleStrHexPat = RegExpImpl.impl.compile(
-      "^"                   +
-      "[\\x00-\\x20]*"      + // optional whitespace
-      "([+-]?)"             + // optional sign
-      "0[xX]"               + // hex marker
-      "([0-9A-Fa-f]*)"      + // integral part
-      "\\.?([0-9A-Fa-f]*)"  + // fractional part
-      "[pP]([+-]?\\d+)"     + // binary exponent
-      "[fFdD]?"             + // optional float / double specifier (ignored)
-      "[\\x00-\\x20]*"      + // optional whitespace
+      "^"                  +
+      "[\\x00-\\x20]*"     + // optional whitespace
+      "([+-]?)"            + // optional sign
+      "0[xX]"              + // hex marker
+      "([0-9A-Fa-f]*)"     + // integral part
+      "\\.?([0-9A-Fa-f]*)" + // fractional part
+      "[pP]([+-]?\\d+)"    + // binary exponent
+      "[fFdD]?"            + // optional float / double specifier (ignored)
+      "[\\x00-\\x20]*"     + // optional whitespace
       "$")
+
+  // scalafmt: {}
 
   def parseDouble(s: String): scala.Double = {
     import RegExpImpl.impl
@@ -305,7 +308,7 @@ object Double {
         else if (binaryExpLong < Int.MinValue.toLong) Int.MinValue
         else binaryExpLong.toInt
       }
-    }  {
+    } {
       val binaryExpDouble = nativeParseInt(binaryExpStr, 10)
       binaryExpDouble.toInt // caps to [MinValue, MaxValue]
     }
@@ -333,8 +336,8 @@ object Double {
       if (a == b) {
         // -0.0 must be smaller than 0.0
         if (a == 0.0) {
-          val ainf = 1.0/a
-          if (ainf == 1.0/b) 0
+          val ainf = 1.0 / a
+          if (ainf == 1.0 / b) 0
           else if (ainf < 0) -1
           else 1
         } else {
@@ -394,7 +397,7 @@ object Double {
   @inline
   private def hashCodeForJS(value: scala.Double): Int = {
     val valueInt = (value.asInstanceOf[js.Dynamic] | 0.asInstanceOf[js.Dynamic]).asInstanceOf[Int]
-    if (valueInt.toDouble == value && 1.0/value != scala.Double.NegativeInfinity)
+    if (valueInt.toDouble == value && 1.0 / value != scala.Double.NegativeInfinity)
       valueInt
     else if (value != value)
       Long.hashCode(CanonicalNaNBits)
