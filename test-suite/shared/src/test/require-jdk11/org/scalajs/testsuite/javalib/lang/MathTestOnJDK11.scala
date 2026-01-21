@@ -18,12 +18,164 @@ import java.util.SplittableRandom
 import org.junit.Test
 import org.junit.Assert._
 
+import org.scalajs.testsuite.utils.AssertExtensions.assertExactEquals
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
 
 class MathTestOnJDK11 {
 
   @noinline
   private def hideFromOptimizer(x: Int): Int = x
+
+  /* Tests for non-special values in fma ported from Rust, under the MIT license:
+   * https://github.com/rust-lang/rust/blob/625b63f9e148d511e187c71e5f70643ee62c77fb/library/compiler-builtins/libm/src/math/fma.rs#L58-L171
+   */
+
+  @Test def fmaDouble(): Unit = {
+    import Double.{
+      MinPositiveValue => MinPos,
+      PositiveInfinity => PosInf,
+      NegativeInfinity => NegInf,
+      NaN
+    }
+    import Math.fma
+
+    def hf(s: String): Double = java.lang.Double.parseDouble(s)
+
+    // Specials
+
+    for (x <- List(+0.0, -0.0, NaN, PosInf, NegInf, 56.5, -103.25)) {
+      // JavaDoc: > If any argument is NaN, the result is NaN.
+      for (y <- List(+0.0, -0.0, NaN, PosInf, NegInf, 56.5, -103.25)) {
+        assertExactEquals(s"$x, $y", NaN, fma(NaN, x, y))
+        assertExactEquals(s"$x, $y", NaN, fma(x, NaN, y))
+        assertExactEquals(s"$x, $y", NaN, fma(x, y, NaN))
+      }
+
+      // > If one of the first two arguments is infinite and the other is zero, the result is NaN.
+      assertExactEquals(s"$x", NaN, fma(PosInf, +0.0, x))
+      assertExactEquals(s"$x", NaN, fma(PosInf, -0.0, x))
+      assertExactEquals(s"$x", NaN, fma(NegInf, +0.0, x))
+      assertExactEquals(s"$x", NaN, fma(NegInf, -0.0, x))
+      assertExactEquals(s"$x", NaN, fma(+0.0, PosInf, x))
+      assertExactEquals(s"$x", NaN, fma(-0.0, PosInf, x))
+      assertExactEquals(s"$x", NaN, fma(+0.0, NegInf, x))
+      assertExactEquals(s"$x", NaN, fma(-0.0, NegInf, x))
+
+      /* > If the exact product of the first two arguments is infinite
+       * > (in other words, at least one of the arguments is infinite and the
+       * > other is neither zero nor NaN) and the third argument is an infinity
+       * > of the opposite sign, the result is NaN.
+       */
+      if (x != 0.0 && !x.isNaN()) {
+        val infSameSignAsX = Math.copySign(PosInf, x)
+
+        assertExactEquals(s"$x", NaN, fma(PosInf, x, -infSameSignAsX))
+        assertExactEquals(s"$x", NaN, fma(NegInf, x, infSameSignAsX))
+        assertExactEquals(s"$x", NaN, fma(x, PosInf, -infSameSignAsX))
+        assertExactEquals(s"$x", NaN, fma(x, NegInf, infSameSignAsX))
+
+        assertExactEquals(s"$x", infSameSignAsX, fma(PosInf, x, infSameSignAsX))
+        assertExactEquals(s"$x", -infSameSignAsX, fma(NegInf, x, -infSameSignAsX))
+        assertExactEquals(s"$x", infSameSignAsX, fma(x, PosInf, infSameSignAsX))
+        assertExactEquals(s"$x", -infSameSignAsX, fma(x, NegInf, -infSameSignAsX))
+      }
+    }
+
+    // Regular inputs
+
+    /* 754-2020 says "When the exact result of (a × b) + c is non-zero yet the
+     * result of fusedMultiplyAdd is zero because of rounding, the zero result
+     * takes the sign of the exact result"
+     */
+    assertExactEquals(+0.0, fma(MinPos, MinPos, +0.0))
+    assertExactEquals(-0.0, fma(MinPos, -MinPos, +0.0))
+    assertExactEquals(-0.0, fma(-MinPos, MinPos, +0.0))
+    assertExactEquals(+0.0, fma(-MinPos, -MinPos, +0.0))
+
+    assertExactEquals(hf("0x0.ffffffffffff8p-1022"),
+        fma(hf("0x1.0p-1070"), hf("0x1.0p-1070"), hf("0x1.ffffffffffffp-1023")))
+    assertExactEquals(hf("-0x1.0p-1022"),
+        fma(hf("0x1.0p-1070"), hf("0x1.0p-1070"), hf("-0x1.0p-1022")))
+
+    assertExactEquals(-2.2204460492503126e-16,
+        fma(-2.220446049250313e-16, -2.220446049250313e-16, -2.220446049250313e-16))
+
+    assertExactEquals(-0.007936000000000007,
+        fma(-0.992, -0.992, -0.992))
+
+    val epsilon = Math.ulp(1.0)
+    assertExactEquals(-3991680619069439e277,
+        fma(-(1.0 - epsilon), Double.MinValue, Double.MinValue))
+
+    assertExactEquals(0.0,
+        fma(1.1102230246251565e-16, -9.812526705433188e-305, 1.0894e-320))
+  }
+
+  @Test def fmaFloat(): Unit = {
+    import Float.{
+      MinPositiveValue => MinPos,
+      PositiveInfinity => PosInf,
+      NegativeInfinity => NegInf,
+      NaN
+    }
+    import Math.fma
+
+    import java.lang.Float.{intBitsToFloat => fromBits}
+
+    // Specials
+
+    for (x <- List(+0.0f, -0.0f, NaN, PosInf, NegInf, 56.5f, -103.25f)) {
+      // JavaDoc: > If any argument is NaN, the result is NaN.
+      for (y <- List(+0.0f, -0.0f, NaN, PosInf, NegInf, 56.5f, -103.25f)) {
+        assertExactEquals(s"$x, $y", NaN, fma(NaN, x, y))
+        assertExactEquals(s"$x, $y", NaN, fma(x, NaN, y))
+        assertExactEquals(s"$x, $y", NaN, fma(x, y, NaN))
+      }
+
+      // > If one of the first two arguments is infinite and the other is zero, the result is NaN.
+      assertExactEquals(s"$x", NaN, fma(PosInf, +0.0f, x))
+      assertExactEquals(s"$x", NaN, fma(PosInf, -0.0f, x))
+      assertExactEquals(s"$x", NaN, fma(NegInf, +0.0f, x))
+      assertExactEquals(s"$x", NaN, fma(NegInf, -0.0f, x))
+      assertExactEquals(s"$x", NaN, fma(+0.0f, PosInf, x))
+      assertExactEquals(s"$x", NaN, fma(-0.0f, PosInf, x))
+      assertExactEquals(s"$x", NaN, fma(+0.0f, NegInf, x))
+      assertExactEquals(s"$x", NaN, fma(-0.0f, NegInf, x))
+
+      /* > If the exact product of the first two arguments is infinite
+       * > (in other words, at least one of the arguments is infinite and the
+       * > other is neither zero nor NaN) and the third argument is an infinity
+       * > of the opposite sign, the result is NaN.
+       */
+      if (x != 0.0f && !x.isNaN()) {
+        val infSameSignAsX = Math.copySign(PosInf, x)
+
+        assertExactEquals(s"$x", NaN, fma(PosInf, x, -infSameSignAsX))
+        assertExactEquals(s"$x", NaN, fma(NegInf, x, infSameSignAsX))
+        assertExactEquals(s"$x", NaN, fma(x, PosInf, -infSameSignAsX))
+        assertExactEquals(s"$x", NaN, fma(x, NegInf, infSameSignAsX))
+
+        assertExactEquals(s"$x", infSameSignAsX, fma(PosInf, x, infSameSignAsX))
+        assertExactEquals(s"$x", -infSameSignAsX, fma(NegInf, x, -infSameSignAsX))
+        assertExactEquals(s"$x", infSameSignAsX, fma(x, PosInf, infSameSignAsX))
+        assertExactEquals(s"$x", -infSameSignAsX, fma(x, NegInf, -infSameSignAsX))
+      }
+    }
+
+    // Regular inputs
+
+    /* 754-2020 says "When the exact result of (a × b) + c is non-zero yet the
+     * result of fusedMultiplyAdd is zero because of rounding, the zero result
+     * takes the sign of the exact result"
+     */
+    assertExactEquals(+0.0f, fma(MinPos, MinPos, +0.0f))
+    assertExactEquals(-0.0f, fma(MinPos, -MinPos, +0.0f))
+    assertExactEquals(-0.0f, fma(-MinPos, MinPos, +0.0f))
+    assertExactEquals(+0.0f, fma(-MinPos, -MinPos, +0.0f))
+
+    assertExactEquals(fromBits(1501560833),
+        fma(fromBits(1266679807), fromBits(1300234242), fromBits(1115553792)))
+  }
 
   @Test def multiplyExactLongInt(): Unit = {
     for (n <- Seq(Long.MinValue, -1L, 0L, 1L, Long.MaxValue)) {

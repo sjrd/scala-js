@@ -57,6 +57,167 @@ object Math {
   @inline def min(a: scala.Float, b: scala.Float): scala.Float = js.Math.min(a, b).toFloat
   @inline def min(a: scala.Double, b: scala.Double): scala.Double = js.Math.min(a, b)
 
+  @noinline
+  def fma(a: scala.Double, b: scala.Double, c: scala.Double): scala.Double =
+    fmaGeneric(a, b, c)
+
+  @noinline
+  def fma(a: scala.Float, b: scala.Float, c: scala.Float): scala.Float =
+    fmaGeneric(a, b, c)
+
+  @inline
+  private def fmaGeneric[I, F](a: F, b: F, c: F)(implicit ops: IntFloatBits[I, F]): F = {
+    // scalastyle:off return
+
+    // See https://hal.science/hal-04575249v1/document
+
+    import ops._
+
+    // constants
+    val p = mbits // by definition
+    val P = intToFloat((one << (p - 1)) + one)
+    val Q = intToFloat(one << (p - 1))
+
+    // Special cases (not in the paper)
+
+    val aBits = floatToBits(a)
+    val bBits = floatToBits(b)
+    if (isSpecialBitPattern(aBits) || isSpecialBitPattern(bBits)) {
+      /* The product will be a special, which is mathematically accurate.
+       * We can use the non-fused operations.
+       */
+      return (a * b) + c
+    }
+
+    val cBits = floatToBits(c)
+    if (isSpecialBitPattern(cBits)) {
+      if (c === fzero) {
+        // The addition will be neutral; we only need to do the multiplication
+        return a * b
+      } else {
+        // c is NaN or an infinity, but the real product is finite, so the result is c
+        return c
+      }
+    }
+
+    // Now the algorithm of the paper
+
+    val (πh, πl) = dekkerProd(a, b)
+    val (sh, sl) = twoSum(πh, c)
+    val (vh, vl) = twoSum(πl, sl)
+    val (zh, zl) = fastTwoSum(sh, vh)
+
+    System.out.println(s"($πh, $πl), ($sh, $sl), ($vh, $vl), ($zh, $zl)")
+
+    val w = vl + zl
+    val dtemp1 = zh + w
+    if (!isPowerOf2(w)) {
+      dtemp1
+    } else {
+      val w2 = fromFloat32(1.5f) * w
+      val dtemp2 = zh + w2
+      if (dtemp2 === zh) {
+        zh
+      } else {
+        val δ = w - zl
+        val t = vl - δ
+        if (t === fzero) {
+          dtemp1
+        } else {
+          val g = t * w
+          if (g < fzero) {
+            zh
+          } else {
+            dtemp2
+          }
+        }
+      }
+    }
+
+    // scalastyle:on return
+  }
+
+  /** Algorithm 1 – The Fast2Sum algorithm. */
+  @inline
+  private def fastTwoSum[I, F](a: F, b: F)(implicit ops: IntFloatBits[I, F]): (F, F) = {
+    import ops._
+
+    val s = a + b
+    val z = s - a
+    val t = b - z
+    (s, t)
+  }
+
+  /** Algorithm 2 – The 2Sum algorithm. */
+  @inline
+  private def twoSum[I, F](a: F, b: F)(implicit ops: IntFloatBits[I, F]): (F, F) = {
+    import ops._
+
+    // 2 stands for ', as there is nothing that looks like a prime that we can use
+    val s = a + b
+    val a2 = s - b
+    val b2 = s - a2
+    val δa = a - a2
+    val δb = b - b2
+    val t = δa + δb
+    (s, t)
+  }
+
+  /** Algorithm 3 – Veltkamp’s splitting algorithm.
+   *
+   *  Returns a pair (xh, xl) of FP numbers such that the significand of xh
+   *  fits in s − p bits, the significand of xl fits in s − 1 bits, and
+   *  xh + xl = x.
+   */
+  @inline
+  private def split[I, F](x: F, s: Int)(implicit ops: IntFloatBits[I, F]): (F, F) = {
+    import ops._
+
+    val K = intToFloat((one << s) + one) // K = 2^s + 1, constant
+    val γ = K * x
+    val δ = x - γ
+    val xh = γ + δ
+    val xl = x - xh
+    (xh, xl)
+  }
+
+  /** Algorithm 4 – Dekker’s product.
+   *
+   *  Returns a pair (πh, πl) of FP numbers such that πh = RN(ab) and πh + πl = ab.
+   */
+  @inline
+  private def dekkerProd[I, F](a: F, b: F)(implicit ops: IntFloatBits[I, F]): (F, F) = {
+    import ops._
+
+    val s = (mbits + 1) >>> 1 // s = ⌈p/2⌉, constant
+    val (ah, al) = split(a, s)
+    val (bh, bl) = split(b, s)
+    val πh = a * b
+    System.out.println(s"$ah, $bh, ${ah * bh}")
+    val t1 = -πh + (ah * bh)
+    val t2 = t1 + (ah * bl)
+    val t3 = t2 + (al * bh)
+    val πl = t3 + (al * bl)
+    System.out.println(s"$πh, $t1, $t2, $t3, $πl")
+    (πh, πl)
+  }
+
+  /** Algorithm 6 – IsPowerOf2. */
+  @inline
+  private def isPowerOf2[I, F](x: F)(implicit ops: IntFloatBits[I, F]): scala.Boolean = {
+    import ops._
+
+    // constants
+    val p = mbits // by definition
+    val P = intToFloat((one << (p - 1)) + one) // 2^(p-1) + 1
+    val Q = intToFloat(one << (p - 1)) // 2^(p-1)
+
+    val L = P * x
+    val R = Q * x
+    val Δ = L - R
+    Δ === x
+  }
+
   def IEEEremainder(f1: scala.Double, f2: scala.Double): scala.Double = {
     /* Inspired by the algorithm of fdlibm:
      * https://github.com/freemint/fdlibm/blob/46a0b20e7094cb2946be02f905a6bdea9933cf29/e_remainder.c
