@@ -31,6 +31,7 @@ import org.scalajs.linker.backend.javascript.{Trees => js, _}
 import org.scalajs.linker.CollectionsCompat.MutableMapCompatOps
 
 import EmitterNames._
+import GlobalKnowledge._
 import GlobalRefUtils._
 
 /** Emits a desugared JS tree to a builder */
@@ -1143,6 +1144,52 @@ final class Emitter(config: Emitter.Config, prePrinter: Emitter.PrePrinter) {
         invalidate()
 
       _trackerUsed
+    }
+  }
+
+  private class InterfaceTypeTestInfoDataCache extends knowledgeGuardian.KnowledgeAccessor {
+    private[this] var _lastInfos: InterfaceTypeTestInfos = null
+    private[this] var _decls: WithGlobals[List[js.Tree]] = _
+
+    def build(infos: InterfaceTypeTestInfos, sjsGen: SJSGen,
+        moduleContext: ModuleContext): WithGlobals[List[js.Tree]] = {
+      if (infos != _lastInfos) {
+        _decls = makeDecls(infos, sjsGen)(moduleContext)
+        _lastInfos = infos
+      }
+      _decls
+    }
+
+    override def invalidate(): Unit = {
+      super.invalidate()
+      _lastInfos = null
+      _decls = null
+    }
+
+    private def makeDecls(infos: InterfaceTypeTestInfos, sjsGen: SJSGen)(
+        implicit moduleContext: ModuleContext): WithGlobals[List[js.Tree]] = {
+
+      implicit val globalKnowledge = this
+      implicit val pos = Position.NoPosition
+
+      import sjsGen._
+      import varGen._
+
+      val bucketCountDef =
+        globalVarDef(VarField.bucketCount, CoreVar, js.IntLiteral(infos.bucketCount))
+
+      val intfIDToBucketData = Array.fill(infos.maxIDWithBucket + 1)(-1)
+      for (info <- infos.infos.valuesIterator) {
+        if (info.bucket != InterfaceTypeTestInfo.NoBucket)
+          intfIDToBucketData(info.id) = info.bucket
+      }
+
+      val intfIDToBucketDef = globalVarDef(VarField.intfIDToBucket, CoreVar, {
+        js.New(js.VarRef(js.Ident("Int32Array")),
+            List(js.ArrayConstr(intfIDToBucketData.toList.map(js.IntLiteral(_)))))
+      })
+
+      WithGlobals.flatten(List(intfIDToBucketDef, intfIDToBucketDef))
     }
   }
 

@@ -101,6 +101,7 @@ private[emitter] object CoreJSLib {
     private val NumberRef = globalRef("Number")
     private val DataViewRef = globalRef("DataView")
     private val ArrayBufferRef = globalRef("ArrayBuffer")
+    private val Int32ArrayRef = globalRef("Int32Array")
     private val TypeErrorRef = globalRef("TypeError")
     private def BigIntRef = globalRef("BigInt")
     private val SymbolRef = globalRef("Symbol")
@@ -672,6 +673,35 @@ private[emitter] object CoreJSLib {
       defineFunction1(VarField.noIsInstance) { instance =>
         Throw(New(TypeErrorRef,
             str("Cannot call isInstance() on a Class representing a JS trait/object") :: Nil))
+      } :::
+
+      defineFunction1(VarField.makeInterfacesArray) { ancestors =>
+        val r = varRef("r")
+        val i = varRef("i")
+        Block(
+          const(r, New(Int32ArrayRef, List(100))), // FIXME Use the right number
+          ???
+        )
+      } :::
+
+      defineFunction2(VarField.ancestorExists) { (ancestors, id) =>
+        // Binary search of `id` in `ancestors`, for reflective assignability tests
+        val start = varRef("start")
+        val end = varRef("end")
+        val mid = varRef("mid")
+        Block(
+          let(start, 0),
+          let(end, ancestors.length),
+          While(((start + 1) | 0) < end, Block(
+            const(mid, (start + end) >>> 1),
+            If(id < BracketSelect(ancestors, mid), {
+              end := mid
+            }, {
+              start := mid
+            })
+          )),
+          Return(start < end && BracketSelect(ancestors, start) === id)
+        )
       } :::
 
       defineFunction1(VarField.objectClone) { instance =>
@@ -1729,6 +1759,12 @@ private[emitter] object CoreJSLib {
       def privateFieldSet(fieldName: String, value: Tree): Tree =
         This() DOT fieldName := value
 
+      def ancestorsToTypedArray(ancestors: Tree): Tree = {
+        // TODO Ideally we should use an Int16Array in most codebases
+        if (esVersion >= ESVersion.ES2015) New(Int32ArrayRef, List(ancestors))
+        else ancestors
+      }
+
       val ctor = {
         MethodDef(static = false, Ident("constructor"), Nil, None, {
           Block(
@@ -1738,6 +1774,7 @@ private[emitter] object CoreJSLib {
               else
                 Skip(),
               privateFieldSet(cpn.ancestors, Null()),
+              privateFieldSet(cpn.interfaces, Null()),
               privateFieldSet(cpn.componentData, Null()),
               privateFieldSet(cpn.arrayBase, Null()),
               privateFieldSet(cpn.arrayDepth, int(0)),
@@ -1777,7 +1814,7 @@ private[emitter] object CoreJSLib {
         MethodDef(static = false, Ident(cpn.initPrim),
             paramList(zero, arrayEncodedName, displayName, arrayClass, typedArrayClass), None, {
           Block(
-              privateFieldSet(cpn.ancestors, ObjectConstr(Nil)),
+              privateFieldSet(cpn.ancestors, ancestorsToTypedArray(ArrayConstr(Nil))),
               privateFieldSet(cpn.zero, zero),
               privateFieldSet(cpn.arrayEncodedName, arrayEncodedName),
               const(self, This()), // capture `this` for use in arrow fun
@@ -1810,8 +1847,9 @@ private[emitter] object CoreJSLib {
         val ancestors = varRef("ancestors")
         val parentData = varRef("parentData")
         val isInstance = varRef("isInstance")
-        val internalName = varRef("internalName")
+        val myID = varRef("myID")
         val that = varRef("that")
+        val thatAncestors = varRef("thatAncestors")
         val depth = varRef("depth")
         val obj = varRef("obj")
         val params =
@@ -1819,21 +1857,20 @@ private[emitter] object CoreJSLib {
           else paramList(kindOrCtor, fullName, ancestors, isInstance)
         MethodDef(static = false, Ident(cpn.initClass), params, None, {
           Block(
-              /* Extract the internalName, which is the first property of ancestors.
-               * We use `getOwnPropertyNames()`, which since ES 2015 guarantees
-               * to return non-integer string keys in creation order.
-               */
-              const(internalName,
-                  BracketSelect(Apply(genIdentBracketSelect(ObjectRef, "getOwnPropertyNames"), List(ancestors)), 0)),
+              // Extract the ID of this class, which is the first element of ancestors.
+              ancestors := ancestorsToTypedArray(ancestors),
+              const(myID, BracketSelect(ancestors, 0)),
               if (hasParentData)
                 privateFieldSet(cpn.parentData, parentData)
               else
                 Skip(),
               privateFieldSet(cpn.ancestors, ancestors),
+              privateFieldSet(cpn.interfaces,
+                  genCallHelper(VarField.makeInterfacesArray, ancestors)),
               privateFieldSet(cpn.arrayEncodedName, str("L") + fullName + str(";")),
               privateFieldSet(cpn.isAssignableFromFun, {
                 genArrowFunction(paramList(that), {
-                  Return(!(!(BracketSelect(that DOT cpn.ancestors, internalName))))
+                  Return(genCallHelper(VarField.ancestorExists, that DOT cpn.ancestors, myID))
                 })
               }),
               privateFieldSet(cpn.isJSType, kindOrCtor === 2),
@@ -1841,8 +1878,9 @@ private[emitter] object CoreJSLib {
               privateFieldSet(cpn.isInterface, kindOrCtor === 1),
               privateFieldSet(cpn.isInstance, isInstance || {
                 genArrowFunction(paramList(obj), {
-                  Return(!(!(obj && (obj DOT classData) &&
-                      BracketSelect(obj DOT classData DOT cpn.ancestors, internalName))))
+                  Return(genIsScalaJSObject(obj) &&
+                      genCallHelper(VarField.ancestorExists,
+                          obj DOT classData DOT cpn.ancestors, myID))
                 })
               }),
               If(typeof(kindOrCtor) !== str("number"), {

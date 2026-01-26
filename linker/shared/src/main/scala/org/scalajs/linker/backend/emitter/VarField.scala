@@ -26,6 +26,14 @@ private[emitter] object VarField {
     new VarField(str)
   }
 
+  // Global "configuration" variables computed outside of the CoreJSLib
+
+  /** Number of buckets used for interface type tests. */
+  final val bucketCount = mk("$bucketCount")
+
+  /** Array mapping interface IDs to their bucket. */
+  final val intfIDToBucket = mk("$intfIDToBucket")
+
   // Scala class related fields.
 
   /** Scala classes (constructor functions). */
@@ -223,6 +231,10 @@ private[emitter] object VarField {
   final val throwClassCastException = mk("$throwClassCastException")
 
   final val noIsInstance = mk("$noIsInstance")
+
+  final val makeInterfacesArray = mk("$makeInterfacesArray")
+
+  final val ancestorExists = mk("$ancestorExists")
 
   // Unboxes
   final val uV = mk("$uV")
