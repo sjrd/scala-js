@@ -25,6 +25,7 @@ package org.scalajs.linker.runtime
 /** Implementation for the Long operations on the JavaScript platform. */
 object RuntimeLong {
   private final val TwoPow32 = 4294967296.0
+  private final val TwoPow32Inv = 1.0 / TwoPow32
   private final val TwoPow63 = 9223372036854775808.0
 
   /** The magical mask that allows to test whether a long is a safe double.
@@ -650,7 +651,7 @@ object RuntimeLong {
 
   def fromDouble(value: Double): Long = {
     /* When value is NaN, the conditions of the 3 `if`s are false, and we end
-     * up returning (NaN | 0, (NaN / TwoPow32) | 0), which is correctly (0, 0).
+     * up returning (NaN | 0, (NaN * TwoPow32Inv) | 0), which is correctly (0, 0).
      */
 
     if (value < -TwoPow63) {
@@ -659,14 +660,14 @@ object RuntimeLong {
       Long.MaxValue
     } else {
       val rawLo = rawToInt(value)
-      val rawHi = rawToInt(value / TwoPow32)
+      val rawHi = rawToInt(value * TwoPow32Inv)
 
       /* Magic!
        *
        * When value < 0, this should *reasonably* be:
        *   val absValue = -value
        *   val absLo = rawToInt(absValue)
-       *   val absHi = rawToInt(absValue / TwoPow32)
+       *   val absHi = rawToInt(absValue * TwoPow32Inv)
        *   val lo = -absLo
        *   hiReturn = if (absLo != 0) ~absHi else -absHi
        *   return lo
@@ -675,7 +676,7 @@ object RuntimeLong {
        * absLo and absHi without absValue as:
        *   val absLo = -rawToInt(value)
        *             = -rawLo
-       *   val absHi = -rawToInt(value / TwoPow32)
+       *   val absHi = -rawToInt(value * TwoPow32Inv)
        *             = -rawHi
        *
        * Now, we can replace absLo in the definition of lo and get:
@@ -693,7 +694,7 @@ object RuntimeLong {
        *   return rawLo
        *
        * When value >= 0, the definitions are simply
-       *   hiReturn = rawToInt(value / TwoPow32) = rawHi
+       *   hiReturn = rawToInt(value * TwoPow32Inv) = rawHi
        *   lo = rawToInt(value) = rawLo
        *
        * Combining the negative and positive cases, we get:
@@ -1255,7 +1256,7 @@ object RuntimeLong {
 
   /** Computes the hi part of a long from an unsigned safe double. */
   @inline def unsignedSafeDoubleHi(x: Double): Int =
-    rawToInt(x / TwoPow32)
+    rawToInt(x * TwoPow32Inv)
 
   /** Approximates an unsigned (lo, hi) with a Double. */
   @inline def unsignedToDoubleApprox(lo: Int, hi: Int): Double =

@@ -28,22 +28,20 @@ import scala.scalajs.js
  */
 object FloatingPointBitsPolyfills {
   private val floatPowsOf2: js.Array[Double] =
-    makePowsOf2(len = 1 << 8, java.lang.Float.MIN_NORMAL.toDouble)
+    makePowsOf2(len = 1 << 8, 0.5 * java.lang.Float.MIN_NORMAL.toDouble)
 
   private val doublePowsOf2: js.Array[Double] =
-    makePowsOf2(len = 1 << 11, java.lang.Double.MIN_NORMAL)
+    makePowsOf2(len = 1 << 11, 0.5 * java.lang.Double.MIN_NORMAL)
 
-  private def makePowsOf2(len: Int, minNormal: Double): js.Array[Double] = {
-    val r = new js.Array[Double](len)
-    r(0) = 0.0
-    var i = 1
-    var next = minNormal
-    while (i != len - 1) {
+  private def makePowsOf2(len: Int, halfMinNormal: Double): js.Array[Double] = {
+    val r = js.Array[Double]()
+    var next = halfMinNormal
+    var i = 0
+    while (i != len) {
       r(i) = next
+      next += next // *= 2.0
       i += 1
-      next *= 2
     }
-    r(len - 1) = Double.PositiveInfinity
     r
   }
 
@@ -53,7 +51,7 @@ object FloatingPointBitsPolyfills {
     val fbits = 23
     val sign = (bits >> 31) | 1 // -1 or 1
     val e = (bits >> fbits) & ((1 << ebits) - 1)
-    val f = bits & ((1 << fbits) - 1)
+    val f = (bits & ((1 << fbits) - 1)).toDouble
     decodeIEEE754(ebits, fbits, floatPowsOf2, Float.MinPositiveValue, sign, e, f)
   }
 
@@ -74,7 +72,7 @@ object FloatingPointBitsPolyfills {
     // Compute e and f
     val powsOf2 = this.floatPowsOf2 // local cache
     val e = encodeIEEE754Exponent(ebits, powsOf2, av)
-    val f = encodeIEEE754MantissaBits(ebits, fbits, powsOf2, Float.MinPositiveValue.toDouble, av, e)
+    val f = encodeIEEE754MantissaBits(ebits, fbits, powsOf2, isFloat = true, av, e)
 
     // Encode
     s | (e << fbits) | rawToInt(f)
@@ -84,12 +82,9 @@ object FloatingPointBitsPolyfills {
   def doubleFromBits(bits: Long): Double = {
     val ebits = 11
     val fbits = 52
-    val hifbits = fbits - 32
-    val hi = (bits >>> 32).toInt
-    val lo = (bits & 0xffffffffL).toDouble
-    val sign = (hi >> 31) | 1 // -1 or 1
-    val e = (hi >> hifbits) & ((1 << ebits) - 1)
-    val f = (hi & ((1 << hifbits) - 1)).toDouble * 0x100000000L.toDouble + lo
+    val sign = (bits >> 63).toInt | 1 // -1 or 1
+    val e = (bits >> fbits).toInt & ((1 << ebits) - 1)
+    val f = (bits & ((1L << fbits) - 1L)).toDouble
     decodeIEEE754(ebits, fbits, doublePowsOf2, Double.MinPositiveValue, sign, e, f)
   }
 
@@ -98,22 +93,19 @@ object FloatingPointBitsPolyfills {
     // Some constants
     val ebits = 11
     val fbits = 52
-    val hifbits = fbits - 32
 
     // Determine sign bit and compute the absolute value av
     val sign = if (value < 0.0 || (value == 0.0 && 1.0 / value < 0.0)) -1 else 1
-    val s = sign & Int.MinValue
+    val s = (sign & Int.MinValue).toLong << 32
     val av = sign * value
 
     // Compute e and f
     val powsOf2 = this.doublePowsOf2 // local cache
     val e = encodeIEEE754Exponent(ebits, powsOf2, av)
-    val f = encodeIEEE754MantissaBits(ebits, fbits, powsOf2, Double.MinPositiveValue, av, e)
+    val f = encodeIEEE754MantissaBits(ebits, fbits, powsOf2, isFloat = false, av, e)
 
     // Encode
-    val hi = s | (e << hifbits) | rawToInt(f / 0x100000000L.toDouble)
-    val lo = rawToInt(f)
-    (hi.toLong << 32) | (lo.toLong & 0xffffffffL)
+    s | ((e.toLong & 0xffffffffL) << fbits) | rawToLong(f)
   }
 
   @inline
@@ -123,7 +115,7 @@ object FloatingPointBitsPolyfills {
 
     // Some constants
     val specialExponent = (1 << ebits) - 1
-    val twoPowFbits = (1L << fbits).toDouble
+    val twoPowFbitsInv = 1.0 / (1L << fbits).toDouble
 
     if (e == specialExponent) {
       // Special
@@ -133,7 +125,7 @@ object FloatingPointBitsPolyfills {
         Double.NaN
     } else if (e > 0) {
       // Normalized
-      sign * powsOf2(e) * (1 + f / twoPowFbits)
+      sign * powsOf2(e) * (1.0 + f * twoPowFbitsInv)
     } else {
       // Subnormal
       sign * f * minPositiveValue
@@ -161,12 +153,13 @@ object FloatingPointBitsPolyfills {
 
   @inline
   private def encodeIEEE754MantissaBits(ebits: Int, fbits: Int,
-      powsOf2: js.Array[Double], minPositiveValue: Double,
-      av: Double, e: Int): Double = {
+      powsOf2: js.Array[Double], isFloat: Boolean, av: Double, e: Int): Double = {
 
     // Some constants
     val specialExponent = (1 << ebits) - 1
     val twoPowFbits = (1L << fbits).toDouble
+    val floatMinPosInv = 1.0 / Float.MinPositiveValue.toDouble
+    val doubleMinPosSqrtInv = 4.4989137945431964e161
 
     if (e == specialExponent) {
       if (av != av)
@@ -174,14 +167,33 @@ object FloatingPointBitsPolyfills {
       else
         0.0 // Infinity
     } else {
-      if (e == 0)
-        av / minPositiveValue // Subnormal
-      else
-        ((av / powsOf2(e)) - 1.0) * twoPowFbits // Normal
+      if (e == 0) {
+        /* Subnormal
+         * For floats, a single multiplication works. For doubles, the inverse
+         * of minPos is not representable, so we need two multiplications,
+         * which are still better than one division.
+         */
+        if (isFloat)
+          av * floatMinPosInv
+        else
+          (av * doubleMinPosSqrtInv) * doubleMinPosSqrtInv
+      } else {
+        /* Normal
+         * powsOf2(specialExponent - 1 - e) == 1.0 / powsOf2(e)
+         */
+        ((av * powsOf2(specialExponent - 1 - e)) - 1.0) * twoPowFbits
+      }
     }
   }
 
   @inline private def rawToInt(x: Double): Int =
     (x.asInstanceOf[js.Dynamic] | 0.asInstanceOf[js.Dynamic]).asInstanceOf[Int]
+
+  @inline private def rawToLong(x: Double): Long = {
+    val twoPow32Inv = 1.0 / 4294967296.0
+    val lo = rawToInt(x)
+    val hi = rawToInt(x * twoPow32Inv)
+    (lo.toLong & 0xffffffffL) | (hi.toLong << 32)
+  }
 
 }
