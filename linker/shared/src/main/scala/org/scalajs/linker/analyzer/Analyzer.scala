@@ -1428,6 +1428,8 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
     private val usedJSInPureWasm: Boolean =
       (data.globalFlags & ReachabilityInfo.FlagUsedJSInPureWasm) != 0
 
+    private val jsInteropUsages: Array[(ir.Position, String)] = data.jsInteropUsages
+
     /** Throws MatchError if `!isDefaultBridge`. */
     def defaultBridgeTarget: ClassName = (syntheticKind: @unchecked) match {
       case MethodSyntheticKind.DefaultBridge(target) => target
@@ -1442,7 +1444,7 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
       _calledFrom ::= from
       if (!_isReachable.getAndSet(true)) {
         if (usedJSInPureWasm)
-          _errors ::= JSInteropInPureWasm(from)
+          _errors ::= JSInteropInPureWasm(jsInteropUsages, from)
 
         _isAbstractReachable.set(true)
         doReach()
@@ -1454,7 +1456,7 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
 
       if (!_isAbstractReachable.getAndSet(true)) {
         if (usedJSInPureWasm)
-          _errors ::= JSInteropInPureWasm(from)
+          _errors ::= JSInteropInPureWasm(jsInteropUsages, from)
 
         checkExistent()
         _calledFrom ::= from
@@ -1476,7 +1478,7 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
 
       if (!_isReachable.getAndSet(true)) {
         if (usedJSInPureWasm)
-          _errors ::= JSInteropInPureWasm(from)
+          _errors ::= JSInteropInPureWasm(jsInteropUsages, from)
 
         _isAbstractReachable.set(true)
         doReach()
