@@ -1120,95 +1120,62 @@ object RuntimeLong {
   private def unsignedDivModHelper(alo: Int, ahi: Int, blo: Int, bhi: Int,
       askQuotient: Boolean): Long = {
 
-    /* Conveniently, when b = 0, we enter the first case, where the first thing
-     * we do is an int division by blo, which will throw an ArithmeticException.
-     * So we don't need a separate check for that case here.
-     */
+    import scala.scalajs.js.Math
 
-    if (bothZero(bhi, blo & 0xffe00000)) {
-      // b < 2^21
+    if (bothZero(blo, bhi))
+      throw new ArithmeticException("/ by zero")
 
-      if (askQuotient) {
-        val quotHi = Integer.divideUnsigned(ahi, blo)
-        val k = ahi - blo * quotHi
-        val quotLo = rawToInt(asSafeDouble(alo, k) / blo.toDouble)
-        pack(quotLo, quotHi)
-      } else {
-        val k = Integer.remainderUnsigned(ahi, blo)
-        val quotLo = rawToInt(asSafeDouble(alo, k) / blo.toDouble)
-        val remLo = alo - blo * quotLo
-        pack(remLo, 0)
-      }
-    } else if ((bhi & 0xc0000000) == 0) {
-      // 2^21 <= b < 2^62
+    @inline
+    def toUnsignedNumber(x: Long): Double =
+      unsignedToDoubleApprox(x.toInt, (x >>> 32).toInt)
 
-      val a = pack(alo, ahi)
-      val b = pack(blo, bhi)
-      val aHat = unsignedToDoubleApprox(alo, ahi)
-      val bHat = unsignedToDoubleApprox(blo, bhi)
-      val qHat = fromUnsignedSafeDouble(aHat / bHat)
-      val rHat = a - b * qHat
+    val SignBit = Long.MinValue
 
-      if (rHat < 0L) {
-        if (askQuotient) qHat - 1L
-        else rHat + b
-      } else if (geu(rHat, b)) {
-        if (askQuotient) qHat + 1L
-        else rHat - b
-      } else {
-        if (askQuotient) qHat
-        else rHat
-      }
-    } else {
-      // 2^62 <= b
-      unsignedDivModHugeDivisor(alo, ahi, blo, bhi, askQuotient)
-    }
-  }
-
-  private def unsignedDivModHugeDivisor(alo: Int, ahi: Int, blo: Int, bhi: Int,
-      askQuotient: Boolean): Long = {
-
-    /* Called for b >= 2^62.
-     * Such huge divisors are practically useless, but they defeat the
-     * correction code of the algorithm above.
-     *
-     * Since b >= 2^62 and a < 2^64, we know that a < 4*b (mathematically).
-     *
-     * Hence, there are only 4 possible outcomes for the quotient, we perform
-     * a "binary search" (with 1 or 2 steps) among those.
-     */
-
-    val a = pack(alo, ahi)
+    // Repeat the following until the remainder is less than other:  find a
+    // floating-point that approximates remainder / other *from below*, add this
+    // into the result, and subtract it from the remainder.  It is critical that
+    // the approximate value is less than or equal to the real value so that the
+    // remainder never becomes negative.
     val b = pack(blo, bhi)
+    val bNumber = unsignedToDoubleApprox(blo, bhi)
 
-    // First (optional) step of the binary search
-    var quot1 = 0
-    val rem1 = if (bhi >= 0) {
-      // Bit 63 is 0: 2*b does not overflow, and we need a 4-way search
-      val b2 = b << 1
-      if (geu(a, b2)) {
-        quot1 = 2
-        a - b2
-      } else {
-        a
+    var res = 0L
+    var rem = pack(alo, ahi)
+
+    while (geu(rem, b)) {
+      // Approximate the result of division. This may be a little greater or
+      // smaller than the actual value.
+      var approx = Math.max(1.0, Math.floor(toUnsignedNumber(rem) / bNumber))
+
+      // We will tweak the approximate result by changing it in the 48-th digit
+      // or the smallest non-fractional digit, whichever is larger.
+      var log2 = Math.ceil(Math.log(approx) / Math.LN2)
+      var delta = if (log2 <= 48) 1.0 else Math.pow(2, log2 - 48)
+
+      // Decrease the approximation until it is smaller than the remainder. Note
+      // that if it is too large, the product overflows and is negative.
+      var approxRes = fromUnsignedSafeDouble(approx)
+      var approxRem = approxRes * b
+      while ((approxRem ^ SignBit) > (rem ^ SignBit)) {
+        approx -= delta
+        approxRes = fromUnsignedSafeDouble(approx)
+        approxRem = approxRes * b
       }
-    } else {
-      a
+
+      // We know the answer can't be zero... and actually, zero would cause
+      // infinite recursion since we would make no progress.
+      if (approxRes == 0L) {
+        approxRes = 1L
+      }
+
+      res = res + approxRes
+      rem = rem - approxRem
     }
 
-    // Second (mandatory) step; at this point, rem1 < 2*b (mathematically)
-    val rem1LTUb = ltu(rem1, b) // compute once for code size
-    if (askQuotient) {
-      if (rem1LTUb)
-        pack(quot1, 0)
-      else
-        pack(quot1 + 1, 0)
-    } else {
-      if (rem1LTUb)
-        rem1
-      else
-        rem1 - b
-    }
+    if (askQuotient)
+      res
+    else
+      rem
   }
 
   @inline
