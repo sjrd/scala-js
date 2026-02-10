@@ -1145,7 +1145,7 @@ object RuntimeLong {
      * val, which will explose the while condition as a while(true) + if +
      * break, and we don't want that.
      */
-    while (shift >= 0 && ((rem >>> 32).toInt & SafeDoubleHiMask) != 0) {
+    while (shift >= 0) {
       if (geu(rem, bShift)) {
         rem = rem - bShift
         if (shift < 32)
@@ -1159,24 +1159,10 @@ object RuntimeLong {
 
     val quot = pack(quotLo, quotHi)
 
-    // Now rem < 2^53, we can finish with a double division
-    if (geu(rem, bOrig)) {
-      val remDouble = asSafeDouble(rem.toInt, (rem >>> 32).toInt)
-      val bDouble = asSafeDouble(blo, bhi)
-
-      if (askQuotient) {
-        val rem_div_bDouble = fromUnsignedSafeDouble(remDouble / bDouble)
-        quot + rem_div_bDouble
-      } else {
-        val rem_mod_bDouble = remDouble % bDouble
-        fromUnsignedSafeDouble(rem_mod_bDouble)
-      }
+    if (askQuotient) {
+      quot
     } else {
-      if (askQuotient) {
-        quot
-      } else {
-        rem
-      }
+      rem
     }
   }
 
