@@ -1120,48 +1120,63 @@ object RuntimeLong {
   private def unsignedDivModHelper(alo: Int, ahi: Int, blo: Int, bhi: Int,
       askQuotient: Boolean): Long = {
 
-    /* Conveniently, when b = 0, we enter the first case, where the first thing
-     * we do is an int division by blo, which will throw an ArithmeticException.
-     * So we don't need a separate check for that case here.
-     */
+    if (bothZero(blo, bhi))
+      throw new ArithmeticException("/ by zero")
 
-    if (bothZero(bhi, blo & 0xffe00000)) {
-      // b < 2^21
+    val aOrig = pack(alo, ahi)
+    val bOrig = pack(blo, bhi)
+
+    var shift = clz(blo, bhi) - clz(alo, ahi)
+    var bShift = bOrig << shift
+    var rem = aOrig
+    var quotLo = 0
+    var quotHi = 0
+
+    /* Invariants:
+     *   bShift == b << shift == b * 2^shift
+     *   quot >= 0
+     *   0 <= rem < 2 * bShift
+     *   quot * b + rem == a
+     *
+     * The loop condition should be
+     *   while (shift >= 0 && !isUnsignedSafeDouble(remHi))
+     * but we manually inline isUnsignedSafeDouble because remHi is a var. If
+     * we let the optimizer inline it, it will first store remHi in a temporary
+     * val, which will explose the while condition as a while(true) + if +
+     * break, and we don't want that.
+     */
+    while (shift >= 0 && ((rem >>> 32).toInt & SafeDoubleHiMask) != 0) {
+      if (geu(rem, bShift)) {
+        rem = rem - bShift
+        if (shift < 32)
+          quotLo |= (1 << shift)
+        else
+          quotHi |= (1 << shift) // == (1 << (shift - 32))
+      }
+      shift -= 1
+      bShift = bShift >>> 1
+    }
+
+    val quot = pack(quotLo, quotHi)
+
+    // Now rem < 2^53, we can finish with a double division
+    if (geu(rem, bOrig)) {
+      val remDouble = asSafeDouble(rem.toInt, (rem >>> 32).toInt)
+      val bDouble = asSafeDouble(blo, bhi)
 
       if (askQuotient) {
-        val quotHi = Integer.divideUnsigned(ahi, blo)
-        val k = ahi - blo * quotHi
-        val quotLo = rawToInt(asSafeDouble(alo, k) / blo.toDouble)
-        pack(quotLo, quotHi)
+        val rem_div_bDouble = fromUnsignedSafeDouble(remDouble / bDouble)
+        quot + rem_div_bDouble
       } else {
-        val k = Integer.remainderUnsigned(ahi, blo)
-        val quotLo = rawToInt(asSafeDouble(alo, k) / blo.toDouble)
-        val remLo = alo - blo * quotLo
-        pack(remLo, 0)
-      }
-    } else if ((bhi & 0xc0000000) == 0) {
-      // 2^21 <= b < 2^62
-
-      val a = pack(alo, ahi)
-      val b = pack(blo, bhi)
-      val aHat = unsignedToDoubleApprox(alo, ahi)
-      val bHat = unsignedToDoubleApprox(blo, bhi)
-      val qHat = fromUnsignedSafeDouble(aHat / bHat)
-      val rHat = a - b * qHat
-
-      if (rHat < 0L) {
-        if (askQuotient) qHat - 1L
-        else rHat + b
-      } else if (geu(rHat, b)) {
-        if (askQuotient) qHat + 1L
-        else rHat - b
-      } else {
-        if (askQuotient) qHat
-        else rHat
+        val rem_mod_bDouble = remDouble % bDouble
+        fromUnsignedSafeDouble(rem_mod_bDouble)
       }
     } else {
-      // 2^62 <= b
-      unsignedDivModHugeDivisor(alo, ahi, blo, bhi, askQuotient)
+      if (askQuotient) {
+        quot
+      } else {
+        rem
+      }
     }
   }
 
