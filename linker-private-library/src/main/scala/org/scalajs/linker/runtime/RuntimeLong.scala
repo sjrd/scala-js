@@ -781,9 +781,9 @@ object RuntimeLong {
     if (bothZero(blo, bhi))
       throw new ArithmeticException("/ by zero")
 
-    val a = BigInt(uintToDouble(alo)) + (BigInt(ahi) << BigInt(32))
-    val b = BigInt(uintToDouble(blo)) + (BigInt(bhi) << BigInt(32))
-    val r = a / b
+    val a = BigInt.asIntN(64, BigInt(uintToDouble(alo)) + BigInt.asIntN(64, (BigInt(ahi) << BigInt(32))))
+    val b = BigInt.asIntN(64, BigInt(uintToDouble(blo)) + BigInt.asIntN(64, (BigInt(bhi) << BigInt(32))))
+    val r = BigInt.asIntN(64, a / b)
     pack(Number(r), Number(r >> BigInt(32)))
   }
 
@@ -791,9 +791,9 @@ object RuntimeLong {
     if (bothZero(blo, bhi))
       throw new ArithmeticException("/ by zero")
 
-    val a = BigInt(uintToDouble(alo)) + (BigInt(uintToDouble(ahi)) << BigInt(32))
-    val b = BigInt(uintToDouble(blo)) + (BigInt(uintToDouble(bhi)) << BigInt(32))
-    val r = a / b
+    val a = BigInt.asUintN(64, BigInt(uintToDouble(alo)) + BigInt.asUintN(64, (BigInt(uintToDouble(ahi)) << BigInt(32))))
+    val b = BigInt.asUintN(64, BigInt(uintToDouble(blo)) + BigInt.asUintN(64, (BigInt(uintToDouble(bhi)) << BigInt(32))))
+    val r = BigInt.asUintN(64, a / b)
     pack(Number(r), Number(r >> BigInt(32)))
   }
 
@@ -801,9 +801,9 @@ object RuntimeLong {
     if (bothZero(blo, bhi))
       throw new ArithmeticException("/ by zero")
 
-    val a = BigInt(uintToDouble(alo)) + (BigInt(ahi) << BigInt(32))
-    val b = BigInt(uintToDouble(blo)) + (BigInt(bhi) << BigInt(32))
-    val r = a % b
+    val a = BigInt.asIntN(64, BigInt(uintToDouble(alo)) + BigInt.asIntN(64, (BigInt(ahi) << BigInt(32))))
+    val b = BigInt.asIntN(64, BigInt(uintToDouble(blo)) + BigInt.asIntN(64, (BigInt(bhi) << BigInt(32))))
+    val r = BigInt.asIntN(64, a % b)
     pack(Number(r), Number(r >> BigInt(32)))
   }
 
@@ -811,9 +811,9 @@ object RuntimeLong {
     if (bothZero(blo, bhi))
       throw new ArithmeticException("/ by zero")
 
-    val a = BigInt(uintToDouble(alo)) + (BigInt(uintToDouble(ahi)) << BigInt(32))
-    val b = BigInt(uintToDouble(blo)) + (BigInt(uintToDouble(bhi)) << BigInt(32))
-    val r = a % b
+    val a = BigInt.asUintN(64, BigInt(uintToDouble(alo)) + BigInt.asUintN(64, (BigInt(uintToDouble(ahi)) << BigInt(32))))
+    val b = BigInt.asUintN(64, BigInt(uintToDouble(blo)) + BigInt.asUintN(64, (BigInt(uintToDouble(bhi)) << BigInt(32))))
+    val r = BigInt.asUintN(64, a % b)
     pack(Number(r), Number(r >> BigInt(32)))
   }
 
