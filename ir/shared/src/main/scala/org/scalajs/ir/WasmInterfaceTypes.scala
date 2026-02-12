@@ -85,13 +85,13 @@ object WasmInterfaceTypes {
   }
 
   case object StringType extends PrimValType {
-    def toIRType(): jstpe.Type = jstpe.ClassType(BoxedStringClass, true)
+    def toIRType(): jstpe.Type = jstpe.ClassType(BoxedStringClass, true, false)
   }
 
   final case class ListType(elemType: ValType, length: Option[Int]) extends FundamentalType {
     def toIRType(): jstpe.Type = {
       val ref = toTypeRef(elemType)
-      Types.ArrayType(Types.ArrayTypeRef.of(ref), true)
+      Types.ArrayType(Types.ArrayTypeRef.of(ref), true, false)
     }
   }
 
@@ -100,25 +100,25 @@ object WasmInterfaceTypes {
 
   /** className is required for loading data back to Scala class */
   final case class RecordType(className: ClassName, fields: List[FieldType]) extends FundamentalType {
-    def toIRType(): jstpe.Type = jstpe.ClassType(className, true)
+    def toIRType(): jstpe.Type = jstpe.ClassType(className, true, false)
   }
 
   final case class TupleType(ts: List[ValType]) extends SpecializedType {
     def toIRType(): jstpe.Type =
-      jstpe.ClassType(ClassName("scala.scalajs.wit.Tuple" + ts.size), true)
+      jstpe.ClassType(ClassName("scala.scalajs.wit.Tuple" + ts.size), true, false)
   }
 
   final case class CaseType(className: ClassName, tpe: Option[ValType]) {
-    def toIRType(): jstpe.Type = jstpe.ClassType(className, true)
+    def toIRType(): jstpe.Type = jstpe.ClassType(className, true, false)
   }
 
   final case class VariantType(className: ClassName, cases: List[CaseType])
       extends FundamentalType {
-    def toIRType(): jstpe.Type = jstpe.ClassType(className, true)
+    def toIRType(): jstpe.Type = jstpe.ClassType(className, true, false)
   }
 
   final case class ResultType(ok: Option[ValType], err: Option[ValType]) extends SpecializedType {
-    def toIRType(): jstpe.Type = jstpe.ClassType(ComponentResultClass, true)
+    def toIRType(): jstpe.Type = jstpe.ClassType(ComponentResultClass, true, false)
   }
 
   final case class EnumType(labels: List[String]) extends SpecializedType {
@@ -126,11 +126,11 @@ object WasmInterfaceTypes {
   }
 
   final case class OptionType(tpe: ValType) extends SpecializedType {
-    def toIRType(): jstpe.Type = jstpe.ClassType(juOptionalClass, true)
+    def toIRType(): jstpe.Type = jstpe.ClassType(juOptionalClass, true, false)
   }
 
   final case class FlagsType(className: ClassName, numFields: Int) extends FundamentalType {
-    def toIRType(): jstpe.Type = jstpe.ClassType(className, nullable = true)
+    def toIRType(): jstpe.Type = jstpe.ClassType(className, nullable = true, exact = false)
   }
 
   final case class ResourceType(className: ClassName) extends FundamentalType {

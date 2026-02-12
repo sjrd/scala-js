@@ -1208,7 +1208,9 @@ object Printers {
       case NullType       => print("null")
       case VoidType       => print("void")
 
-      case ClassType(className, nullable) =>
+      case ClassType(className, nullable, exact) =>
+        if (exact)
+          print("=")
         print(className)
         if (!nullable)
           print("!")
@@ -1218,7 +1220,9 @@ object Printers {
         print(className)
         print(">")
 
-      case ArrayType(arrayTypeRef, nullable) =>
+      case ArrayType(arrayTypeRef, nullable, exact) =>
+        if (exact)
+          print("=")
         print(arrayTypeRef)
         if (!nullable)
           print("!")

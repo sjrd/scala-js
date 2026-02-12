@@ -53,16 +53,17 @@ object SWasmGen {
           ctx.stringPool.getEmptyStringInstr()
       case UndefType => GlobalGet(genGlobalID.undef)
 
-      case ClassType(BoxedStringClass, true) =>
+      case ClassType(BoxedStringClass, true, _) =>
         if (ctx.coreSpec.wasmFeatures.targetPureWasm)
           RefNull(HeapType(genTypeID.wasmString))
         else
           RefNull(Types.HeapType.NoExtern)
 
-      case AnyType | ClassType(_, true) | ArrayType(_, true) | ClosureType(_, _, true) | NullType =>
+      case AnyType | ClassType(_, true, _) | ArrayType(_, true, _) |
+          ClosureType(_, _, true) | NullType =>
         RefNull(Types.HeapType.None)
 
-      case NothingType | VoidType | ClassType(_, false) | ArrayType(_, false) |
+      case NothingType | VoidType | ClassType(_, false, _) | ArrayType(_, false, _) |
           ClosureType(_, _, false) | AnyNotNullType | _:WitResourceType | _:RecordType =>
         throw new AssertionError(s"Unexpected type for field: ${tpe.show()}")
     }

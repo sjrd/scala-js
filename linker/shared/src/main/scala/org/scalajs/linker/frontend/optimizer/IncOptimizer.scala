@@ -951,6 +951,9 @@ final class IncOptimizer private[optimizer] (config: CommonPhaseConfig, collOps:
           getterDependenciesBuilder += ((className, methodName))
           true
 
+        case ArrayValue(_, elems) =>
+          elems.forall(isTriviallySideEffectFree(_))
+
         case _ =>
           false
       }
@@ -1563,7 +1566,7 @@ final class IncOptimizer private[optimizer] (config: CommonPhaseConfig, collOps:
     private def computeInstanceThisType(linkedClass: LinkedClass): Type = {
       if (linkedClass.kind.isJSType) AnyType
       else if (linkedClass.kind == ClassKind.HijackedClass) BoxedClassToPrimType(className)
-      else ClassType(className, nullable = false)
+      else ClassType(className, nullable = false, exact = false)
     }
   }
 
