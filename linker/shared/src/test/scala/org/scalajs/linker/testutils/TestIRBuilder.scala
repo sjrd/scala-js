@@ -120,7 +120,7 @@ object TestIRBuilder {
   val MainMethodName: MethodName = m("main", List(AT), VoidRef)
 
   def mainMethodDef(body: Tree): MethodDef = {
-    val argsParamDef = paramDef("args", ArrayType(AT, nullable = true))
+    val argsParamDef = paramDef("args", ArrayType(AT, nullable = true, exact = false))
     MethodDef(MemberFlags.empty.withNamespace(MemberNamespace.PublicStatic),
         MainMethodName, NON, List(argsParamDef), VoidType, Some(body))(
         EOH, UNV)
@@ -135,7 +135,7 @@ object TestIRBuilder {
     val printlnMethodName = m("println", List(O), VoidRef)
 
     val out = ApplyStatic(EAF, "java.lang.System", outMethodName, Nil)(
-        ClassType(PrintStreamClass, nullable = true))
+        ClassType(PrintStreamClass, nullable = true, exact = false))
     Apply(EAF, out, printlnMethodName, List(expr))(VoidType)
   }
 
@@ -170,7 +170,7 @@ object TestIRBuilder {
   }
 
   def thisFor(cls: ClassName): VarRef =
-    This()(ClassType(cls, nullable = false))
+    This()(ClassType(cls, nullable = false, exact = false))
 
   implicit def string2LocalName(name: String): LocalName =
     LocalName(name)

@@ -62,7 +62,7 @@ trait TypeConversions[G <: Global with Singleton] extends SubComponent {
     if (arrayDepth == 0)
       primitiveIRTypeMap.getOrElse(base, encodeClassType(base))
     else
-      Types.ArrayType(makeArrayTypeRef(base, arrayDepth), nullable = true)
+      Types.ArrayType(makeArrayTypeRef(base, arrayDepth), nullable = true, exact = false)
   }
 
   def toTypeRef(t: Type): Types.TypeRef = {
@@ -83,7 +83,7 @@ trait TypeConversions[G <: Global with Singleton] extends SubComponent {
     Types.DoubleType -> wit.F64Type,
     Types.CharType -> wit.CharType,
     Types.StringType -> wit.StringType,
-    Types.ClassType(ClassName("java.lang.String"), true) -> wit.StringType
+    Types.ClassType(ClassName("java.lang.String"), true, false) -> wit.StringType
   )
 
   private lazy val ScalaJSWitUnsignedPackageModule =

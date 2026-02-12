@@ -331,7 +331,7 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
     jstpe.DoubleType -> wit.F64Type,
     jstpe.CharType -> wit.CharType,
     jstpe.StringType -> wit.StringType,
-    jstpe.ClassType(Names.ClassName("java.lang.String"), true) ->
+    jstpe.ClassType(Names.ClassName("java.lang.String"), true, false) ->
     wit.StringType
   )
 

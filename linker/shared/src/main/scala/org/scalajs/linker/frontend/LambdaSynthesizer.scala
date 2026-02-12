@@ -122,7 +122,7 @@ private[linker] object LambdaSynthesizer {
 
     val closureType = ClosureType(paramTypes, resultType, nullable = true)
 
-    val thiz = This()(ClassType(className, nullable = false))
+    val thiz = This()(ClassType(className, nullable = false, exact = false))
 
     val fFieldIdent = FieldIdent(FieldName(className, fFieldSimpleName))
     val fFieldDef = FieldDef(MemberFlags.empty, fFieldIdent, NoOriginalName, closureType)

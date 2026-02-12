@@ -331,6 +331,12 @@ class AnalyzerTest {
     val fooMethodName = m("foo", Nil, V)
     val barMethodName = m("bar", Nil, V)
 
+    /* The separate VarDef upcasts the New to a non-exact class type.
+     * Otherwise we don't get the last error with FromDispatch(B).
+     */
+    val bVarDef = VarDef("b", NON, ClassType("B", nullable = true, exact = false),
+        mutable = false, New("B", NoArgConstructorName, Nil))
+
     val classDefs = Seq(
       classDef("A", superClass = Some(ObjectClass),
           methods = List(
@@ -338,30 +344,33 @@ class AnalyzerTest {
             MethodDef(EMF, barMethodName, NON, Nil, VoidType,
                 Some(Block(
                   Apply(EAF, thisFor("A"), fooMethodName, Nil)(VoidType),
-                  Apply(EAF, New("B", NoArgConstructorName, Nil), fooMethodName, Nil)(VoidType)
+                  bVarDef,
+                  Apply(EAF, bVarDef.ref, fooMethodName, Nil)(VoidType)
                 )))(EOH, UNV)
           )),
       classDef("B", superClass = Some("A"),
           methods = List(trivialCtor("B", "A")))
     )
 
-    val analysis = computeAnalysis(classDefs,
+    val analysisFuture = computeAnalysis(classDefs,
         reqsFactory.instantiateClass("A", NoArgConstructorName) ++
         reqsFactory.callMethod("A", barMethodName))
 
-    assertContainsError("MissingMethod(A.foo;V) from A", analysis) {
-      case MissingMethod(MethInfo("A", "foo;V"), FromDispatch(ClsInfo("A"), `fooMethodName`)) =>
-        true
-    }
+    for (analysis <- analysisFuture) yield {
+      assertContainsError("MissingMethod(A.foo;V) from A", analysis) {
+        case MissingMethod(MethInfo("A", "foo;V"), FromDispatch(ClsInfo("A"), `fooMethodName`)) =>
+          true
+      }
 
-    assertContainsError("MissingMethod(B.foo;V) from A", analysis) {
-      case MissingMethod(MethInfo("B", "foo;V"), FromDispatch(ClsInfo("A"), `fooMethodName`)) =>
-        true
-    }
+      assertContainsError("MissingMethod(B.foo;V) from A", analysis) {
+        case MissingMethod(MethInfo("B", "foo;V"), FromDispatch(ClsInfo("A"), `fooMethodName`)) =>
+          true
+      }
 
-    assertContainsError("MissingMethod(B.foo;V) from B", analysis) {
-      case MissingMethod(MethInfo("B", "foo;V"), FromDispatch(ClsInfo("B"), `fooMethodName`)) =>
-        true
+      assertContainsError("MissingMethod(B.foo;V) from B", analysis) {
+        case MissingMethod(MethInfo("B", "foo;V"), FromDispatch(ClsInfo("B"), `fooMethodName`)) =>
+          true
+      }
     }
   }
 
@@ -801,9 +810,9 @@ class AnalyzerTest {
         superClass = Some(ObjectClass),
         methods = List(
           trivialCtor("X"),
-          MethodDef(EMF, fooAMethodName, NON, Nil, ClassType("A", nullable = true),
+          MethodDef(EMF, fooAMethodName, NON, Nil, ClassType("A", nullable = true, exact = false),
               Some(Null()))(EOH, UNV),
-          MethodDef(EMF, fooBMethodName, NON, Nil, ClassType("B", nullable = true),
+          MethodDef(EMF, fooBMethodName, NON, Nil, ClassType("B", nullable = true, exact = false),
               Some(Null()))(EOH, UNV)
         )
       )
@@ -921,8 +930,6 @@ class AnalyzerTest {
     val fooMethodName = m("foo", Nil, IntRef)
     val barMethodName = m("bar", Nil, IntRef)
 
-    val thisType = ClassType("A", nullable = false)
-
     val productionMode = true
 
     /* linkTimeIf(productionMode) {
@@ -935,8 +942,8 @@ class AnalyzerTest {
       BinaryOp(BinaryOp.Boolean_==,
           LinkTimeProperty("core/productionMode")(BooleanType),
           BooleanLiteral(productionMode)),
-      Apply(EAF, This()(thisType), fooMethodName, Nil)(IntType),
-      Apply(EAF, This()(thisType), barMethodName, Nil)(IntType)
+      Apply(EAF, thisFor("A"), fooMethodName, Nil)(IntType),
+      Apply(EAF, thisFor("A"), barMethodName, Nil)(IntType)
     )(IntType)
 
     val classDefs = Seq(
@@ -978,8 +985,6 @@ class AnalyzerTest {
     val mainMethodName = m("main", Nil, IntRef)
     val fooMethodName = m("foo", Nil, IntRef)
 
-    val thisType = ClassType("A", nullable = false)
-
     val productionMode = true
 
     /* linkTimeIf(unknownProperty) {
@@ -992,8 +997,8 @@ class AnalyzerTest {
       BinaryOp(BinaryOp.Boolean_==,
           LinkTimeProperty("core/unknownProperty")(BooleanType),
           BooleanLiteral(productionMode)),
-      Apply(EAF, This()(thisType), fooMethodName, Nil)(IntType),
-      Apply(EAF, This()(thisType), fooMethodName, Nil)(IntType)
+      Apply(EAF, thisFor("A"), fooMethodName, Nil)(IntType),
+      Apply(EAF, thisFor("A"), fooMethodName, Nil)(IntType)
     )(IntType)
 
     val classDefs = Seq(
