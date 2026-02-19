@@ -104,6 +104,7 @@ private[emitter] object CoreJSLib {
     private val TypeErrorRef = globalRef("TypeError")
     private def BigIntRef = globalRef("BigInt")
     private val SymbolRef = globalRef("Symbol")
+    private val consoleRef = globalRef("console")
 
     // Conditional global references that we often use
     private def ReflectRef = globalRef("Reflect")
@@ -681,6 +682,22 @@ private[emitter] object CoreJSLib {
       defineFunction1(VarField.noIsInstance) { instance =>
         Throw(New(TypeErrorRef,
             str("Cannot call isInstance() on a Class representing a JS trait/object") :: Nil))
+      } :::
+
+      defineFunction1(VarField.printStdout) { line =>
+        If(UnaryOp(JSUnaryOp.typeof, consoleRef) !== str("undefined"), {
+          Apply(genIdentBracketSelect(consoleRef, "log"), List(line))
+        })
+      } :::
+
+      defineFunction1(VarField.printStderr) { line =>
+        If(UnaryOp(JSUnaryOp.typeof, consoleRef) !== str("undefined"), {
+          If(genIdentBracketSelect(consoleRef, "error"), {
+            Apply(genIdentBracketSelect(consoleRef, "error"), List(line))
+          }, {
+            Apply(genIdentBracketSelect(consoleRef, "log"), List(line))
+          })
+        })
       } :::
 
       defineFunction1(VarField.objectClone) { instance =>

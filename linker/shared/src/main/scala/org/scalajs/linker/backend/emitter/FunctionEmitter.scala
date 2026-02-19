@@ -766,6 +766,15 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           }
           js.Assign(globalVar(VarField.n, enclosingClassName), js.This())
 
+        case UnaryOp(op @ (UnaryOp.PrintStdout | UnaryOp.PrintStderr), line) =>
+          unnest(line) { (newLine, env0) =>
+            implicit val env = env0
+            val helper =
+              if (op == UnaryOp.PrintStdout) VarField.printStdout
+              else VarField.printStderr
+            genCallHelper(helper, transformExprNoChar(newLine))
+          }
+
         case While(cond, body) =>
           val loopEnv = env.withInLoopForVarCapture(true)
 
@@ -1353,7 +1362,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
       import UnaryOp._
 
       tree.op match {
-        case Throw =>
+        case Throw | PrintStdout | PrintStderr =>
           false
         case WrapAsThrowable | UnwrapFromThrowable =>
           isDuplicatable(tree.lhs)
@@ -1658,9 +1667,11 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
      */
     def isRTLongBoxingAvoidable(tree: Tree)(implicit env: Env): Boolean = {
       tree match {
-        case _:Labeled | _:If | _:TryCatch | _:TryFinally | _:Match | _:ArraySelect =>
+        case _:Labeled | _:If | _:TryCatch | _:TryFinally | _:Match |
+            _:ArraySelect | _:NullaryOp =>
           /* Trees resulting in JS statements we can push the LHS into.
            * See the comment on `JSLongArraySelect` why `ArraySelect` is here.
+           * `NullaryOp` receives a similar treatment.
            */
           true
         case _ =>
@@ -2082,7 +2093,50 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
             redo(ApplyTypedClosure(flags, newFun, newArgs))(env)
           }
 
-        case UnaryOp(op, lhs) =>
+        case NullaryOp(op) =>
+          import TreeDSL._
+
+          assert(isSplitLongType(rhs.tpe),
+              s"$rhs of non-split long type should have been handled as an expression at $pos")
+
+          def redoWithPackTwoJSExprs(lo: js.Tree, hi: js.Tree): js.Tree = {
+            withTempJSVar(lo) { loJSVarRef =>
+              withTempJSVar(hi) { hiJSVarRef =>
+                val loVarRef = Transient(JSVarRef(
+                    loJSVarRef.ident.asInstanceOf[js.Ident], mutable = false)(IntType))
+                val hiVarRef = Transient(JSVarRef(
+                    hiJSVarRef.ident.asInstanceOf[js.Ident], mutable = false)(IntType))
+                redo(Transient(PackLong(loVarRef, hiVarRef)))
+              }
+            }
+          }
+
+          op match {
+            case NullaryOp.CurrentTimeMillis | NullaryOp.NanoTime =>
+              val receiver =
+                if (op == NullaryOp.CurrentTimeMillis) genGlobalVarRef("Date")
+                else genGlobalVarRef("performance")
+              val nowCall = js.Apply(genIdentBracketSelect(receiver, "now"), Nil)
+              val scaledNowCall =
+                if (op == NullaryOp.CurrentTimeMillis) nowCall
+                else nowCall * js.DoubleLiteral(1000000.0)
+              withTempJSVar(scaledNowCall) { doubleTimeVarRef =>
+                val twoPowM32 = js.DoubleLiteral(1.0 / (1L << 32).toDouble)
+                redoWithPackTwoJSExprs(doubleTimeVarRef | 0, (doubleTimeVarRef * twoPowM32) | 0)
+              }
+
+            case NullaryOp.InsecureRandomSeed =>
+              def randomInt(): js.Tree = {
+                // (Math.random() * 4294967296.0) | 0
+                val randomCall =
+                  js.Apply(genIdentBracketSelect(genGlobalVarRef("Math"), "random"), Nil)
+                (randomCall * js.DoubleLiteral(4294967296.0)) | 0
+              }
+
+              redoWithPackTwoJSExprs(randomInt(), randomInt())
+          }
+
+        case UnaryOp(op, lhs) if rhs.tpe != VoidType =>
           op match {
             case UnaryOp.Throw =>
               pushLhsInto(Lhs.Throw, lhs, tailPosLabels)
@@ -2377,7 +2431,7 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
         case _:Skip | _:VarDef | _:Assign | _:While | _:Debugger |
             _:JSSuperConstructorCall | _:JSDelete | _:StoreModule |
-            Transient(_: SystemArrayCopy) =>
+            _:UnaryOp | Transient(_: SystemArrayCopy) =>
           /* Go "back" to transformStat() after having dived into
            * expression statements. This can only happen for Lhs.Discard and
            * for Lhs.Return's whose target is a statement.

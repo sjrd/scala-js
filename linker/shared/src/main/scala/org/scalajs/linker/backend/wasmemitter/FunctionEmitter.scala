@@ -599,6 +599,7 @@ private class FunctionEmitter private (
 
     val generatedType: Type = tree match {
       case t: Literal            => genLiteral(t, expectedTypeNoCast)
+      case t: NullaryOp          => genNullaryOp(t)
       case t: UnaryOp            => genUnaryOp(t)
       case t: BinaryOp           => genBinaryOp(t)
       case t: VarRef             => genVarRef(t)
@@ -1505,6 +1506,12 @@ private class FunctionEmitter private (
 
     markPosition(tree)
     fb += wa.Call(genFunctionID.loadModule(className))
+    tree.tpe
+  }
+
+  private def genNullaryOp(tree: NullaryOp): Type = {
+    ???
+
     tree.tpe
   }
 

@@ -276,6 +276,10 @@ private[emitter] object VarField {
 
   final val moduleDefault = mk("$moduleDefault")
 
+  final val printStdout = mk("$printStdout")
+
+  final val printStderr = mk("$printStderr")
+
   // Arithmetic Call Helpers
 
   final val checkIntDivisor = mk("$checkIntDivisor")
