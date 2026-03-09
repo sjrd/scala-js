@@ -2359,9 +2359,6 @@ object Build {
               contains(f, "/shared/src/test/scala-old-collections/") ||
               contains(f, "/shared/src/test/require-scala2/") ||
               contains(f, "/shared/src/test/scala/org/scalajs/testsuite/") && (
-                // javalib/lang
-                !endsWith(f, "/lang/ClassValueTest.scala") && // js.Map in ClassValue
-
                 // javalib/util
                 !endsWith(f, "/DateTest.scala") && // js.Date
                 !endsWith(f, "/PropertiesTest.scala") && // Date.toString
