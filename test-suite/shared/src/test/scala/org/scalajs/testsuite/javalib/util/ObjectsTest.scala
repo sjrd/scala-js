@@ -119,9 +119,18 @@ class ObjectsTest {
     }
 
     if (hasCompliantNullPointers) {
-      val e = assertThrows(classOf[NullPointerException],
+      val e1 = assertThrows(classOf[NullPointerException],
           ju.Objects.requireNonNull(null, successSupplier))
-      assertEquals(message, e.getMessage())
+      assertEquals(message, e1.getMessage())
+
+      // If the supplier returns a null message, we get a null message
+      val e2 = assertThrows(classOf[NullPointerException],
+          ju.Objects.requireNonNull(null, () => null))
+      assertNull(e2.getMessage())
+
+      // If the supplier itself is null as well, we get an NPE with an unspecified message
+      assertThrows(classOf[NullPointerException],
+          ju.Objects.requireNonNull(null, null: ju.function.Supplier[String]))
     }
 
     assertEquals("abc", ju.Objects.requireNonNull("abc", failureSupplier))
