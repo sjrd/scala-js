@@ -66,12 +66,14 @@ object Objects {
     if (a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]) 0
     else c.compare(a, b)
 
+  // Intrinsic
   @inline
   def requireNonNull[T](obj: T): T = {
     obj.getClass() // null check
     obj
   }
 
+  // Intrinsic
   @inline
   def requireNonNull[T](obj: T, message: String): T =
     if (obj == null) throwNPEWithMessage(message)
@@ -85,6 +87,7 @@ object Objects {
   def nonNull(obj: Any): Boolean =
     obj != null
 
+  // Intrinsic
   @inline
   def requireNonNull[T](obj: T, messageSupplier: Supplier[String]): T =
     if (obj == null) throwNPEWithMessage(messageSupplier)
