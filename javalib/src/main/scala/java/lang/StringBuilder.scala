@@ -90,7 +90,7 @@ class StringBuilder extends AnyRef with CharSequence with Appendable with java.i
   }
 
   def replace(start: Int, end: Int, str: String): StringBuilder = {
-    val strNonNull = str.toString() // null check, and refine the type in the process
+    val strNonNull = requireNonNull(str)
     val oldContent = content
     val length = oldContent.length
 
