@@ -5470,6 +5470,17 @@ private[optimizer] abstract class OptimizerCore(
             foldCmp(cmp.withRels(if (cmp.rels == Rels_>) Rels_== else Rels_!=), lhs,
                 cmp.makeLit(maxValue))
 
+          case 0L if cmp.isSigned && !cmp.isLongOp && (cmp.rels == Rels_< || cmp.rels == Rels_>=) =>
+            /* Only the sign bit matters. Simplify the lhs based on the sign bit mask.
+             * This is particularly useful things like `(a | b) < 0`, when one
+             * of the operands is folded to a non-negative constant.
+             */
+            val newLhs = simplifyOnlyInterestedInMask(lhs, Int.MinValue)
+            if (newLhs eq lhs)
+              default
+            else
+              foldCmp(cmp, newLhs, rhs)
+
           case _ =>
             default
         }
