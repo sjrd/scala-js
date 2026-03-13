@@ -21,8 +21,6 @@ import org.junit.Assume._
 import org.scalajs.testsuite.utils.AssertThrows.{assertThrows, assertThrowsNPEIfCompliant}
 import org.scalajs.testsuite.utils.Platform._
 
-import scala.scalajs.LinkingInfo
-
 class StringTest {
 
   @Test def lengthTest(): Unit = {
