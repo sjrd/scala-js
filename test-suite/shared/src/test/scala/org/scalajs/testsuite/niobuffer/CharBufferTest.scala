@@ -181,3 +181,34 @@ class ReadOnlyCharViewOfWrappedByteBufferLittleEndianTest
 class ReadOnlyCharViewOfSlicedAllocByteBufferLittleEndianTest
     extends ReadOnlyCharViewOfByteBufferTest(
         new SlicedAllocByteBufferFactory, ByteOrder.LITTLE_ENDIAN)
+
+// Char views of direct byte buffers
+
+class CharViewOfAllocDirectByteBufferBigEndianTest
+    extends CharViewOfByteBufferTest(new AllocDirectByteBufferFactory, ByteOrder.BIG_ENDIAN)
+
+class CharViewOfSlicedAllocDirectByteBufferBigEndianTest
+    extends CharViewOfByteBufferTest(new SlicedAllocDirectByteBufferFactory, ByteOrder.BIG_ENDIAN)
+
+class CharViewOfAllocDirectByteBufferLittleEndianTest
+    extends CharViewOfByteBufferTest(new AllocDirectByteBufferFactory, ByteOrder.LITTLE_ENDIAN)
+
+class CharViewOfSlicedAllocDirectByteBufferLittleEndianTest
+    extends CharViewOfByteBufferTest(new SlicedAllocDirectByteBufferFactory, ByteOrder.LITTLE_ENDIAN)
+
+// Read only Char views of direct byte buffers
+
+class ReadOnlyCharViewOfAllocDirectByteBufferBigEndianTest
+    extends ReadOnlyCharViewOfByteBufferTest(new AllocDirectByteBufferFactory, ByteOrder.BIG_ENDIAN)
+
+class ReadOnlyCharViewOfSlicedAllocDirectByteBufferBigEndianTest
+    extends ReadOnlyCharViewOfByteBufferTest(
+        new SlicedAllocDirectByteBufferFactory, ByteOrder.BIG_ENDIAN)
+
+class ReadOnlyCharViewOfAllocDirectByteBufferLittleEndianTest
+    extends ReadOnlyCharViewOfByteBufferTest(
+        new AllocDirectByteBufferFactory, ByteOrder.LITTLE_ENDIAN)
+
+class ReadOnlyCharViewOfSlicedAllocDirectByteBufferLittleEndianTest
+    extends ReadOnlyCharViewOfByteBufferTest(
+        new SlicedAllocDirectByteBufferFactory, ByteOrder.LITTLE_ENDIAN)
