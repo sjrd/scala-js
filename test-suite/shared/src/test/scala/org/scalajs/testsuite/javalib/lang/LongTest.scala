@@ -21,10 +21,6 @@ import org.junit.Assume._
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
 import org.scalajs.testsuite.utils.Platform.executingInPureWebAssembly
 
-import scala.scalajs.LinkingInfo
-import scala.scalajs.LinkingInfo.moduleKind
-import scala.scalajs.LinkingInfo.ModuleKind.{MinimalWasmModule, WasmComponent}
-
 /** Tests the implementation of the java standard library Long
  *  requires jsinterop/LongTest to work to make sense
  */
@@ -193,27 +189,24 @@ class LongTest {
   }
 
   @Test def parseStringBase2To36(): Unit = {
-    assumeFalse("Doesn't link StringRadixInfos", executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(moduleKind != MinimalWasmModule && moduleKind != WasmComponent) {
-      def test(radix: Int, s: String, v: Long): Unit = {
-        assertEquals(v, JLong.parseLong(s, radix))
-        assertEquals(v, JLong.valueOf(s, radix).longValue())
-      }
+    def test(radix: Int, s: String, v: Long): Unit = {
+      assertEquals(v, JLong.parseLong(s, radix))
+      assertEquals(v, JLong.valueOf(s, radix).longValue())
+    }
 
-      def genTestValue(i: Int): Long = {
-        val result = Long.MaxValue / (1L << i)
-        if (i > 63) -result
-        else result
-      }
+    def genTestValue(i: Int): Long = {
+      val result = Long.MaxValue / (1L << i)
+      if (i > 63) -result
+      else result
+    }
 
-      for {
-        radix <- 2 to 36
-        i <- 0 until 128
-      } {
-        val n = genTestValue(i)
-        test(radix, JLong.toString(n, radix), n)
-      }
-    } {}
+    for {
+      radix <- 2 to 36
+      i <- 0 until 128
+    } {
+      val n = genTestValue(i)
+      test(radix, JLong.toString(n, radix), n)
+    }
   }
 
   @Test def parseStringsBaseLessThanTwoOrBaseLargerThan36Throws(): Unit = {

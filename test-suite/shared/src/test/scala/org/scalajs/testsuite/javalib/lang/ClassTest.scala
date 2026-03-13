@@ -21,8 +21,6 @@ import scala.runtime.BoxedUnit
 import org.scalajs.testsuite.utils.AssertThrows.{assertThrows, _}
 import org.scalajs.testsuite.utils.Platform._
 
-import scala.scalajs.LinkingInfo
-
 class ClassTest {
 
   private val PrimitiveClassOfs = Seq(

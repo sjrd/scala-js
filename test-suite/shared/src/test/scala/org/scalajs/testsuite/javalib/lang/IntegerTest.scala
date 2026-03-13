@@ -19,8 +19,6 @@ import org.junit.Assume._
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
 import org.scalajs.testsuite.utils.Platform._
 
-import scala.scalajs.LinkingInfo
-
 class IntegerTest {
   import IntegerTest._
 

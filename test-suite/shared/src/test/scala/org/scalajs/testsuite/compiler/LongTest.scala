@@ -20,8 +20,6 @@ import org.scalajs.testsuite.utils.AssertExtensions.assertExactEquals
 import org.scalajs.testsuite.utils.AssertThrows.assertThrows
 import org.scalajs.testsuite.utils.Platform._
 
-import scala.scalajs.LinkingInfo
-
 class LongTest {
   import LongTest._
 
