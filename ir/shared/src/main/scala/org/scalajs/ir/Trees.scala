@@ -1324,6 +1324,7 @@ object Trees {
     final val ProductionMode = "core/productionMode"
     final val ESVersion = "core/esVersion"
     final val UseECMAScript2015Semantics = "core/useECMAScript2015Semantics"
+    final val ModuleKind = "core/moduleKind"
     final val IsWebAssembly = "core/isWebAssembly"
     final val LinkerVersion = "core/linkerVersion"
     final val TargetPureWasm = "core/targetPureWasm"
