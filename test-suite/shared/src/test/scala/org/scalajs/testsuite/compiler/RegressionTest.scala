@@ -22,10 +22,6 @@ import org.scalajs.testsuite.utils.AssertThrows.{assertThrows, _}
 
 import org.scalajs.testsuite.utils.Platform._
 
-import scala.scalajs.LinkingInfo
-import scala.scalajs.LinkingInfo.moduleKind
-import scala.scalajs.LinkingInfo.ModuleKind.{MinimalWasmModule, WasmComponent}
-
 class RegressionTest {
   import RegressionTest._
 
@@ -109,18 +105,13 @@ class RegressionTest {
   }
 
   @Test def buffer_Issue268(): Unit = {
-    assumeFalse("TODO: mutable.Buffer doesn't link in pure Wasm, it uses typedarray",
-        executingInPureWebAssembly)
-
-    LinkingInfo.linkTimeIf(moduleKind != MinimalWasmModule && moduleKind != WasmComponent) {
-      val a = scala.collection.mutable.Buffer.empty[Int]
-      a.insert(0, 0)
-      a.remove(0)
-      for (i <- 0 to 10) {
-        a.insert(a.length / 2, i)
-      }
-      assertEquals("1, 3, 5, 7, 9, 10, 8, 6, 4, 2, 0", a.mkString(", "))
-    } {}
+    val a = scala.collection.mutable.Buffer.empty[Int]
+    a.insert(0, 0)
+    a.remove(0)
+    for (i <- 0 to 10) {
+      a.insert(a.length / 2, i)
+    }
+    assertEquals("1, 3, 5, 7, 9, 10, 8, 6, 4, 2, 0", a.mkString(", "))
   }
 
   @Test def doNotCallEqualsWhenComparingWithLiteralNull_Issue362(): Unit = {
