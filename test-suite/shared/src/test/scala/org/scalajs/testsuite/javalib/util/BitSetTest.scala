@@ -1501,8 +1501,6 @@ class BitSetTest {
     assumeFalse("requires support for direct Buffers, which isn't available in pure Wasm",
         executingInPureWebAssembly)
     LinkingInfo.linkTimeIf(moduleKind != MinimalWasmModule && moduleKind != WasmComponent) {
-      assumeTrue("requires support for direct Buffers", hasDirectBuffers)
-
       val eightBS = makeEightBS()
       val eightBytes = eightBS.toByteArray()
 

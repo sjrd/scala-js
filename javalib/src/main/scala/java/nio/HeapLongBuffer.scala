@@ -96,7 +96,7 @@ private[nio] object HeapLongBuffer {
       extends GenHeapBuffer.NewHeapBuffer[LongBuffer, Long] {
     def apply(capacity: Int, array: Array[Long], arrayOffset: Int,
         initialPosition: Int, initialLimit: Int,
-        readOnly: Boolean): LongBuffer = {
+        readOnly: Boolean, directIfSupported: Boolean): LongBuffer = {
       new HeapLongBuffer(capacity, array, arrayOffset,
           initialPosition, initialLimit, readOnly)
     }

@@ -96,7 +96,7 @@ private[nio] object HeapFloatBuffer {
       extends GenHeapBuffer.NewHeapBuffer[FloatBuffer, Float] {
     def apply(capacity: Int, array: Array[Float], arrayOffset: Int,
         initialPosition: Int, initialLimit: Int,
-        readOnly: Boolean): FloatBuffer = {
+        readOnly: Boolean, directIfSupported: Boolean): FloatBuffer = {
       new HeapFloatBuffer(capacity, array, arrayOffset,
           initialPosition, initialLimit, readOnly)
     }

@@ -96,7 +96,7 @@ private[nio] object HeapShortBuffer {
       extends GenHeapBuffer.NewHeapBuffer[ShortBuffer, Short] {
     def apply(capacity: Int, array: Array[Short], arrayOffset: Int,
         initialPosition: Int, initialLimit: Int,
-        readOnly: Boolean): ShortBuffer = {
+        readOnly: Boolean, directIfSupported: Boolean): ShortBuffer = {
       new HeapShortBuffer(capacity, array, arrayOffset,
           initialPosition, initialLimit, readOnly)
     }
