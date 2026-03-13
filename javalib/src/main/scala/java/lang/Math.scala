@@ -29,7 +29,8 @@ import scala.scalajs.js
 import js.Dynamic.{global => g}
 
 import scala.scalajs.LinkingInfo
-import scala.scalajs.LinkingInfo.{ESVersion, linkTimeIf}
+import scala.scalajs.LinkingInfo.{ESVersion, linkTimeIf, moduleKind}
+import scala.scalajs.LinkingInfo.ModuleKind.{MinimalWasmModule, WasmComponent}
 
 object Math {
   final val E = 2.718281828459045
@@ -53,7 +54,7 @@ object Math {
 
   // Wasm intrinsics
   @inline def abs(a: scala.Float): scala.Float = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(LinkingInfo.isWebAssembly) {
       Float.intBitsToFloat(Float.floatToIntBits(a) & ~Int.MinValue)
     } {
       js.Math.abs(a).toFloat
@@ -61,7 +62,7 @@ object Math {
   }
 
   @inline def abs(a: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(LinkingInfo.isWebAssembly) {
       Double.longBitsToDouble(Double.doubleToLongBits(a) & ~scala.Long.MinValue)
     } {
       js.Math.abs(a)
@@ -73,7 +74,7 @@ object Math {
 
   // Wasm intrinsics
   @inline def max(a: scala.Float, b: scala.Float): scala.Float = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       if (a != a || b != b) {
         Float.NaN
       } else if (a == 0.0f && b == 0.0f) {
@@ -90,7 +91,7 @@ object Math {
   }
 
   @inline def max(a: scala.Double, b: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       if (a != a || b != b) {
         Double.NaN
       } else if (a == 0.0 && b == 0.0) {
@@ -111,7 +112,7 @@ object Math {
 
   // Wasm intrinsics
   @inline def min(a: scala.Float, b: scala.Float): scala.Float = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       if (a != a || b != b) {
         Float.NaN
       } else if (a == 0.0f && b == 0.0f) {
@@ -128,7 +129,7 @@ object Math {
   }
 
   @inline def min(a: scala.Double, b: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       if (a != a || b != b) {
         Double.NaN
       } else if (a == 0.0 && b == 0.0) {
@@ -189,7 +190,7 @@ object Math {
 
   // Wasm intrinsics
   @inline def ceil(a: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       -floor(-a)
     } {
       js.Math.ceil(a)
@@ -197,7 +198,7 @@ object Math {
   }
 
   @inline def floor(a: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       floorWasm(a)
     } {
       js.Math.floor(a)
@@ -278,7 +279,7 @@ object Math {
   }
 
   @inline def round(a: scala.Float): scala.Int = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       if (Float.isNaN(a)) {
         0
       } else if (a <= Int.MinValue.toFloat) {
@@ -294,7 +295,7 @@ object Math {
   }
 
   @inline def round(a: scala.Double): scala.Long = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       if (Double.isNaN(a)) {
         0L
       } else if (a <= scala.Long.MinValue.toDouble) {
@@ -311,7 +312,7 @@ object Math {
 
   // Wasm intrinsic
   @inline def sqrt(a: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       StrictMath.sqrt(a)
     } {
       js.Math.sqrt(a)
@@ -319,7 +320,7 @@ object Math {
   }
 
   @inline def pow(a: scala.Double, b: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       StrictMath.pow(a, b)
     } {
       js.Math.pow(a, b)
@@ -329,7 +330,7 @@ object Math {
   @inline def exp(a: scala.Double): scala.Double = js.Math.exp(a)
 
   @inline def log(a: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       StrictMath.log(a)
     } {
       js.Math.log(a)
@@ -337,7 +338,7 @@ object Math {
   }
 
   @inline def log10(a: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       StrictMath.log10(a)
     } {
       if (assumingES6 || !Utils.isUndefined(g.Math.log10))
@@ -348,7 +349,7 @@ object Math {
   }
 
   @inline def log1p(a: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       StrictMath.log1p(a)
     } {
       if (assumingES6 || !Utils.isUndefined(g.Math.log1p))
@@ -367,7 +368,7 @@ object Math {
   @inline def atan2(y: scala.Double, x: scala.Double): scala.Double = js.Math.atan2(y, x)
 
   @inline def random(): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       WasmSystem.random()
     } {
       js.Math.random()
@@ -405,7 +406,7 @@ object Math {
   }
 
   def cbrt(a: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       cbrtImpl(a)
     } {
       if (assumingES6 || !Utils.isUndefined(g.Math.cbrt)) {
@@ -676,7 +677,7 @@ object Math {
   }
 
   def hypot(a: scala.Double, b: scala.Double): scala.Double = {
-    linkTimeIf(LinkingInfo.targetPureWasm) {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       hypotImpl(a, b)
     } {
       if (assumingES6 || !Utils.isUndefined(g.Math.hypot)) {

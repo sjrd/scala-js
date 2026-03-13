@@ -1327,7 +1327,6 @@ object Trees {
     final val ModuleKind = "core/moduleKind"
     final val IsWebAssembly = "core/isWebAssembly"
     final val LinkerVersion = "core/linkerVersion"
-    final val TargetPureWasm = "core/targetPureWasm"
   }
 
   // Atomic expressions
