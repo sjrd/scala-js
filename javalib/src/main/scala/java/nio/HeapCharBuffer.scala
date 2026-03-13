@@ -103,7 +103,7 @@ private[nio] object HeapCharBuffer {
       extends GenHeapBuffer.NewHeapBuffer[CharBuffer, Char] {
     def apply(capacity: Int, array: Array[Char], arrayOffset: Int,
         initialPosition: Int, initialLimit: Int,
-        readOnly: Boolean): CharBuffer = {
+        readOnly: Boolean, directIfSupported: Boolean): CharBuffer = {
       new HeapCharBuffer(capacity, array, arrayOffset,
           initialPosition, initialLimit, readOnly)
     }

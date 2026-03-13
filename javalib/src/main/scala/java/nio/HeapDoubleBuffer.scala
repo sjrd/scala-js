@@ -96,7 +96,7 @@ private[nio] object HeapDoubleBuffer {
       extends GenHeapBuffer.NewHeapBuffer[DoubleBuffer, Double] {
     def apply(capacity: Int, array: Array[Double], arrayOffset: Int,
         initialPosition: Int, initialLimit: Int,
-        readOnly: Boolean): DoubleBuffer = {
+        readOnly: Boolean, directIfSupported: Boolean): DoubleBuffer = {
       new HeapDoubleBuffer(capacity, array, arrayOffset,
           initialPosition, initialLimit, readOnly)
     }
