@@ -16,7 +16,8 @@ import scala.scalajs.js
 import scala.scalajs.js.typedarray._
 
 import scala.scalajs.LinkingInfo
-import scala.scalajs.LinkingInfo.ESVersion
+import scala.scalajs.LinkingInfo.{ESVersion, moduleKind}
+import scala.scalajs.LinkingInfo.ModuleKind.{MinimalWasmModule, WasmComponent}
 
 object ByteBuffer {
   private final val HashSeed = -547316498 // "java.nio.ByteBuffer".##
@@ -29,16 +30,21 @@ object ByteBuffer {
   def allocateDirect(capacity: Int): ByteBuffer = {
     GenBuffer.validateAllocateCapacity(capacity)
 
-    if (LinkingInfo.esVersion >= ESVersion.ES2015 ||
-        js.typeOf(js.Dynamic.global.Int8Array) != "undefined") {
-      TypedArrayByteBuffer.allocate(capacity)
-    } else {
+    LinkingInfo.linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
       /* Create a direct ByteBuffer that is actually backed by a regular Array.
        * We can do this because the JavaDoc does not specify whether direct
        * buffers are actually backed by an array or not. They only need to
        * return `true` from `isDirect()`.
        */
       HeapByteBuffer.allocateDirect(capacity)
+    } {
+      if (LinkingInfo.esVersion >= ESVersion.ES2015 ||
+          js.typeOf(js.Dynamic.global.Int8Array) != "undefined") {
+        TypedArrayByteBuffer.allocate(capacity)
+      } else {
+        // Same as for Wasm without JS host
+        HeapByteBuffer.allocateDirect(capacity)
+      }
     }
   }
 

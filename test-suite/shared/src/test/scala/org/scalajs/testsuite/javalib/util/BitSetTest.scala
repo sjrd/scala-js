@@ -20,10 +20,6 @@ import org.junit.Test
 import org.scalajs.testsuite.utils.AssertThrows._
 import org.scalajs.testsuite.utils.Platform._
 
-import scala.scalajs.LinkingInfo
-import scala.scalajs.LinkingInfo.moduleKind
-import scala.scalajs.LinkingInfo.ModuleKind.{MinimalWasmModule, WasmComponent}
-
 class BitSetTest {
   @Test def test_Constructor_empty(): Unit = {
     val bs = new BitSet
@@ -1498,24 +1494,20 @@ class BitSetTest {
   }
 
   @Test def valueOf_ByteBuffer_typedArrays(): Unit = {
-    assumeFalse("requires support for direct Buffers, which isn't available in pure Wasm",
-        executingInPureWebAssembly)
-    LinkingInfo.linkTimeIf(moduleKind != MinimalWasmModule && moduleKind != WasmComponent) {
-      val eightBS = makeEightBS()
-      val eightBytes = eightBS.toByteArray()
+    val eightBS = makeEightBS()
+    val eightBytes = eightBS.toByteArray()
 
-      // ByteBuffer.allocateDirect()ed
-      assertEquals(new BitSet, BitSet.valueOf(ByteBuffer.allocateDirect(0)))
+    // ByteBuffer.allocateDirect()ed
+    assertEquals(new BitSet, BitSet.valueOf(ByteBuffer.allocateDirect(0)))
 
-      val directByteBuffer = ByteBuffer.allocateDirect(eightBytes.length + 1)
-      directByteBuffer.put(192.toByte) // extra byte
-      directByteBuffer.put(eightBytes)
-      directByteBuffer.rewind()
-      assertEquals(192.toByte, directByteBuffer.get()) // extra byte
-      assertEquals(1, directByteBuffer.position())
-      assertEquals(eightBS, BitSet.valueOf(directByteBuffer))
-      assertEquals(1, directByteBuffer.position())
-    } {}
+    val directByteBuffer = ByteBuffer.allocateDirect(eightBytes.length + 1)
+    directByteBuffer.put(192.toByte) // extra byte
+    directByteBuffer.put(eightBytes)
+    directByteBuffer.rewind()
+    assertEquals(192.toByte, directByteBuffer.get()) // extra byte
+    assertEquals(1, directByteBuffer.position())
+    assertEquals(eightBS, BitSet.valueOf(directByteBuffer))
+    assertEquals(1, directByteBuffer.position())
   }
 
   @Test def valueOf_LongBuffer(): Unit = {
