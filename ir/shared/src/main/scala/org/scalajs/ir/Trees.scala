@@ -1596,6 +1596,12 @@ object Trees {
       implicit val pos: Position)
       extends MemberDef
 
+  sealed case class MinWasmImportedMethodDef(
+      flags: MemberFlags, name: MethodIdent, args: List[ParamDef], resultType: Type,
+      moduleName: String, functionName: String)(
+      implicit val pos: Position)
+      extends MemberDef
+
   sealed case class WitNativeMemberDef(flags: MemberFlags,
       moduleName: String, name: WitFunctionName, method: MethodIdent,
       signature: WasmInterfaceTypes.FuncType)(
@@ -1627,7 +1633,9 @@ object Trees {
         val StringLiteral(name) = propName: @unchecked // unchecked is needed for Scala 3.2+
         name
 
-      case TopLevelFieldExportDef(_, name, _)   => name
+      case TopLevelFieldExportDef(_, name, _) => name
+      case MinWasmMethodExportDef(_, name, _) => name
+
       case WitExportDef(moduleName, name, _, _) => name match {
           case WitFunctionName.Function(func) =>
             s"$moduleName#$func"
@@ -1672,6 +1680,11 @@ object Trees {
 
   sealed case class TopLevelFieldExportDef(moduleID: String,
       exportName: String, field: FieldIdent)(
+      implicit val pos: Position)
+      extends TopLevelExportDef
+
+  sealed case class MinWasmMethodExportDef(
+      moduleID: String, exportName: String, methodName: MethodName)(
       implicit val pos: Position)
       extends TopLevelExportDef
 

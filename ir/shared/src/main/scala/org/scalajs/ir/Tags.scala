@@ -157,7 +157,9 @@ private[ir] object Tags {
 
   final val TagJSConstructorDef = TagJSNativeMemberDef + 1
 
-  final val TagWitNativeMemberDef = TagJSConstructorDef + 1
+  // New in <wasm-only>
+  final val TagMinWasmImportedMethodDef = TagJSConstructorDef + 1
+  final val TagWitNativeMemberDef = TagMinWasmImportedMethodDef + 1
 
   // Tags for top-level export defs
 
@@ -165,7 +167,10 @@ private[ir] object Tags {
   final val TagTopLevelModuleExportDef = TagTopLevelJSClassExportDef + 1
   final val TagTopLevelMethodExportDef = TagTopLevelModuleExportDef + 1
   final val TagTopLevelFieldExportDef = TagTopLevelMethodExportDef + 1
-  final val TagWitExportDef = TagTopLevelFieldExportDef + 1
+
+  // New in scala-wasm
+  final val TagMinWasmMethodExportDef = TagTopLevelFieldExportDef + 1
+  final val TagWitExportDef = TagMinWasmMethodExportDef + 1
 
   // Tags for Types
 

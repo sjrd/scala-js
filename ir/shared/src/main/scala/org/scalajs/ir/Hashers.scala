@@ -118,7 +118,7 @@ object Hashers {
       WitExportDef(moduleName, name, hashMethodDef(methodDef), signature)(tle.pos)
 
     case _:TopLevelFieldExportDef | _:TopLevelModuleExportDef |
-        _:TopLevelJSClassExportDef =>
+        _:TopLevelJSClassExportDef | _:MinWasmMethodExportDef =>
       tle
   }
 
