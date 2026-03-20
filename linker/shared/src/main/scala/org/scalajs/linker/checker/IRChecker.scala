@@ -77,7 +77,7 @@ private final class IRChecker(linkTimeProperties: LinkTimeProperties,
           typecheckAny(methodDef.body, Env.empty)
 
         case _:TopLevelJSClassExportDef | _:TopLevelModuleExportDef |
-            _:TopLevelFieldExportDef =>
+            _:TopLevelFieldExportDef | _:MinWasmMethodExportDef =>
       }
     }
   }

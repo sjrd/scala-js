@@ -795,6 +795,15 @@ object Serializers {
           writeInt(MemberFlags.toBits(flags))
           writeMethodIdent(name)
           writeJSNativeLoadSpec(Some(jsNativeLoadSpec))
+
+        case MinWasmImportedMethodDef(flags, name, args, resultType, moduleName, functionName) =>
+          writeByte(TagMinWasmImportedMethodDef)
+          writeInt(MemberFlags.toBits(flags))
+          writeMethodIdent(name)
+          writeParamDefs(args)
+          writeType(resultType)
+          writeString(moduleName)
+          writeString(functionName)
       }
     }
 
@@ -825,6 +834,10 @@ object Serializers {
         case TopLevelFieldExportDef(moduleID, exportName, field) =>
           writeByte(TagTopLevelFieldExportDef)
           writeString(moduleID); writeString(exportName); writeFieldIdentForEnclosingClass(field)
+
+        case MinWasmMethodExportDef(moduleID, exportName, methodName) =>
+          writeByte(TagMinWasmMethodExportDef)
+          writeString(moduleID); writeString(exportName); writeMethodName(methodName)
       }
     }
 

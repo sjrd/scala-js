@@ -169,7 +169,8 @@ private[frontend] object BaseLinker {
       desugaringRequirements = desugaringRequirements.addAnyExportedMember()
 
     val topLevelImportDefs = classDef.topLevelImportDefs.filter {
-      case tli: JSNativeMemberDef => classInfo.jsNativeMembersUsed.contains(tli.name.name)
+      case tli: JSNativeMemberDef        => classInfo.jsNativeMembersUsed.contains(tli.name.name)
+      case tli: MinWasmImportedMethodDef => true // FIXME TODO
     }
 
     val allMethods = methods ++ syntheticMethodDefs

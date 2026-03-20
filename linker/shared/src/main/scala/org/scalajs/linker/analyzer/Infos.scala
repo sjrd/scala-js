@@ -659,6 +659,11 @@ object Infos {
           val field = topLevelFieldExport.field.name
           builder.addStaticFieldRead(field)
           builder.addStaticFieldWritten(field)
+
+        case topLevelWasmExport: MinWasmMethodExportDef =>
+          builder.addMethodCalledStatically(enclosingClass,
+              NamespacedMethodName(MemberNamespace.PublicStatic,
+                  topLevelWasmExport.methodName))
       }
 
       builder.result()

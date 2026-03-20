@@ -101,7 +101,8 @@ private final class ClassDefChecker(classDef: ClassDef,
       case jsPropertyDef: JSPropertyDef => checkJSPropertyDef(jsPropertyDef)
     }
     classDef.topLevelImportDefs.foreach {
-      case tli: JSNativeMemberDef => checkJSNativeMemberDef(tli)
+      case tli: JSNativeMemberDef        => checkJSNativeMemberDef(tli)
+      case tli: MinWasmImportedMethodDef => () // FIXME TODO
     }
 
     // top level exports need the lookup maps to be populated.
@@ -457,6 +458,9 @@ private final class ClassDefChecker(classDef: ClassDef,
 
       case topLevelExportDef: TopLevelFieldExportDef =>
         checkTopLevelFieldExportDef(topLevelExportDef)
+
+      case topLevelExportDef: MinWasmMethodExportDef =>
+        () // FIXME TODO
     }
   }
 

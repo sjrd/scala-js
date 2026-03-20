@@ -124,7 +124,7 @@ private[analyzer] object InfoLoader {
       val topLevelExports = classDef.topLevelExportDefs
         .map(generator.generateTopLevelExportInfo(classDef.name.name, _))
 
-      val jsNativeMembers = classDef.topLevelImportDefs.map {
+      val jsNativeMembers = classDef.topLevelImportDefs.collect {
         case JSNativeMemberDef(_, name, loadSpec) =>
           name.name -> loadSpec
       }.toMap
