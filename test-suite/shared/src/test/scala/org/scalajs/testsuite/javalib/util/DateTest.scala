@@ -48,16 +48,44 @@ class DateTest {
 
   @Test def parseStrings(): Unit = {
     def test(s: String, v: Date): Unit = {
-      assertEquals(0, new Date(s).compareTo(v))
-      assertEquals(0, Date.parse(s).compareTo(v.getTime))
+      assertEquals(s, new Date(s), v)
+      assertEquals(s, Date.parse(s), v.getTime())
+    }
+
+    def testFailure(s: String): Unit = {
+      assertThrows(classOf[IllegalArgumentException], new Date(s))
+      assertThrows(classOf[IllegalArgumentException], Date.parse(s))
     }
 
     test("Nov 5 1997 5:23:27 GMT", new Date(Date.UTC(97, 10, 5, 5, 23, 27)))
     test("Nov 1 1997 GMT", new Date(Date.UTC(97, 10, 1, 0, 0, 0)))
     test("Jan 1 1970 18:11:01 GMT", new Date(Date.UTC(70, 0, 1, 18, 11, 1)))
 
-    assertThrows(classOf[IllegalArgumentException], new Date("not a date"))
-    assertThrows(classOf[IllegalArgumentException], Date.parse("not a date"))
+    test("Nov 5 1997 (ig(no)ré) 5:23:27 GMT", new Date(Date.UTC(97, 10, 5, 5, 23, 27)))
+
+    // Some time zones are explicitly supported (mix of cases)
+    val supportedTimeZones = List(
+      "GMT" -> 0,
+      "UT" -> 0,
+      "utc" -> 0,
+      "Est" -> -5,
+      "cSt" -> -6,
+      "MsT" -> -7,
+      "pst" -> -8,
+      "eDT" -> -4,
+      "CDt" -> -5,
+      "MdT" -> -6,
+      "PDT" -> -7
+    )
+    for ((tzName, offset) <- supportedTimeZones) {
+      test(s"Mar 21 2026 10:30 $tzName", new Date(Date.UTC(126, 2, 21, 10 - offset, 30, 0)))
+    }
+
+    // But other time zones are not
+    for (tzName <- List("CET", "JST", "cest"))
+      testFailure(s"Mar 21 2026 10:30 $tzName")
+
+    testFailure("not a date")
   }
 
   @Test def after(): Unit = {
