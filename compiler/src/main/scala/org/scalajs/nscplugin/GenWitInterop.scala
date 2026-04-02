@@ -134,8 +134,8 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
     implicit val pos = tree.pos
     val sym = tree.symbol
     withNewLocalNameScope {
-      val funcType = jsInterop.witFunctionTypeOf(sym)
-      val baseParams = funcType.params.map(toWIT(_))
+      val (paramTypes, resultType) = witMethodSignatureOf(sym)
+      val baseParams = paramTypes.map(toWIT(_))
       val params = name match {
         case _:js.WitFunctionName.Function |
             _:js.WitFunctionName.ResourceConstructor |
@@ -146,7 +146,7 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
       }
       val witFuncType = wit.FuncType(
         params,
-        toResultWIT(funcType.resultType)
+        toResultWIT(resultType)
       )
       js.WitNativeMemberDef(flags, moduleName, name,
           encodeMethodSym(sym), witFuncType)
@@ -158,8 +158,7 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
     val sym = tree.symbol
 
     val flags = js.MemberFlags.empty.withNamespace(js.MemberNamespace.PublicStatic)
-    val funcType = jsInterop.witFunctionTypeOf(sym)
-
+    val (paramTypes, resultType) = witMethodSignatureOf(sym)
     for {
       methodAnnot <- sym.getAnnotation(WitResourceStaticMethodAnnotation)
       resourceAnnot <- sym.owner.companionClass.getAnnotation(WitResourceImportAnnotation)
@@ -170,8 +169,8 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
       val name = js.WitFunctionName.ResourceStaticMethod(
           func = methodName, resource = resourceName)
       withNewLocalNameScope {
-        val params = funcType.params.map(p => toWIT(p))
-        val ft = wit.FuncType(params, toResultWIT(funcType.resultType))
+        val params = paramTypes.map(toWIT(_))
+        val ft = wit.FuncType(params, toResultWIT(resultType))
         js.WitNativeMemberDef(flags, moduleName, name, encodeMethodSym(sym), ft)
       }
     }
@@ -182,7 +181,7 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
     val sym = tree.symbol
 
     val flags = js.MemberFlags.empty.withNamespace(js.MemberNamespace.PublicStatic)
-    val funcType = jsInterop.witFunctionTypeOf(sym)
+    val (paramTypes, resultType) = witMethodSignatureOf(sym)
 
     for {
       methodAnnot <- sym.getAnnotation(WitResourceConstructorAnnotation)
@@ -192,19 +191,20 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
     } yield {
       val name = js.WitFunctionName.ResourceConstructor(resourceName)
       withNewLocalNameScope {
-        val params = funcType.params.map(p => toWIT(p))
-        val ft = wit.FuncType(params, toResultWIT(funcType.resultType))
+        val params = paramTypes.map(toWIT(_))
+        val ft = wit.FuncType(params, toResultWIT(resultType))
         js.WitNativeMemberDef(flags, moduleName, name, encodeMethodSym(sym), ft)
       }
     }
   }
 
-  def genWitExportDef(info: jsInterop.WitExportInfo,
+  def genWitExportDef(info: jsInterop.WitExportInfo, sym: Symbol,
       methodDef: js.MethodDef): js.WitExportDef = {
     withNewLocalNameScope {
+      val (paramTypes, resultType) = witMethodSignatureOf(sym)
       val signature = wit.FuncType(
-        info.signature.params.map(toWIT(_)),
-        toResultWIT(info.signature.resultType)
+        paramTypes.map(toWIT(_)),
+        toResultWIT(resultType)
       )
       js.WitExportDef(
         info.moduleName,
@@ -215,15 +215,46 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
     }
   }
 
+  private def witMethodSignatureOf(sym: Symbol): (List[Type], Type) = {
+    exitingPhase(currentRun.typerPhase) {
+      val methodType = sym.tpe
+      val params =
+        if (methodType.paramss.isEmpty) Nil
+        else methodType.paramss.head.map(_.tpe)
+      (params, methodType.resultType)
+    }
+  }
+
+  private def witVariantValueTypeOf(sym: Symbol): Type = {
+    exitingPhase(currentRun.typerPhase) {
+      if (sym.isModuleClass) {
+        UnitTpe
+      } else if (sym.isClass && sym.isFinal && !sym.isTrait) {
+        sym.primaryConstructor.paramss.flatten match {
+          case Nil =>
+            UnitTpe
+          case param :: Nil =>
+            param.tpe
+          case _ =>
+            throw new AssertionError(s"Invalid WIT variant case shape for $sym")
+        }
+      } else {
+        throw new AssertionError(s"Invalid WIT variant case symbol $sym")
+      }
+    }
+  }
+
   private def toWIT(tpe: Type): wit.ValType = {
-    unsigned2WIT.get(tpe.typeSymbolDirect).orElse {
-      toWITMaybeArray(tpe.dealiasWiden)
+    val widenedTpe = exitingPhase(currentRun.typerPhase)(tpe.dealiasWiden)
+
+    unsigned2WIT.get(widenedTpe.typeSymbolDirect).orElse {
+      toWITMaybeArray(widenedTpe)
     }.orElse {
-      primitiveIRWIT.get(toIRType(tpe.dealiasWiden))
+      primitiveIRWIT.get(toIRType(widenedTpe))
     }.getOrElse {
-      tpe.dealiasWiden.typeSymbol match {
+      widenedTpe.typeSymbol match {
         case tsym if isWasmComponentTupleClass(tsym) =>
-          wit.TupleType(tpe.typeArgs.map(toWIT(_)))
+          wit.TupleType(widenedTpe.baseType(tsym).typeArgs.map(toWIT(_)))
 
         case tsym if tsym.hasAnnotation(WitFlagsAnnotation) =>
           // Read numFlags from annotation parameter
@@ -236,26 +267,26 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
           wit.FlagsType(className, numFlags)
 
         case tsym if isWasmWitRecordClass(tsym) =>
-          // TODO: it needs to be sorted by the order of record in wit definition
           val className = encodeClassName(tsym)
-          val fields: List[wit.FieldType] = tsym.info.decls.collect {
-            case f if f.isField =>
-              val label = encodeFieldSym(f)(f.pos).name
-              val fieldType = jsInterop.witVariantValueTypeOf(f)
-              val valueType = toWIT(fieldType)
-              wit.FieldType(label, valueType)
-          }.toList
+          val fields = exitingPhase(currentRun.typerPhase) {
+            tsym.primaryConstructor.paramss.flatten.map { param =>
+              (param.name.dropLocal.toString(), param.tpe)
+            }
+          }.map { case (fieldName, fieldType) =>
+            val label = Names.FieldName(className, Names.SimpleFieldName(fieldName))
+            wit.FieldType(label, toWIT(fieldType))
+          }
           wit.RecordType(className, fields)
 
         case tsym if isWasmWitResourceType(tsym) =>
           wit.ResourceType(encodeClassName(tsym))
 
         case tsym if tsym.isSubClass(ComponentResultClass) && tsym.isSealed =>
-          val List(ok, err) = tpe.typeArgs
+          val List(ok, err) = widenedTpe.baseType(ComponentResultClass).typeArgs
           wit.ResultType(toResultWIT(ok), toResultWIT(err))
 
         case tsym if tsym.fullName == "java.util.Optional" =>
-          val List(t) = tpe.dealiasWiden.typeArgs
+          val List(t) = widenedTpe.baseType(tsym).typeArgs
           wit.OptionType(toWIT(t))
 
         case tsym if tsym.hasAnnotation(WitVariantAnnotation) && tsym.isSealed =>
@@ -266,7 +297,7 @@ trait GenWitInterop[G <: Global with Singleton] extends SubComponent {
           val cases = tsym.sealedChildren.toList.sortBy(_.pos.line) map { child =>
             // assert(child.isFinal)
             // assert(child.isClass)
-            val valueType = jsInterop.witVariantValueTypeOf(child)
+            val valueType = witVariantValueTypeOf(child)
             val caseTyp = if (toIRType(valueType) == jstpe.VoidType) {
               None
             } else {

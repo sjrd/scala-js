@@ -140,11 +140,7 @@ trait PrepJSExports[G <: Global with Singleton] { this: PrepJSInterop[G] =>
 
     val wasmComponent = exports.collect {
       case info @ ExportInfo(moduleName, ExportDestination.WasmComponent(name)) =>
-        val signature = jsInterop.WitFunctionType(
-          (if (sym.tpe.paramss.isEmpty) Nil else sym.tpe.paramss.head).map(_.tpe),
-          sym.tpe.resultType
-        )
-        jsInterop.WitExportInfo(moduleName, name, signature)(info.pos)
+        jsInterop.WitExportInfo(moduleName, name)(info.pos)
     }
 
     if (sym.isMethod && wasmComponent.nonEmpty) {
