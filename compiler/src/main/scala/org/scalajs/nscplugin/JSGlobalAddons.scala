@@ -103,12 +103,6 @@ trait JSGlobalAddons extends JSDefinitions with CompatComponent {
     private val jsNativeLoadSpecs =
       mutable.Map.empty[Symbol, JSNativeLoadSpec]
 
-    private val componentFunctionTypes =
-      mutable.Map.empty[Symbol, WitFunctionType]
-
-    private val WitVariantValueTypes =
-      mutable.Map.empty[Symbol, Type]
-
     private val exportPrefix = "$js$exported$"
     private val methodExportPrefix = exportPrefix + "meth$"
     private val propExportPrefix = exportPrefix + "prop$"
@@ -125,15 +119,9 @@ trait JSGlobalAddons extends JSDefinitions with CompatComponent {
         val pos: Position)
         extends ExportInfo
 
-    case class WitExportInfo(moduleName: String, name: String,
-        signature: WitFunctionType)(
+    case class WitExportInfo(moduleName: String, name: String)(
         val pos: Position)
         extends ExportInfo
-
-    case class WitFunctionType(
-        params: List[Type],
-        resultType: Type
-    )
 
     case class StaticExportInfo(jsName: String)(val pos: Position) extends ExportInfo
 
@@ -420,17 +408,6 @@ trait JSGlobalAddons extends JSDefinitions with CompatComponent {
     def jsNativeLoadSpecOfOption(sym: Symbol): Option[JSNativeLoadSpec] =
       jsNativeLoadSpecs.get(sym)
 
-    def storeWitVariantValueType(sym: Symbol, valueType: Type): Unit =
-      WitVariantValueTypes(sym) = valueType
-
-    def witVariantValueTypeOf(sym: Symbol): Type =
-      WitVariantValueTypes(sym)
-
-    def storeWitFunctionType(sym: Symbol, funcType: WitFunctionType): Unit =
-      componentFunctionTypes(sym) = funcType
-
-    def witFunctionTypeOf(sym: Symbol): WitFunctionType =
-      componentFunctionTypes(sym)
   }
 
 }

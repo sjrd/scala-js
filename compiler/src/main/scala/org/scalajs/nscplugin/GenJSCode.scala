@@ -696,7 +696,7 @@ abstract class GenJSCode[G <: Global with Singleton](val global: G)
           val info = jsInterop.witExportOf(dd.symbol).get
           for (method <- genMethod(dd)) {
             methodsBuilder += method
-            witExportDefsBuilder += genWitExportDef(info, method)
+            witExportDefsBuilder += genWitExportDef(info, dd.symbol, method)
           }
         } else {
           methodsBuilder ++= genMethod(dd)

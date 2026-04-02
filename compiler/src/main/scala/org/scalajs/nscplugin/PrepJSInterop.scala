@@ -862,12 +862,6 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
             reporter.error(pos,
                 s"Return type '${returnType}' is not compatible with Component Model")
           }
-
-          val funcType = jsInterop.WitFunctionType(
-            (if (sym.tpe.paramss.isEmpty) Nil else sym.tpe.paramss.head).map(_.tpe),
-            sym.tpe.resultType
-          )
-          jsInterop.storeWitFunctionType(sym, funcType)
         }
       }
     }
@@ -953,12 +947,6 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
                   overridden.fullName)
             }
           }
-
-          val funcType = jsInterop.WitFunctionType(
-            (if (member.tpe.paramss.isEmpty) Nil else member.tpe.paramss.head).map(_.tpe),
-            member.tpe.resultType
-          )
-          jsInterop.storeWitFunctionType(member, funcType)
         }
       }
 
@@ -991,12 +979,6 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
                   s"Public method '${member.name}' in companion object of @WitResourceImport trait must be " +
                   "annotated with @WitResourceConstructor or @WitResourceStaticMethod")
             }
-
-            val funcType = jsInterop.WitFunctionType(
-              (if (member.tpe.paramss.isEmpty) Nil else member.tpe.paramss.head).map(_.tpe),
-              member.tpe.resultType
-            )
-            jsInterop.storeWitFunctionType(member, funcType)
           }
         }
       }
@@ -1024,7 +1006,6 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
     private def validateWitVariantCase(caseSym: Symbol): Unit = {
       if (caseSym.isModuleClass) {
         // Regular object (enum case without payload)
-        jsInterop.storeWitVariantValueType(caseSym, definitions.UnitTpe)
       } else if (caseSym.isClass && caseSym.isFinal && !caseSym.isTrait) {
         // Final class (variant case with payload)
         val primaryCtor = caseSym.primaryConstructor
@@ -1051,12 +1032,9 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
           } else if (!isComponentModelCompatible(fieldType)) {
             reporter.error(param.pos,
                 s"Field '${param.name}' has type '${fieldType}' which is not compatible with Component Model. ")
-          } else {
-            jsInterop.storeWitVariantValueType(caseSym, fieldType)
           }
         } else {
           // Zero parameters - enum case defined as a class
-          jsInterop.storeWitVariantValueType(caseSym, definitions.UnitTpe)
         }
       } else {
         reporter.error(caseSym.pos,
@@ -1120,13 +1098,6 @@ abstract class PrepJSInterop[G <: Global with Singleton](val global: G)
             reporter.error(param.pos,
                 s"Field '${param.name}' has type '${fieldType}' which is not compatible with Component Model")
           }
-        }
-        // Store field types for code generation
-        for {
-          f <- sym.info.decls
-          if !f.isMethod && f.isField
-        } {
-          jsInterop.storeWitVariantValueType(f, f.tpe)
         }
       }
     }
