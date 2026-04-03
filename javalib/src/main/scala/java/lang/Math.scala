@@ -327,7 +327,13 @@ object Math {
     }
   }
 
-  @inline def exp(a: scala.Double): scala.Double = js.Math.exp(a)
+  @inline def exp(a: scala.Double): scala.Double = {
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
+      pow(E, a)
+    } {
+      js.Math.exp(a)
+    }
+  }
 
   @inline def log(a: scala.Double): scala.Double = {
     linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
@@ -708,64 +714,91 @@ object Math {
   }
 
   def expm1(a: scala.Double): scala.Double = {
-    if (assumingES6 || !Utils.isUndefined(g.Math.expm1)) {
-      js.Math.expm1(a)
-    } else {
-      // https://github.com/ghewgill/picomath/blob/master/javascript/expm1.js
-      if (a == 0 || Double.isNaN(a))
-        a
-      // Power Series http://en.wikipedia.org/wiki/Power_series
-      // for small values of a, exp(a) = 1 + a + (a*a)/2
-      else if (abs(a) < 1e-5)
-        a + 0.5 * a * a
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
+      expm1Impl(a)
+    } {
+      if (assumingES6 || !Utils.isUndefined(g.Math.expm1))
+        js.Math.expm1(a)
       else
-        exp(a) - 1.0
+        expm1Impl(a)
     }
+  }
+
+  private def expm1Impl(a: scala.Double): scala.Double = {
+    // https://github.com/ghewgill/picomath/blob/master/javascript/expm1.js
+    if (a == 0 || Double.isNaN(a))
+      a
+    // Power Series http://en.wikipedia.org/wiki/Power_series
+    // for small values of a, exp(a) = 1 + a + (a*a)/2
+    else if (abs(a) < 1e-5)
+      a + 0.5 * a * a
+    else
+      exp(a) - 1.0
   }
 
   def sinh(a: scala.Double): scala.Double = {
-    if (assumingES6 || !Utils.isUndefined(g.Math.sinh)) {
-      js.Math.sinh(a)
-    } else {
-      if (Double.isNaN(a) || a == 0.0 || abs(a) == scala.Double.PositiveInfinity) a
-      else (exp(a) - exp(-a)) / 2.0
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
+      sinhImpl(a)
+    } {
+      if (assumingES6 || !Utils.isUndefined(g.Math.sinh))
+        js.Math.sinh(a)
+      else
+        sinhImpl(a)
     }
   }
 
+  private def sinhImpl(a: scala.Double): scala.Double =
+    if (Double.isNaN(a) || a == 0.0 || abs(a) == scala.Double.PositiveInfinity) a
+    else (exp(a) - exp(-a)) / 2.0
+
   def cosh(a: scala.Double): scala.Double = {
-    if (assumingES6 || !Utils.isUndefined(g.Math.cosh)) {
-      js.Math.cosh(a)
-    } else {
-      if (Double.isNaN(a))
-        a
-      else if (a == 0.0)
-        1.0
-      else if (abs(a) == scala.Double.PositiveInfinity)
-        scala.Double.PositiveInfinity
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
+      coshImpl(a)
+    } {
+      if (assumingES6 || !Utils.isUndefined(g.Math.cosh))
+        js.Math.cosh(a)
       else
-        (exp(a) + exp(-a)) / 2.0
+        coshImpl(a)
     }
+  }
+
+  private def coshImpl(a: scala.Double): scala.Double = {
+    if (Double.isNaN(a))
+      a
+    else if (a == 0.0)
+      1.0
+    else if (abs(a) == scala.Double.PositiveInfinity)
+      scala.Double.PositiveInfinity
+    else
+      (exp(a) + exp(-a)) / 2.0
   }
 
   def tanh(a: scala.Double): scala.Double = {
-    if (assumingES6 || !Utils.isUndefined(g.Math.tanh)) {
-      js.Math.tanh(a)
+    linkTimeIf(moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
+      tanhImpl(a)
+    } {
+      if (assumingES6 || !Utils.isUndefined(g.Math.tanh))
+        js.Math.tanh(a)
+      else
+        tanhImpl(a)
+    }
+  }
+
+  private def tanhImpl(a: scala.Double): scala.Double = {
+    if (Double.isNaN(a) || a == 0.0) {
+      a
+    } else if (abs(a) == scala.Double.PositiveInfinity) {
+      signum(a)
     } else {
-      if (Double.isNaN(a) || a == 0.0) {
-        a
-      } else if (abs(a) == scala.Double.PositiveInfinity) {
-        signum(a)
+      // sinh(a) / cosh(a) =
+      // 1 - 2 * (exp(-a)/ (exp(-a) + exp (a)))
+      val expma = exp(-a)
+      if (expma == scala.Double.PositiveInfinity) { // Infinity / Infinity
+        -1.0
       } else {
-        // sinh(a) / cosh(a) =
-        // 1 - 2 * (exp(-a)/ (exp(-a) + exp (a)))
-        val expma = exp(-a)
-        if (expma == scala.Double.PositiveInfinity) { // Infinity / Infinity
-          -1.0
-        } else {
-          val expa = exp(a)
-          val ret = expma / (expa + expma)
-          1.0 - (2.0 * ret)
-        }
+        val expa = exp(a)
+        val ret = expma / (expa + expma)
+        1.0 - (2.0 * ret)
       }
     }
   }
