@@ -22,6 +22,7 @@ import scala.scalajs.LinkingInfo.ModuleKind.{MinimalWasmModule, WasmComponent}
 
 import java.{util => ju}
 import java.util.function._
+import java.util.Objects.requireNonNull
 
 object System {
   /* System contains a bag of unrelated features. If we naively implement
@@ -104,6 +105,9 @@ object System {
     import scala.{Boolean, Char, Byte, Short, Int, Long, Float, Double}
 
     def mismatch(): Unit = {
+      requireNonNull(src)
+      requireNonNull(dest)
+
       // Trigger an ArrayStoreException subject to UB.
       new Array[String](1).asInstanceOf[Array[Object]](0) = Integer.valueOf(0)
     }
@@ -134,9 +138,7 @@ object System {
       }
     }
 
-    if (src == null || dest == null) {
-      throw new NullPointerException()
-    } else (src match {
+    src match {
       case src: Array[AnyRef] =>
         dest match {
           case dest: Array[AnyRef] => impl(src.length, dest.length, (i, j) => dest(i) = src(j))
@@ -184,7 +186,7 @@ object System {
         }
       case _ =>
         mismatch()
-    })
+    }
   }
 
   @inline
@@ -374,9 +376,7 @@ object System {
 
   @inline
   def getenv(name: String): String = {
-    if (name eq null)
-      throw new NullPointerException
-
+    requireNonNull(name)
     null
   }
 

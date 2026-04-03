@@ -1497,12 +1497,10 @@ class BitSetTest {
     assertEquals(1, allocateByteBuffer.position())
   }
 
-  @Test def valueOf_ByteBuffer_typedArrays(): Unit = {
+  @Test def valueOf_ByteBuffer_direct(): Unit = {
     assumeFalse("requires support for direct Buffers, which isn't available in pure Wasm",
         executingInPureWebAssembly)
     LinkingInfo.linkTimeIf(moduleKind != MinimalWasmModule && moduleKind != WasmComponent) {
-      assumeTrue("requires support for direct Buffers", hasDirectBuffers)
-
       val eightBS = makeEightBS()
       val eightBytes = eightBS.toByteArray()
 
