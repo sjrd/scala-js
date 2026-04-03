@@ -13,6 +13,7 @@
 package java.lang
 
 import java.util.function._
+import java.util.Objects.requireNonNull
 
 import scala.scalajs.js.annotation.JSExport
 import scala.scalajs.LinkingInfo
@@ -78,8 +79,7 @@ class Throwable protected (s: String, private var e: Throwable,
       if (writableStackTrace) {
         var i = 0
         while (i < stackTrace.length) {
-          if (stackTrace(i) eq null)
-            throw new NullPointerException()
+          requireNonNull(stackTrace(i))
           i += 1
         }
 
@@ -170,8 +170,7 @@ class Throwable protected (s: String, private var e: Throwable,
   }
 
   def addSuppressed(exception: Throwable): Unit = {
-    if (exception eq null)
-      throw new NullPointerException
+    requireNonNull(exception)
     if (exception eq this)
       throw new IllegalArgumentException
 
