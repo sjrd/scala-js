@@ -29,6 +29,7 @@ private[java] sealed abstract class RegExpImpl {
 
   def compile(patternStr: String): PatRepr
   def compile(patternStr: String, global: Boolean): PatRepr
+  def compile(patternStr: String, flags: Int): PatRepr
   def exec(pattern: PatRepr, string: String): Repr
   def matches(r: Repr): Boolean
   def exists(r: Repr, index: Int): Boolean
@@ -37,9 +38,20 @@ private[java] sealed abstract class RegExpImpl {
   def execFrom(pattern: PatRepr, string: String, startPos: Int): Repr
   def matchStart(r: Repr): Int
   def matchEnd(pattern: PatRepr, r: Repr): Int
+
+  def replaceAll(
+      pattern: PatRepr,
+      string: String,
+      replacer: java.util.function.Function[String, String]
+  ): String
 }
 
 private[java] object RegExpImpl {
+  object Flags {
+    final val Global = 0x01
+    final val CaseInsensitive = 0x02
+  }
+
   val impl = LinkingInfo.linkTimeIf[RegExpImpl](
       moduleKind == MinimalWasmModule || moduleKind == WasmComponent) {
     JavaRegExpImpl
@@ -59,6 +71,14 @@ private[java] object RegExpImpl {
     def compile(patternStr: String, global: Boolean): PatRepr = {
       if (global) new js.RegExp(patternStr, "g")
       else new js.RegExp(patternStr)
+    }
+
+    def compile(patternStr: String, flags: Int): PatRepr = {
+      val jsFlags = {
+        (if ((flags & Flags.Global) != 0) "g" else "") +
+        (if ((flags & Flags.CaseInsensitive) != 0) "i" else "")
+      }
+      new js.RegExp(patternStr, jsFlags)
     }
 
     def exec(pattern: PatRepr, string: String): Repr = pattern.exec(string)
@@ -83,6 +103,20 @@ private[java] object RegExpImpl {
       if (r == null) -1
       else pattern.lastIndex
     }
+
+    def replaceAll(
+        pattern: PatRepr,
+        string: String,
+        replacer: java.util.function.Function[String, String]
+    ): String = {
+      import js.JSStringOps._
+      if (!pattern.global)
+        throw new IllegalArgumentException("replaceAll requires a global pattern")
+      val jsFunc: js.Function1[String, String] = { (matched: String) =>
+        replacer.apply(matched)
+      }
+      string.jsReplace(pattern, jsFunc)
+    }
   }
 
   private object JavaRegExpImpl extends RegExpImpl {
@@ -91,6 +125,14 @@ private[java] object RegExpImpl {
 
     def compile(patternStr: String): PatRepr = Pattern.compile(patternStr)
     def compile(patternStr: String, global: Boolean): PatRepr = Pattern.compile(patternStr)
+
+    def compile(patternStr: String, flags: Int): PatRepr = {
+      var patFlags = 0
+      if ((flags & Flags.CaseInsensitive) != 0)
+        patFlags |= Pattern.CASE_INSENSITIVE
+      Pattern.compile(patternStr, patFlags)
+    }
+
     def exec(pattern: PatRepr, string: String): Repr = pattern.matcher(string)
     def matches(r: Repr): Boolean = r.matches()
     def exists(r: Repr, index: Int): Boolean = r.group(index) != null
@@ -114,6 +156,16 @@ private[java] object RegExpImpl {
     def matchEnd(pattern: PatRepr, r: Repr): Int = {
       if (r == null) -1
       else r.end()
+    }
+
+    def replaceAll(
+        pattern: PatRepr,
+        string: String,
+        replacer: java.util.function.Function[String, String]
+    ): String = {
+      pattern.matcher(string).replaceAll(new java.util.function.Function[MatchResult, String] {
+        def apply(result: MatchResult): String = replacer.apply(result.group())
+      })
     }
   }
 }

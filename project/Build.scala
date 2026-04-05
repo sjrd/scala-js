@@ -2361,10 +2361,8 @@ object Build {
               contains(f, "/shared/src/test/scala/org/scalajs/testsuite/") && (
                 // javalib/util
                 !endsWith(f, "/DateTest.scala") && // js.Date
-                !endsWith(f, "/PropertiesTest.scala") && // Date.toString
+                !endsWith(f, "/PropertiesTest.scala") // Date.toString
 
-                // javalib/net
-                !endsWith(f, "/net/URITest.scala") // URI.normalize
               ) ||
               contains(f, "/js/src/test/scala/org/scalajs/testsuite/") && (
                 // compiler
