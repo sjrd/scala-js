@@ -200,7 +200,7 @@ object RuntimeLong {
     // Hacker's Delight, Section 2-16
     val lo = alo + blo
     pack(lo,
-        ahi + bhi + (((alo & blo) | ((alo | blo) & ~lo)) >>> 31))
+        ahi + bhi + (if (inlineUnsignedInt_<(lo, alo)) 1 else 0)) // (((alo & blo) | ((alo | blo) & ~lo)) >>> 31))
   }
 
   @inline
@@ -215,7 +215,7 @@ object RuntimeLong {
      */
     val lo = alo - blo
     pack(lo,
-        ahi - bhi + (((~alo & blo) | (~(alo ^ blo) & lo)) >> 31))
+        ahi - bhi - (if (inlineUnsignedInt_>(lo, alo)) 1 else 0)) // + (((~alo & blo) | (~(alo ^ blo) & lo)) >> 31))
   }
 
   @inline

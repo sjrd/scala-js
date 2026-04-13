@@ -2624,6 +2624,11 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
           js.BinaryOp(JSBinaryOp.&&, transformExprNoChar(cond),
               transformExpr(thenp, tree.tpe))
 
+        case If(cond, IntLiteral(1), IntLiteral(0)) =>
+          or0(transformExprNoChar(cond))
+        case If(cond, IntLiteral(0), IntLiteral(1)) =>
+          or0(!transformExprNoChar(cond))
+
         case If(cond, thenp, elsep) =>
           js.If(transformExprNoChar(cond), transformExpr(thenp, tree.tpe),
               transformExpr(elsep, tree.tpe))
