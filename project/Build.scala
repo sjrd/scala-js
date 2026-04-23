@@ -1367,15 +1367,15 @@ object Build {
   )
 
   lazy val linker: MultiScalaProject = MultiScalaProject(
-      id = "linker", base = file("linker/jvm")
+      id = "linker", base = file("linker/jvm"), List("2.12", "2.13", "3")
   ).settings(
       commonLinkerSettings,
 
       libraryDependencies ++= Seq(
           "com.google.javascript" % "closure-compiler" % "v20220202",
           "com.google.jimfs" % "jimfs" % "1.1" % "test",
-          "org.scala-js" %% "scalajs-env-nodejs" % "1.4.0" % "test",
-          "org.scala-js" %% "scalajs-js-envs-test-kit" % "1.4.0" % "test"
+          "org.scala-js" %% "scalajs-env-nodejs" % "1.5.0" % "test",
+          "org.scala-js" %% "scalajs-js-envs-test-kit" % "1.5.0" % "test"
       ) ++ (
           parallelCollectionsDependencies(scalaVersion.value)
       ),
@@ -2732,7 +2732,7 @@ object Build {
 
       resolvers += Resolver.typesafeIvyRepo("releases"),
 
-      libraryDependencies += "org.scala-js" %% "scalajs-env-nodejs" % "1.4.0",
+      libraryDependencies += "org.scala-js" %% "scalajs-env-nodejs" % "1.5.0",
 
       fetchScalaSource / artifactPath :=
         baseDirectory.value.getParentFile / "fetchedSources" / scalaVersion.value,
