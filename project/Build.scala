@@ -1190,6 +1190,13 @@ object Build {
       fatalWarningsSettings,
       name := "Scala.js linker interface",
 
+      scalacOptions ++= {
+        if (scalaVersion.value.startsWith("3."))
+          List("-Wsafe-init", "-Yexplicit-nulls")
+        else
+          Nil
+      },
+
       Compile / unmanagedSourceDirectories +=
         baseDirectory.value.getParentFile.getParentFile / "shared/src/main/scala",
       Test / unmanagedSourceDirectories +=
@@ -1446,6 +1453,14 @@ object Build {
       libraryDependencies ++= JUnitDeps,
       previousArtifactSetting,
       mimaBinaryIssueFilters ++= BinaryIncompatibilities.TestAdapter,
+
+      scalacOptions ++= {
+        if (scalaVersion.value.startsWith("3."))
+          List("-Wsafe-init", "-Yexplicit-nulls")
+        else
+          Nil
+      },
+
       Compile / unmanagedSourceDirectories +=
         baseDirectory.value.getParentFile.getParentFile / "test-common/src/main/scala",
       Test / unmanagedSourceDirectories +=

@@ -15,10 +15,10 @@ package org.scalajs.linker.interface
 /** Thrown by the linker when linking cannot be performed. */
 class LinkingException(message: String, cause: Throwable) extends Exception(message, cause) {
 
-  def this(message: String) = this(message, null)
+  def this(message: String) = this(message, null.asInstanceOf[Throwable])
 
   def this(cause: Throwable) =
-    this(if (cause == null) null else cause.toString(), cause)
+    this(if (cause == null) null.asInstanceOf[String] else cause.toString(), cause)
 
-  def this() = this(null, null)
+  def this() = this(null.asInstanceOf[String], null.asInstanceOf[Throwable])
 }
