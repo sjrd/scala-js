@@ -1618,8 +1618,8 @@ object Trees {
       case MinWasmMethodExportDef(_, name, _) => name
     }
 
-    val skipsJSIdentifierCheck = this.isInstanceOf[MinWasmMethodExportDef]
-    require(skipsJSIdentifierCheck || isValidTopLevelExportName(topLevelExportName),
+    val isWasmExport = this.isInstanceOf[MinWasmMethodExportDef]
+    require(isWasmExport || isValidTopLevelExportName(topLevelExportName),
         s"`$topLevelExportName` is not a valid top-level export name")
   }
 

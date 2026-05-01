@@ -1121,15 +1121,16 @@ object Printers {
           print(" loadfrom ")
           print(jsNativeLoadSpec)
 
-        case MinWasmImportedMethodDef(flags, name, args, resultType, moduleName, functionName) =>
+        case MinWasmImportedMethodDef(flags, name, args, resultType, moduleName, funcName) =>
           print(flags.namespace.prefixString)
-          print("import wasm \"")
+          print("(import \"")
           printEscapeJS(moduleName, out)
           print("\" \"")
-          printEscapeJS(functionName, out)
-          print("\" as ")
+          printEscapeJS(funcName, out)
+          print("\" (func ")
           print(name)
           printSig(args, None, resultType)
+          print("))")
       }
     }
 
@@ -1160,11 +1161,11 @@ object Printers {
           print("\"")
 
         case MinWasmMethodExportDef(_, exportName, methodName) =>
-          print("static method ")
-          print(methodName)
-          print(" as wasm \"")
+          print("(export \"")
           printEscapeJS(exportName, out)
-          print("\"")
+          print("\" (func ")
+          print(methodName)
+          print("))")
       }
     }
 
