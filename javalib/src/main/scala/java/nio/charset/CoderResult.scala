@@ -62,11 +62,11 @@ object CoderResult {
 
   // This is a sparse array
   private val uniqueMalformedJS = {
-    linkTimeIf(moduleKind != MinimalWasmModule) {
+    //linkTimeIf(moduleKind != MinimalWasmModule) {
       js.Array[js.UndefOr[CoderResult]]()
-    } {
-      null
-    }
+    //} {
+    //  null
+    //}
   }
 
   private val uniqueMalformedWasm = {

@@ -42,15 +42,32 @@ private[bridge] final object JSRPC extends RPCCore {
 
   override protected def send(msg: String): Unit = {
     linkTimeIf(moduleKind == MinimalWasmModule) {
-      WasmCom.send(msg.getBytes(StandardCharsets.UTF_16BE))
+      // Quick UTF-16 BE encoding, without depending on the full Charset's.
+      val len = msg.length()
+      val bytes = new Array[Byte](len * 2)
+      var i = 0
+      while (i != len) {
+        val c = msg.charAt(i).toInt
+        bytes(i * 2) = (c >>> 8).toByte
+        bytes(i * 2 + 1) = c.toByte
+      }
+      WasmCom.send(bytes)
     } {
       Com.send(msg)
     }
   }
 
   @WasmExport("scalajs:testing/com/receive")
-  def receive(msg: Array[Byte]): Unit =
-    handleMessage(new String(msg, StandardCharsets.UTF_16BE))
+  def receive(msg: Array[Byte]): Unit = {
+    val len = msg.length
+    var str = ""
+    var i = 0
+    while (i != len) {
+      str += (((msg(i) & 0xff) << 8) | (msg(i + 1) & 0xff)).toChar
+      i += 2
+    }
+    handleMessage(str)
+  }
 
   @js.native
   @JSGlobal("scalajsCom")

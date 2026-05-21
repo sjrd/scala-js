@@ -59,7 +59,12 @@ private[testing] object Serializer {
 
   @inline
   def withOutputStream(body: DataOutputStream => Unit): String = {
-    val byteOut = new ByteArrayOutputStream()
+    // TODO Remove this when we support Charset's in MinimalWasm
+    final class ByteArrayOutputStreamWithoutToString extends ByteArrayOutputStream {
+      override def toString(): String = "ByteArrayOutputStream"
+    }
+
+    val byteOut = new ByteArrayOutputStreamWithoutToString()
     val dataOut = new DataOutputStream(byteOut)
 
     try body(dataOut)
