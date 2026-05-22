@@ -31,12 +31,12 @@ object QueueExecutionContext {
     new SingleThreadedExecutionContext
 
   def apply(): ExecutionContextExecutor = {
-    linkTimeIf(moduleKind == MinimalWasmModule) {
-      single()
-    } {
+    //linkTimeIf(moduleKind == MinimalWasmModule) {
+    //  single()
+    //} {
       if (js.typeOf(js.Dynamic.global.Promise) == "undefined") timeouts()
       else promises()
-    }
+    //}
   }
 
   private final class SingleThreadedExecutionContext extends ExecutionContextExecutor {

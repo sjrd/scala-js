@@ -20,15 +20,10 @@ import scala.scalajs.LinkingInfo._
 import scala.scalajs.LinkingInfo.ModuleKind.MinimalWasmModule
 import scala.scalajs.wasm.annotation._
 
-/* Use the queue execution context (based on JS promises) explicitly:
- * We do not have anything better at our disposal and it is accceptable in
- * terms of fairness: JSRPC only handles in-between test communcation, so any
- * future chain will "yield" to I/O (waiting for a message) or an RPC handler in
- * a finite number of steps.
- */
-import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
-
+import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.ExecutionContextExecutor
 
 import org.scalajs.testing.common.RPCCore
 
@@ -37,6 +32,13 @@ private[bridge] final object JSRPC extends RPCCore {
   linkTimeIf(moduleKind == MinimalWasmModule) {
     ()
   } {
+    /* Use the queue execution context (based on JS promises) explicitly:
+     * We do not have anything better at our disposal and it is accceptable in
+     * terms of fairness: JSRPC only handles in-between test communication, so any
+     * future chain will "yield" to I/O (waiting for a message) or an RPC handler in
+     * a finite number of steps.
+     */
+    implicit val ec = scala.scalajs.concurrent.JSExecutionContext.queue
     Com.init(handleMessage _)
   }
 
@@ -49,8 +51,11 @@ private[bridge] final object JSRPC extends RPCCore {
   }
 
   @WasmExport("scalajs:testing/com/receive")
-  def receive(msg: Array[Byte]): Unit =
+  def receive(msg: Array[Byte]): Unit = {
+    implicit val ec = new SingleThreadedExecutionContext()
     handleMessage(new String(msg, StandardCharsets.UTF_16BE))
+    ec.runLoop()
+  }
 
   @js.native
   @JSGlobal("scalajsCom")
@@ -64,5 +69,33 @@ private[bridge] final object JSRPC extends RPCCore {
   private object WasmCom {
     @WasmImport("scalajs:testing/com", "send")
     def send(msg: Array[Byte]): Unit = scala.scalajs.wasm.native
+
+    @WasmImport("scalajs:core", "doWriteLine")
+    def doWriteLine(isErr: scala.Boolean, line: Array[scala.Byte]): Unit =
+      scala.scalajs.wasm.native
+  }
+
+  // !!! Copy-pasted in JUnitTask
+  private final class SingleThreadedExecutionContext
+      extends ExecutionContextExecutor {
+
+    private val tasks = mutable.ListBuffer.empty[Runnable]
+
+    def execute(runnable: Runnable): Unit =
+      tasks += runnable
+
+    def runLoop(): Unit = {
+      while (tasks.nonEmpty) {
+        val task = tasks.remove(0)
+        try {
+          task.run()
+        } catch {
+          case t: Throwable => reportFailure(t)
+        }
+      }
+    }
+
+    def reportFailure(t: Throwable): Unit =
+      WasmCom.doWriteLine(true, t.toString().getBytes())
   }
 }
