@@ -27,7 +27,7 @@ object StandardLinkerBackend {
       .withClosureCompilerIfAvailableInternal(config.closureCompilerIfAvailable)
       .withPrettyPrint(config.prettyPrint)
       .withMaxConcurrentWrites(config.maxConcurrentWrites)
-      .withExperimentalUseWebAssembly(config.experimentalUseWebAssembly)
+      .withUseWebAssembly(config.useWebAssembly)
 
     LinkerBackendImpl(backendConfig)
   }

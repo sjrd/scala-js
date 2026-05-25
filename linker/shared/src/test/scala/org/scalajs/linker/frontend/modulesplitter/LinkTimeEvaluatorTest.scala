@@ -33,7 +33,7 @@ class LinkTimeEvaluatorTest {
     val config = StandardConfig()
       .withSemantics(semantics)
       .withESFeatures(esFeatures)
-      .withExperimentalUseWebAssembly(isWebAssembly)
+      .withUseWebAssembly(isWebAssembly)
     LinkTimeProperties.fromCoreSpec(CoreSpec.fromStandardConfig(config))
   }
 

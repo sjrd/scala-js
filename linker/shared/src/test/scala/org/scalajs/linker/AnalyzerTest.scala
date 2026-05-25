@@ -760,7 +760,7 @@ class AnalyzerTest {
       val config = StandardConfig()
         .withModuleKind(ModuleKind.ESModule)
         .withESFeatures(_.withESVersion(ESVersion.ES2022))
-        .withExperimentalUseWebAssembly(true)
+        .withUseWebAssembly(true)
 
       val analysis = computeAnalysis(classDefs,
           moduleInitializers = MainTestModuleInitializers,

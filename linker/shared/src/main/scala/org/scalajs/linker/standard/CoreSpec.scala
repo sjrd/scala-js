@@ -124,7 +124,7 @@ private[linker] object CoreSpec {
       config.moduleKind,
       config.esFeatures,
       config.wasmFeatures,
-      config.experimentalUseWebAssembly
+      config.useWebAssembly
     )
   }
 }

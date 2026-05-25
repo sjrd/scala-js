@@ -39,7 +39,7 @@ abstract class LinkerBackendImpl(
 
 object LinkerBackendImpl {
   def apply(config: Config): LinkerBackendImpl = {
-    if (config.experimentalUseWebAssembly)
+    if (config.useWebAssembly)
       new WebAssemblyLinkerBackend(config)
     else
       LinkerBackendImplPlatform.createJSLinkerBackend(config)
@@ -67,8 +67,8 @@ object LinkerBackendImpl {
       val prettyPrint: Boolean,
       /** The maximum number of (file) writes executed concurrently. */
       val maxConcurrentWrites: Int,
-      /** If true, use the experimental WebAssembly backend. */
-      val experimentalUseWebAssembly: Boolean
+      /** If true, use the WebAssembly backend. */
+      val useWebAssembly: Boolean
   ) {
     private def this() = {
       this(
@@ -81,9 +81,13 @@ object LinkerBackendImpl {
         closureCompilerIfAvailable = false,
         prettyPrint = false,
         maxConcurrentWrites = 50,
-        experimentalUseWebAssembly = false
+        useWebAssembly = false
       )
     }
+
+    /** If true, use the WebAssembly backend. */
+    @deprecated("Use useWebAssembly instead.", since = "1.22.0")
+    val experimentalUseWebAssembly: Boolean = useWebAssembly
 
     def withCommonConfig(commonConfig: CommonPhaseConfig): Config =
       copy(commonConfig = commonConfig)
@@ -124,8 +128,12 @@ object LinkerBackendImpl {
     def withMaxConcurrentWrites(maxConcurrentWrites: Int): Config =
       copy(maxConcurrentWrites = maxConcurrentWrites)
 
+    def withUseWebAssembly(useWebAssembly: Boolean): Config =
+      copy(useWebAssembly = useWebAssembly)
+
+    @deprecated("Use withUseWebAssembly instead.", since = "1.22.0")
     def withExperimentalUseWebAssembly(experimentalUseWebAssembly: Boolean): Config =
-      copy(experimentalUseWebAssembly = experimentalUseWebAssembly)
+      withUseWebAssembly(experimentalUseWebAssembly)
 
     private def copy(
         commonConfig: CommonPhaseConfig = commonConfig,
@@ -137,7 +145,7 @@ object LinkerBackendImpl {
         closureCompilerIfAvailable: Boolean = closureCompilerIfAvailable,
         prettyPrint: Boolean = prettyPrint,
         maxConcurrentWrites: Int = maxConcurrentWrites,
-        experimentalUseWebAssembly: Boolean = experimentalUseWebAssembly
+        useWebAssembly: Boolean = useWebAssembly
     ): Config = {
       new Config(
         commonConfig,
@@ -149,7 +157,7 @@ object LinkerBackendImpl {
         closureCompilerIfAvailable,
         prettyPrint,
         maxConcurrentWrites,
-        experimentalUseWebAssembly
+        useWebAssembly
       )
     }
   }
