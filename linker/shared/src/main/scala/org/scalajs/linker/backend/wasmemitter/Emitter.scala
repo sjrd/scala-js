@@ -311,6 +311,12 @@ final class Emitter(config: Emitter.Config) {
       js.ImportNamespace(importIdent, moduleNameStr)
     }
 
+    // Wasm module source import
+
+    val wasmModuleIdent = js.Ident("wasmModule")
+    val wasmModuleURI = config.internalWasmFileURIPattern(module.id)
+    val wasmModuleImport = js.ImportSource(wasmModuleIdent, js.StringLiteral(wasmModuleURI))
+
     // Exports
 
     val (exportDecls, exportSettersItems) = (for {
@@ -386,7 +392,8 @@ final class Emitter(config: Emitter.Config) {
     val loadCall = js.Apply(
       js.VarRef(loadFunIdent),
       List(
-        js.StringLiteral(config.internalWasmFileURIPattern(module.id)),
+        //js.StringLiteral(config.internalWasmFileURIPattern(module.id)),
+        js.VarRef(wasmModuleIdent),
         exportSettersDict,
         privateJSFieldGettersDict,
         privateJSFieldSettersDict,
@@ -396,7 +403,8 @@ final class Emitter(config: Emitter.Config) {
     )
 
     val fullTree = (
-      moduleImports :::
+      wasmModuleImport ::
+        moduleImports :::
         loaderImport ::
         privateJSFieldDecls :::
         exportDecls.flatten :::

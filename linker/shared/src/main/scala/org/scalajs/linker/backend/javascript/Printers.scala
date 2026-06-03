@@ -714,6 +714,13 @@ object Printers {
           print(from: Tree)
           print(';')
 
+        case ImportSource(binding, from) =>
+          print("import source ")
+          print(binding)
+          print(" from ")
+          print(from: Tree)
+          print(';')
+
         case Export(bindings) =>
           print("export { ")
           var first = true

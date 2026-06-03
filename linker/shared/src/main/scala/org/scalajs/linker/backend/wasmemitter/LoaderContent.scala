@@ -186,7 +186,7 @@ const stringConstantsPolyfills = new Proxy({}, {
   },
 });
 
-export async function load(wasmFileURL, exportSetters, privateJSFieldGetters,
+export async function load(wasmModule, exportSetters, privateJSFieldGetters,
     privateJSFieldSetters, customJSHelpers, wtf16Strings) {
   const myScalaJSHelpers = {
     ...scalaJSHelpers,
@@ -206,7 +206,7 @@ export async function load(wasmFileURL, exportSetters, privateJSFieldGetters,
     builtins: ["js-string"],
     importedStringConstants: "$UTF8StringConstantsModule",
   };
-  const resolvedURL = new URL(wasmFileURL, import.meta.url);
+  /*const resolvedURL = new URL(wasmFileURL, import.meta.url);
   if (resolvedURL.protocol === 'file:') {
     const { fileURLToPath } = await import("node:url");
     const { readFile } = await import("node:fs/promises");
@@ -215,7 +215,8 @@ export async function load(wasmFileURL, exportSetters, privateJSFieldGetters,
     return WebAssembly.instantiate(body, importsObj, options);
   } else {
     return await WebAssembly.instantiateStreaming(fetch(resolvedURL), importsObj, options);
-  }
+  }*/
+  return await WebAssembly.instantiate(wasmModule, importsObj, options);
 }
     """
   }

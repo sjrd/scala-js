@@ -571,6 +571,17 @@ object Trees {
       implicit val pos: Position)
       extends Tree
 
+  /** `import source` statement.
+   *
+   *  This corresponds to the following syntax:
+   *  {{{
+   *  import source <binding> from <from>
+   *  }}}
+   */
+  sealed case class ImportSource(binding: MaybeDelayedIdent, from: StringLiteral)(
+      implicit val pos: Position)
+      extends Tree
+
   /** `export` statement.
    *
    *  This corresponds to the following syntax:
