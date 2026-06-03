@@ -43,6 +43,35 @@ final class CommonPhaseConfig private (
         parallel = true,
         batchMode = false)
   }
+
+  def withCoreSpec(coreSpec: CoreSpec): CommonPhaseConfig =
+    copy(coreSpec = coreSpec)
+
+  def withCoreSpec(f: CoreSpec => CoreSpec): CommonPhaseConfig =
+    withCoreSpec(f(coreSpec))
+
+  def withMinify(minify: Boolean): CommonPhaseConfig =
+    copy(minify = minify)
+
+  def withParallel(parallel: Boolean): CommonPhaseConfig =
+    copy(parallel = parallel)
+
+  def withBatchMode(batchMode: Boolean): CommonPhaseConfig =
+    copy(batchMode = batchMode)
+
+  private def copy(
+      coreSpec: CoreSpec = this.coreSpec,
+      minify: Boolean = this.minify,
+      parallel: Boolean = this.parallel,
+      batchMode: Boolean = this.batchMode
+  ): CommonPhaseConfig = {
+    new CommonPhaseConfig(
+      coreSpec = coreSpec,
+      minify = minify,
+      parallel = parallel,
+      batchMode = batchMode
+    )
+  }
 }
 
 private[linker] object CommonPhaseConfig {

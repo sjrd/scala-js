@@ -39,7 +39,7 @@ abstract class LinkerBackendImpl(
 
 object LinkerBackendImpl {
   def apply(config: Config): LinkerBackendImpl = {
-    if (config.useWebAssembly)
+    if (config.commonConfig.coreSpec.esFeatures.useWebAssembly)
       new WebAssemblyLinkerBackend(config)
     else
       LinkerBackendImplPlatform.createJSLinkerBackend(config)
@@ -66,9 +66,7 @@ object LinkerBackendImpl {
       /** Pretty-print the output. */
       val prettyPrint: Boolean,
       /** The maximum number of (file) writes executed concurrently. */
-      val maxConcurrentWrites: Int,
-      /** If true, use the WebAssembly backend. */
-      val useWebAssembly: Boolean
+      val maxConcurrentWrites: Int
   ) {
     private def this() = {
       this(
@@ -80,17 +78,20 @@ object LinkerBackendImpl {
         minify = false,
         closureCompilerIfAvailable = false,
         prettyPrint = false,
-        maxConcurrentWrites = 50,
-        useWebAssembly = false
+        maxConcurrentWrites = 50
       )
     }
 
     /** If true, use the WebAssembly backend. */
-    @deprecated("Use useWebAssembly instead.", since = "1.22.0")
-    val experimentalUseWebAssembly: Boolean = useWebAssembly
+    @deprecated("Use commonConfig.coreSpec.esFeatures.useWebAssembly instead.", since = "1.22.0")
+    val experimentalUseWebAssembly: Boolean =
+      commonConfig.coreSpec.esFeatures.useWebAssembly
 
     def withCommonConfig(commonConfig: CommonPhaseConfig): Config =
       copy(commonConfig = commonConfig)
+
+    def withCommonConfig(f: CommonPhaseConfig => CommonPhaseConfig): Config =
+      withCommonConfig(f(commonConfig))
 
     def withJSHeader(jsHeader: String): Config = {
       require(StandardConfig.isValidJSHeader(jsHeader), jsHeader)
@@ -128,12 +129,13 @@ object LinkerBackendImpl {
     def withMaxConcurrentWrites(maxConcurrentWrites: Int): Config =
       copy(maxConcurrentWrites = maxConcurrentWrites)
 
-    def withUseWebAssembly(useWebAssembly: Boolean): Config =
-      copy(useWebAssembly = useWebAssembly)
-
-    @deprecated("Use withUseWebAssembly instead.", since = "1.22.0")
-    def withExperimentalUseWebAssembly(experimentalUseWebAssembly: Boolean): Config =
-      withUseWebAssembly(experimentalUseWebAssembly)
+    @deprecated(
+        "Use withCommonConfig(_.withCoreSpec(_.withESFeatures(_.withUseWebAssembly(.)))) instead.",
+        since = "1.22.0")
+    def withExperimentalUseWebAssembly(experimentalUseWebAssembly: Boolean): Config = {
+      withCommonConfig(
+          _.withCoreSpec(_.withESFeatures(_.withUseWebAssembly(experimentalUseWebAssembly))))
+    }
 
     private def copy(
         commonConfig: CommonPhaseConfig = commonConfig,
@@ -144,8 +146,7 @@ object LinkerBackendImpl {
         minify: Boolean = minify,
         closureCompilerIfAvailable: Boolean = closureCompilerIfAvailable,
         prettyPrint: Boolean = prettyPrint,
-        maxConcurrentWrites: Int = maxConcurrentWrites,
-        useWebAssembly: Boolean = useWebAssembly
+        maxConcurrentWrites: Int = maxConcurrentWrites
     ): Config = {
       new Config(
         commonConfig,
@@ -156,8 +157,7 @@ object LinkerBackendImpl {
         minify,
         closureCompilerIfAvailable,
         prettyPrint,
-        maxConcurrentWrites,
-        useWebAssembly
+        maxConcurrentWrites
       )
     }
   }

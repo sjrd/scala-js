@@ -52,7 +52,7 @@ private[optimizer] abstract class OptimizerCore(
 
   private def semantics: Semantics = config.coreSpec.semantics
 
-  private val isWasm: Boolean = config.coreSpec.targetIsWebAssembly
+  private val isWasm: Boolean = config.coreSpec.esFeatures.useWebAssembly
 
   // Uncomment and adapt to print debug messages only during one method
   // lazy val debugThisMethod: Boolean =

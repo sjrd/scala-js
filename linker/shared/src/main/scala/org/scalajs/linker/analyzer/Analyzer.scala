@@ -1580,7 +1580,7 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
       }
 
       if ((globalFlags & ReachabilityInfo.FlagUsedAsync) != 0) {
-        if (config.coreSpec.targetIsWebAssembly) {
+        if (config.coreSpec.esFeatures.useWebAssembly) {
           if (!config.coreSpec.wasmFeatures.useJSPI)
             _errors ::= AsyncWithoutJSPI(from)
         } else {
@@ -1590,7 +1590,7 @@ private class AnalyzerRun(config: CommonPhaseConfig, initial: Boolean,
       }
 
       if ((globalFlags & ReachabilityInfo.FlagUsedOrphanAwait) != 0 &&
-          !config.coreSpec.targetIsWebAssembly) {
+          !config.coreSpec.esFeatures.useWebAssembly) {
         _errors ::= OrphanAwaitWithoutWebAssembly(from)
       }
 

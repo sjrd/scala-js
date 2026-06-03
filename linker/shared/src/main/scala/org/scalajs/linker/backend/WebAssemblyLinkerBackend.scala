@@ -41,7 +41,7 @@ final class WebAssemblyLinkerBackend(config: LinkerBackendImpl.Config)
     s"The WebAssembly backend requires ECMAScript 2022 or later."
   )
 
-  require(coreSpec.targetIsWebAssembly,
+  require(coreSpec.esFeatures.useWebAssembly,
       s"A WebAssembly backend cannot be used with CoreSpec targeting JavaScript")
 
   val loaderJSFileName = OutputPatternsImpl.jsFile(config.outputPatterns, "__loader")

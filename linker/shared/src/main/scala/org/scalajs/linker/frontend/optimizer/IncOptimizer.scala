@@ -73,11 +73,11 @@ final class IncOptimizer private[optimizer] (config: CommonPhaseConfig, collOps:
       if (p) v else none()
 
     multiple(
-      cond(!targetIsWebAssembly && !esFeatures.allowBigIntsForLongs) {
+      cond(!esFeatures.useWebAssembly && !esFeatures.allowBigIntsForLongs) {
         // Required by the intrinsics manipulating Longs
         callStaticMethods(LongImpl.RuntimeLongClass, LongImpl.AllIntrinsicMethods.toList)
       },
-      cond(targetIsWebAssembly) {
+      cond(esFeatures.useWebAssembly) {
         // Required by the intrinsic CharacterCodePointToString
         instantiateClass(IllegalArgumentExceptionClass, NoArgConstructorName)
       }

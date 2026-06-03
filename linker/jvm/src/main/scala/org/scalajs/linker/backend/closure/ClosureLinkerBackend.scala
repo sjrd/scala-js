@@ -52,7 +52,7 @@ final class ClosureLinkerBackend(config: LinkerBackendImpl.Config) extends Linke
   require(moduleKind != ModuleKind.ESModule,
       s"Cannot use module kind $moduleKind with the Closure Compiler")
 
-  require(!targetIsWebAssembly,
+  require(!esFeatures.useWebAssembly,
       s"A JavaScript backend cannot be used with CoreSpec targeting WebAssembly")
 
   private[this] val emitter = {

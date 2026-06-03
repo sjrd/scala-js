@@ -22,8 +22,7 @@ import org.scalajs.linker.standard.CoreSpec
 final class LinkTimeProperties private (
     semantics: Semantics,
     esFeatures: ESFeatures,
-    moduleKindInt: Int,
-    targetIsWebAssembly: Boolean
+    moduleKindInt: Int
 ) {
   import LinkTimeProperties._
 
@@ -31,7 +30,7 @@ final class LinkTimeProperties private (
     ESVersion -> LinkTimeInt(esFeatures.esVersion.edition),
     UseECMAScript2015Semantics -> LinkTimeBoolean(esFeatures.useECMAScript2015Semantics),
     ModuleKind -> LinkTimeInt(moduleKindInt),
-    IsWebAssembly -> LinkTimeBoolean(targetIsWebAssembly),
+    IsWebAssembly -> LinkTimeBoolean(esFeatures.useWebAssembly),
     ProductionMode -> LinkTimeBoolean(semantics.productionMode),
     LinkerVersion -> LinkTimeString(ScalaJSVersions.current)
   )
@@ -61,7 +60,6 @@ object LinkTimeProperties {
       case CommonJSModule => 3
     }
 
-    new LinkTimeProperties(coreSpec.semantics, coreSpec.esFeatures,
-        moduleKindInt, coreSpec.targetIsWebAssembly)
+    new LinkTimeProperties(coreSpec.semantics, coreSpec.esFeatures, moduleKindInt)
   }
 }
