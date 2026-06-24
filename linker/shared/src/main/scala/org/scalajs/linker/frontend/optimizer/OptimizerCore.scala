@@ -1531,8 +1531,18 @@ private[optimizer] abstract class OptimizerCore(
 
   private def pretransformAssign(tlhs: PreTransform, trhs: PreTransform)(
       cont: PreTransCont)(implicit scope: Scope, pos: Position): TailRec[Tree] = {
-    def contAssign(lhs: Tree, rhs: Tree) =
-      cont(PreTransTree(Assign(lhs.asInstanceOf[AssignLhs], rhs)))
+    def contAssign(lhs: Tree, rhs: Tree): TailRec[Tree] = {
+      val assignTree = lhs match {
+        case lhs: AssignLhs =>
+          Assign(lhs, rhs)
+        case Block(stats :+ (expr: AssignLhs)) =>
+          Block(stats, Assign(expr, rhs))
+        case _ =>
+          throw new AssertionError(
+              s"unexpected non-lhs for Assign after optimizing at ${lhs.pos}:\n$lhs")
+      }
+      cont(PreTransTree(assignTree))
+    }
 
     resolvePreTransform(tlhs) match {
       case PreTransRecordTree(lhsTree, lhsStructure, lhsCancelFun) =>
