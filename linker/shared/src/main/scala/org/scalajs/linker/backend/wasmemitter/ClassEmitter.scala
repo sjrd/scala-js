@@ -86,7 +86,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
       member match {
         case _: JSNativeMemberDef =>
           ()
-        case member: MinWasmImportedMethodDef =>
+        case member: WasmImportedMethodDef =>
           genWasmImportedMethod(clazz, member)
       }
     }
@@ -153,7 +153,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
         genTopLevelExportSetter(topLevelExport.exportName)
         genTopLevelMethodExportDef(d)
 
-      case d: MinWasmMethodExportDef =>
+      case d: TopLevelWasmMethodExportDef =>
         genWasmMethodExport(topLevelExport.owningClass, d)
 
       case _ =>
@@ -1725,7 +1725,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
     }
   }
 
-  private def genWasmImportedMethod(clazz: LinkedClass, member: MinWasmImportedMethodDef)(
+  private def genWasmImportedMethod(clazz: LinkedClass, member: WasmImportedMethodDef)(
       implicit ctx: WasmContext): Unit = {
     val functionID =
       genFunctionID.forMethod(member.flags.namespace, clazz.className, member.name.name)
@@ -1747,7 +1747,7 @@ class ClassEmitter(coreSpec: CoreSpec) {
   }
 
   private def genWasmMethodExport(owningClass: ClassName,
-      exportDef: MinWasmMethodExportDef)(implicit ctx: WasmContext): Unit = {
+      exportDef: TopLevelWasmMethodExportDef)(implicit ctx: WasmContext): Unit = {
     implicit val pos = exportDef.pos
 
     val methodName = exportDef.methodName
