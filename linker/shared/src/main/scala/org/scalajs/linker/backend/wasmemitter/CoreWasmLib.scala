@@ -507,26 +507,11 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val primTypesWithBoxClasses: List[(GlobalID, ClassName, Instr)] = List(
       (genGlobalID.bZeroChar, SpecialNames.CharBoxClass, I32Const(0)),
       (genGlobalID.bZeroLong, SpecialNames.LongBoxClass, I64Const(0))
-    ) ++ {
-      if (hasJSInterop) {
-        Nil
-      } else {
-        List(
-          (genGlobalID.bZeroBoolean, SpecialNames.BooleanBoxClass, I32Const(0)),
-          (genGlobalID.bZeroInteger, SpecialNames.IntegerBoxClass, I32Const(0)),
-          (genGlobalID.bZeroFloat, SpecialNames.DoubleBoxClass, F64Const(0)),
-          (genGlobalID.bZeroDouble, SpecialNames.DoubleBoxClass, F64Const(0))
-        )
-      }
-    }
+    )
 
-    for {
-      (globalID, boxClassName, zeroValueInstr) <- primTypesWithBoxClasses
-      if ctx.getClassInfoOption(boxClassName).isDefined
-    } {
+    for ((globalID, boxClassName, zeroValueInstr) <- primTypesWithBoxClasses) {
       val getVTable = GlobalGet(genGlobalID.forVTable(boxClassName))
       val boxStruct = genTypeID.forClass(boxClassName)
-
       val instrs: List[Instr] = {
         if (useCustomDescriptors) List(getVTable, StructNewDefaultDesc(boxStruct))
         else if (hasJSInterop) List(getVTable, zeroValueInstr, StructNew(boxStruct))
