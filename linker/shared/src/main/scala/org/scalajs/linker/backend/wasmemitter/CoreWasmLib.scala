@@ -3386,7 +3386,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     genTestDouble()
 
     genIs()
-    genJSValueTypeWithoutJS()
 
     val wasmArrayBaseRefs: List[PrimRef] = List(
       ByteRef,
@@ -4254,44 +4253,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb += Drop
     fb += I32Const(0)
 
-    fb.buildAndAddToModule()
-  }
-
-  private def genJSValueTypeWithoutJS()(implicit ctx: WasmContext): Unit = {
-    assert(!hasJSInterop,
-        "genJSValueTypeWithoutJS() should be called only for Wasm-without-JS target")
-
-    val fb = newFunctionBuilder(genFunctionID.jsValueType)
-    val xParam = fb.addParam("x", RefType.any)
-    fb.setResultType(Int32)
-
-    fb += LocalGet(xParam)
-    fb += Call(genFunctionID.typeTest(DoubleRef))
-    fb.ifThenElse(Int32) {
-      fb += I32Const(JSValueTypeNumber)
-    } {
-      fb += LocalGet(xParam)
-      fb += RefTest(RefType(genTypeID.wasmString))
-      fb.ifThenElse(Int32) {
-        fb += I32Const(JSValueTypeString)
-      } {
-        fb += LocalGet(xParam)
-        fb += Call(genFunctionID.typeTest(BooleanRef))
-        fb.ifThenElse(Int32) {
-          fb += LocalGet(xParam)
-          fb += Call(genFunctionID.unbox(BooleanRef))
-        } {
-          // Unit is represented by the singleton `undefined` value.
-          fb += LocalGet(xParam)
-          fb += Call(genFunctionID.isUndef)
-          fb.ifThenElse(Int32) {
-            fb += I32Const(JSValueTypeUndefined)
-          } {
-            fb += I32Const(JSValueTypeOther)
-          }
-        }
-      }
-    }
     fb.buildAndAddToModule()
   }
 
