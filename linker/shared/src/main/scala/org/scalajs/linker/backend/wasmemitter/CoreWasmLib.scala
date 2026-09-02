@@ -4341,9 +4341,39 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val xParam = fb.addParam("x", RefType.anyref)
     fb.setResultType(Int32)
 
-    fb += LocalGet(xParam)
-    fb += Call(genFunctionID.unbox(DoubleRef))
-    fb += I32TruncF64S
+    /* The case i31ref is handled in the non-fallback entry point for
+     * `unbox(IntType)`. It cannot happen here.
+     */
+
+    val integerBoxTypeID = genTypeID.forClass(IntegerBoxClass)
+    val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+    val integerBoxType = RefType(integerBoxTypeID)
+    val doubleBoxType = RefType(doubleBoxTypeID)
+    val intValueField = genFieldID.forClassInstanceField(
+        FieldName(IntegerBoxClass, valueFieldSimpleName))
+    val doubleValueField = genFieldID.forClassInstanceField(
+        FieldName(DoubleBoxClass, valueFieldSimpleName))
+
+    fb.block() { isNullLabel =>
+      fb.block(doubleBoxType) { isDoubleLabel =>
+        fb.block(integerBoxType) { isIntLabel =>
+          fb += LocalGet(xParam)
+          fb += BrOnNull(isNullLabel)
+          fb += BrOnCast(isIntLabel, RefType.any, integerBoxType)
+          fb += BrOnCast(isDoubleLabel, RefType.any, doubleBoxType)
+          fb += Unreachable
+        }
+        // IntegerBox
+        fb += StructGet(integerBoxTypeID, intValueField)
+        fb += Return
+      }
+      // DoubleBox
+      fb += StructGet(doubleBoxTypeID, doubleValueField)
+      fb += I32TruncSatF64S
+      fb += Return
+    }
+    // null
+    fb += I32Const(0)
 
     fb.buildAndAddToModule()
   }
@@ -4369,50 +4399,42 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val xParam = fb.addParam("x", RefType.anyref)
     fb.setResultType(Float64)
 
-    val intBoxType = genTypeID.forClass(IntegerBoxClass)
-    val doubleBoxType = genTypeID.forClass(DoubleBoxClass)
-    val intBoxRef = RefType(intBoxType)
-    val doubleBoxRef = RefType(doubleBoxType)
+    val integerBoxTypeID = genTypeID.forClass(IntegerBoxClass)
+    val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+    val integerBoxType = RefType(integerBoxTypeID)
+    val doubleBoxType = RefType(doubleBoxTypeID)
     val intValueField = genFieldID.forClassInstanceField(
         FieldName(IntegerBoxClass, valueFieldSimpleName))
     val doubleValueField = genFieldID.forClassInstanceField(
         FieldName(DoubleBoxClass, valueFieldSimpleName))
 
-    val anyrefToF64 = FunctionType(List(RefType.anyref), List(Float64))
-    val anyrefToNothing = FunctionType(List(RefType.anyref), Nil)
-    val anyrefToI31 = FunctionType(List(RefType.anyref), List(RefType.i31))
-    val anyrefToIntBox = FunctionType(List(RefType.anyref), List(intBoxRef))
-    val anyrefToDoubleBox = FunctionType(List(RefType.anyref), List(doubleBoxRef))
-
-    fb += LocalGet(xParam)
-    fb.block(anyrefToF64) { doneLabel =>
-      fb.block(anyrefToNothing) { isNullLabel =>
-        fb.block(anyrefToI31) { isI31Label =>
-          fb.block(anyrefToIntBox) { isIntLabel =>
-            fb.block(anyrefToDoubleBox) { isDoubleLabel =>
-              fb += BrOnNull(isNullLabel)
-              fb += BrOnCast(isI31Label, RefType.anyref, RefType.i31)
-              fb += BrOnCast(isIntLabel, RefType.anyref, intBoxRef)
-              fb += BrOnCast(isDoubleLabel, RefType.anyref, doubleBoxRef)
-              fb += Unreachable
-            }
-            // `Float` and `Double` both use `DoubleBoxClass`
-            fb += StructGet(doubleBoxType, doubleValueField)
-            fb += Br(doneLabel)
+    fb.block() { isNullLabel =>
+      fb.block(RefType.i31) { isI31Label =>
+        fb.block(integerBoxType) { isIntLabel =>
+          fb.block(doubleBoxType) { isDoubleLabel =>
+            fb += LocalGet(xParam)
+            fb += BrOnNull(isNullLabel)
+            fb += BrOnCast(isI31Label, RefType.any, RefType.i31)
+            fb += BrOnCast(isIntLabel, RefType.any, integerBoxType)
+            fb += BrOnCast(isDoubleLabel, RefType.any, doubleBoxType)
+            fb += Unreachable
           }
-          // Large `Int` values that do not fit in i31ref use `IntegerBoxClass`.
-          fb += StructGet(intBoxType, intValueField)
-          fb += F64ConvertI32S
-          fb += Br(doneLabel)
+          // DoubleBox
+          fb += StructGet(doubleBoxTypeID, doubleValueField)
+          fb += Return
         }
-        // Small `Int` values use i31ref, `Short` and `Byte`.
-        fb += I31GetS
+        // IntegerBox
+        fb += StructGet(integerBoxTypeID, intValueField)
         fb += F64ConvertI32S
-        fb += Br(doneLabel)
+        fb += Return
       }
-      // null
-      fb += F64Const(0.0)
+      // i31
+      fb += I31GetS
+      fb += F64ConvertI32S
+      fb += Return
     }
+    // null
+    fb += F64Const(0.0)
 
     fb.buildAndAddToModule()
   }
