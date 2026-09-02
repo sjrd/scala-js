@@ -2408,6 +2408,9 @@ private class FunctionEmitter private (
       case LongType =>
         val structTypeID = genTypeID.forClass(SpecialNames.LongBoxClass)
         fb += wa.RefTest(watpe.RefType(structTypeID))
+      case BooleanType if !ctx.hasJSInterop =>
+        val structTypeID = genTypeID.forClass(SpecialNames.BooleanBoxClass)
+        fb += wa.RefTest(watpe.RefType(structTypeID))
       case VoidType | NothingType | NullType =>
         throw new AssertionError(s"Illegal isInstanceOf[$testType]")
       case testType: PrimTypeWithRef =>
