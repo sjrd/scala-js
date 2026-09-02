@@ -39,7 +39,6 @@ object DerivedClasses {
         Set(
           BoxedCharacterClass,
           BoxedLongClass,
-          BoxedIntegerClass,
           BoxedDoubleClass,
           BoxedBooleanClass
         )

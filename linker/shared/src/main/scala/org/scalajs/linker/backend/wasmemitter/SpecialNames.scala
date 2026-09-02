@@ -27,7 +27,6 @@ object SpecialNames {
   val LongBoxClass = BoxedLongClass.withSuffix("Box")
 
   val BooleanBoxClass = BoxedBooleanClass.withSuffix("Box")
-  val IntegerBoxClass = BoxedIntegerClass.withSuffix("Box")
   val DoubleBoxClass = BoxedDoubleClass.withSuffix("Box")
   val BooleanBoxCtor = MethodName.constructor(List(BooleanRef))
 
