@@ -35,7 +35,7 @@ import SpecialNames._
 object DerivedClasses {
   def deriveClasses(classes: List[LinkedClass], coreSpec: CoreSpec): List[LinkedClass] = {
     val derivedBoxClasses = {
-      if (coreSpec.moduleKind == ModuleKind.MinimalWasmModule) {
+      if (coreSpec.moduleKind == ModuleKind.WasmModule) {
         Set(
           BoxedCharacterClass,
           BoxedLongClass,
