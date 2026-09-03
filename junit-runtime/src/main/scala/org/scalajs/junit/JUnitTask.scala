@@ -236,7 +236,7 @@ private[junit] final class JUnitTask(val taskDef: TaskDef,
 
   @inline
   private def nanoTime(): Long = {
-    linkTimeIf(moduleKind == ModuleKind.MinimalWasmModule) {
+    linkTimeIf(moduleKind == ModuleKind.WasmModule) {
       0L
     } {
       System.nanoTime()
