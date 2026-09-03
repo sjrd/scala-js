@@ -18,7 +18,7 @@ import org.scalajs.ir.Names._
 import org.scalajs.ir.Trees._
 import org.scalajs.ir.Types._
 import org.scalajs.ir.WellKnownNames._
-import org.scalajs.ir.{ClassKind, Traversers}
+import org.scalajs.ir.{ClassKind, OriginalName, Traversers}
 
 import org.scalajs.linker.interface.ModuleKind
 import org.scalajs.linker.standard.{CoreSpec, LinkedClass, LinkedTopLevelExport}
@@ -147,7 +147,17 @@ object Preprocessor {
     val kind = clazz.kind
 
     val allFieldDefs: List[FieldDef] = {
-      if (kind.isClass) {
+      if (kind == ClassKind.HijackedClass) {
+        assert(superClass.isDefined && superClass.get.allFieldDefs.isEmpty, className)
+        implicit val pos = clazz.pos
+        val valueFieldDef = FieldDef(
+          MemberFlags.empty.withNamespace(MemberNamespace.Public),
+          FieldIdent(FieldName(className, SpecialNames.valueFieldSimpleName)),
+          OriginalName("value"),
+          BoxedClassToPrimType(className)
+        )
+        List(valueFieldDef)
+      } else if (kind.isClass) {
         val inheritedFields =
           superClass.fold[List[FieldDef]](Nil)(_.allFieldDefs)
         val myFieldDefs = clazz.fields.collect {

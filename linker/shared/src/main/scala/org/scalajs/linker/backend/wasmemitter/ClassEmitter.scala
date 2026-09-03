@@ -94,12 +94,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
     clazz.kind match {
       case ClassKind.Class | ClassKind.ModuleClass =>
         genScalaClass(clazz)
+      case ClassKind.HijackedClass =>
+        if (ctx.hijackedClassesWithBoxes.contains(className))
+          genScalaClass(clazz)
       case ClassKind.Interface =>
         genInterface(clazz)
       case ClassKind.JSClass | ClassKind.JSModuleClass =>
         genJSClass(clazz)
-      case ClassKind.HijackedClass | ClassKind.AbstractJSType | ClassKind.NativeJSClass |
-          ClassKind.NativeJSModuleClass =>
+      case ClassKind.AbstractJSType | ClassKind.NativeJSClass | ClassKind.NativeJSModuleClass =>
         () // nothing to do
     }
   }
@@ -1704,7 +1706,8 @@ class ClassEmitter(coreSpec: CoreSpec) {
       method.resultType
     )
 
-    if (namespace == MemberNamespace.Public && !isHijackedClass) {
+    if (namespace == MemberNamespace.Public &&
+        (!isHijackedClass || ctx.hijackedClassesWithBoxes.contains(className))) {
       /* Also generate the bridge that is stored in the table entries. In table
        * entries, the receiver type is always `(ref any)`.
        *
@@ -1726,9 +1729,14 @@ class ClassEmitter(coreSpec: CoreSpec) {
       fb.setResultTypes(TypeTransformer.transformResultType(method.resultType))
       fb.setFunctionType(ctx.tableFunctionType(methodName))
 
-      // Load and cast down the receiver
+      // Load and cast down the receiver; for a hijacked class, extract the value from the box
       fb += wa.LocalGet(receiverParam)
       receiverType match {
+        case _ if isHijackedClass =>
+          val boxStructTypeID = genTypeID.forClass(className)
+          val valueFieldName = FieldName(className, SpecialNames.valueFieldSimpleName)
+          fb += wa.RefCast(watpe.RefType(boxStructTypeID))
+          fb += wa.StructGet(boxStructTypeID, genFieldID.forClassInstanceField(valueFieldName))
         case Some(watpe.RefType(_, watpe.HeapType.Any)) =>
           () // no cast necessary
         case Some(receiverType: watpe.RefType) =>

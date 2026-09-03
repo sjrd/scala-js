@@ -166,8 +166,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
   /** Generates definitions that must come *after* the code generated for regular classes. */
   def genPostClasses()(implicit ctx: WasmContext): Unit = {
-    genBoxedZeroGlobals()
-
     if (!hasJSInterop)
       genBoxedBooleanGlobals()
   }
@@ -504,39 +502,12 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     }
   }
 
-  private def genBoxedZeroGlobals()(implicit ctx: WasmContext): Unit = {
-    val primTypesWithBoxClasses: List[(GlobalID, ClassName, Instr)] = List(
-      (genGlobalID.bZeroChar, CharBoxClass, I32Const(0)),
-      (genGlobalID.bZeroLong, LongBoxClass, I64Const(0))
-    )
-
-    for ((globalID, boxClassName, zeroValueInstr) <- primTypesWithBoxClasses) {
-      val getVTable = GlobalGet(genGlobalID.forVTable(boxClassName))
-      val boxStruct = genTypeID.forClass(boxClassName)
-      val instrs: List[Instr] = {
-        if (useCustomDescriptors) List(getVTable, StructNewDefaultDesc(boxStruct))
-        else if (hasJSInterop) List(getVTable, zeroValueInstr, StructNew(boxStruct))
-        else List(getVTable, I32Const(0), zeroValueInstr, StructNew(boxStruct))
-      }
-
-      ctx.addGlobal(
-        Global(
-          globalID,
-          OriginalName(globalID.toString()),
-          isMutable = false,
-          RefType(boxStruct),
-          Expr(instrs)
-        )
-      )
-    }
-  }
-
   private def genBoxedBooleanGlobals()(implicit ctx: WasmContext): Unit = {
     assert(!hasJSInterop)
 
     for ((globalID, value) <- List((genGlobalID.bFalse, false), (genGlobalID.bTrue, true))) {
-      val structTypeID = genTypeID.forClass(BooleanBoxClass)
-      val vtableGlobalID = genGlobalID.forVTable(BooleanBoxClass)
+      val structTypeID = genTypeID.forClass(BoxedBooleanClass)
+      val vtableGlobalID = genGlobalID.forVTable(BoxedBooleanClass)
 
       val instructions = if (!ctx.useCustomDescriptors) {
         List(
@@ -750,12 +721,12 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
      * With JS interop, all JS `number`s in the correct range are guaranteed to be i31ref's.
      */
     if (!hasJSInterop) {
-      val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+      val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
       fb.block(RefType.anyref) { xIsNotDoubleBox =>
         fb += LocalGet(xParam)
         fb += BrOnCastFail(xIsNotDoubleBox, RefType.anyref, RefType(doubleBoxTypeID))
 
-        val fieldName = FieldName(DoubleBoxClass, valueFieldSimpleName)
+        val fieldName = FieldName(BoxedDoubleClass, valueFieldSimpleName)
         fb += StructGet(doubleBoxTypeID, genFieldID.forClassInstanceField(fieldName))
         fb += I32TruncSatF64S
         fb += Return
@@ -796,12 +767,12 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
      * With JS interop, all JS `number`s in the correct range are guaranteed to be i31ref's.
      */
     if (!hasJSInterop) {
-      val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+      val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
       fb.block(RefType.anyref) { xIsNotDoubleBox =>
         fb += LocalGet(xParam)
         fb += BrOnCastFail(xIsNotDoubleBox, RefType.anyref, RefType(doubleBoxTypeID))
 
-        val fieldName = FieldName(DoubleBoxClass, valueFieldSimpleName)
+        val fieldName = FieldName(BoxedDoubleClass, valueFieldSimpleName)
         fb += StructGet(doubleBoxTypeID, genFieldID.forClassInstanceField(fieldName))
         fb += LocalTee(doubleValueLocal)
         fb += I32TruncSatF64S
@@ -1031,8 +1002,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
           fb += BrOnCastFail(notOurObjectLabel, anyref, objectType)
 
           // If is a long or char box, jump out to the appropriate label
-          fb += BrOnCast(isLongLabel, objectType, RefType(genTypeID.forClass(LongBoxClass)))
-          fb += BrOnCast(isCharLabel, objectType, RefType(genTypeID.forClass(CharBoxClass)))
+          fb += BrOnCast(isLongLabel, objectType, RefType(genTypeID.forClass(BoxedLongClass)))
+          fb += BrOnCast(isCharLabel, objectType, RefType(genTypeID.forClass(BoxedCharacterClass)))
 
           // Get and return the class name
           fb += ctx.getVTableInstr(genTypeID.ObjectStruct)
@@ -1056,10 +1027,10 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
   }
 
   private def genValueDescriptionWithoutJS()(implicit ctx: WasmContext): Unit = {
-    val longBoxTypeID = genTypeID.forClass(LongBoxClass)
-    val charBoxTypeID = genTypeID.forClass(CharBoxClass)
-    val booleanBoxTypeID = genTypeID.forClass(BooleanBoxClass)
-    val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+    val longBoxTypeID = genTypeID.forClass(BoxedLongClass)
+    val charBoxTypeID = genTypeID.forClass(BoxedCharacterClass)
+    val booleanBoxTypeID = genTypeID.forClass(BoxedBooleanClass)
+    val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
 
     val objectType = RefType(genTypeID.ObjectStruct)
 
@@ -1108,7 +1079,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
         // DoubleBox
         fb += StructGet(
           doubleBoxTypeID,
-          genFieldID.forClassInstanceField(FieldName(DoubleBoxClass, valueFieldSimpleName))
+          genFieldID.forClassInstanceField(FieldName(BoxedDoubleClass, valueFieldSimpleName))
         )
         fb += Br(numberLabel)
       }
@@ -1265,9 +1236,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
         // For char and long, use br_on_cast_fail to test+cast to the box class
         case CharType | LongType =>
-          val boxClass =
-            if (primType == CharType) CharBoxClass
-            else LongBoxClass
+          val boxClass = PrimTypeToBoxedClass(primType)
           val structTypeID = genTypeID.forClass(boxClass)
 
           fb.block(RefType.any) { castFailLabel =>
@@ -1346,7 +1315,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
           val floatValueLocal = fb.addLocal("floatValue", Float32)
           val doubleValueLocal = fb.addLocal("doubleValue", Float64)
 
-          val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+          val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
 
           fb.block(RefType.anyref) { castFailLabel =>
             fb.block(RefType(doubleBoxTypeID)) { doubleBoxLabel =>
@@ -1409,7 +1378,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
             if (primType == DoubleType && !isUnbox) {
               fb += Return
             } else {
-              val fieldName = FieldName(DoubleBoxClass, valueFieldSimpleName)
+              val fieldName = FieldName(BoxedDoubleClass, valueFieldSimpleName)
               fb += StructGet(doubleBoxTypeID, genFieldID.forClassInstanceField(fieldName))
 
               if (primType == DoubleType) {
@@ -1477,11 +1446,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
         // For other types, use br_on_cast_fail to the appropriate struct type
         case CharType | LongType | BooleanType | StringType | UndefType =>
           val structTypeID: TypeID = (primType: @unchecked) match {
-            case CharType    => genTypeID.forClass(CharBoxClass)
-            case LongType    => genTypeID.forClass(LongBoxClass)
-            case BooleanType => genTypeID.forClass(BooleanBoxClass)
-            case StringType  => genTypeID.wasmString
-            case UndefType   => genTypeID.undefined
+            case StringType => genTypeID.wasmString
+            case UndefType  => genTypeID.undefined
+            case _          => genTypeID.forClass(PrimTypeToBoxedClass(primType))
           }
 
           fb.block(RefType.any) { castFailLabel =>
@@ -2164,7 +2131,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       },
       List(KindBoxedCharacter) -> { () =>
         fb += LocalGet(valueParam)
-        val structTypeID = genTypeID.forClass(CharBoxClass)
+        val structTypeID = genTypeID.forClass(BoxedCharacterClass)
         fb += RefTest(RefType(structTypeID))
       },
       List(KindBoxedByte) -> { () =>
@@ -2181,7 +2148,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       },
       List(KindBoxedLong) -> { () =>
         fb += LocalGet(valueParam)
-        val structTypeID = genTypeID.forClass(LongBoxClass)
+        val structTypeID = genTypeID.forClass(BoxedLongClass)
         fb += RefTest(RefType(structTypeID))
       },
       List(KindBoxedFloat) -> { () =>
@@ -2866,10 +2833,6 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val valueParam = fb.addParam("value", RefType.any)
     fb.setResultType(RefType.nullable(genTypeID.typeData))
 
-    val doubleValueLocal = fb.addLocal("doubleValue", Float64)
-    val intValueLocal = fb.addLocal("intValue", Int32)
-    val ourObjectLocal = fb.addLocal("ourObject", ourObjectType)
-
     def getHijackedClassTypeDataInstr(className: ClassName): Instr =
       GlobalGet(genGlobalID.forVTable(className))
 
@@ -2934,46 +2897,24 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       fb += ReturnCall(genFunctionID.intGetTypeData)
     } // end of block ourObjectLabel
 
-    /* Now we have one of our objects. Normally we only have to get the
-     * vtable, but there are two exceptions. If the value is an instance of
-     * `jl.CharacterBox` or `jl.LongBox`, we must use the typeData of
-     * `jl.Character` or `jl.Long` and more, respectively.
-     *
-     * Without JS interop, we also have to handle BooleanBox and DoubleBox..
+    /* Now we have one of our objects. Normally we only have to get the vtable.
+     * There is one exception when we don't have JS interop. If the value is a
+     * jl.Double, we must extract its value and decide what number type data to
+     * return based on the numeric value.
      */
-    fb += LocalTee(ourObjectLocal)
-    fb += RefTest(RefType(genTypeID.forClass(CharBoxClass)))
-    fb.ifThenElse(typeDataType) {
-      fb += getHijackedClassTypeDataInstr(BoxedCharacterClass)
-    } {
-      fb += LocalGet(ourObjectLocal)
-      fb += RefTest(RefType(genTypeID.forClass(LongBoxClass)))
-      fb.ifThenElse(typeDataType) {
-        fb += getHijackedClassTypeDataInstr(BoxedLongClass)
-      } {
-        if (hasJSInterop) {
-          fb += LocalGet(ourObjectLocal)
-          fb += ctx.getVTableInstr(genTypeID.ObjectStruct)
-        } else {
-          fb += LocalGet(ourObjectLocal)
-          fb += RefTest(RefType(genTypeID.forClass(BooleanBoxClass)))
-          fb.ifThenElse(typeDataType) {
-            fb += getHijackedClassTypeDataInstr(BoxedBooleanClass)
-          } {
-            fb.block(ourObjectType) { notADoubleBoxLabel =>
-              val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
-              fb += LocalGet(ourObjectLocal)
-              fb += BrOnCastFail(notADoubleBoxLabel, ourObjectType, RefType(doubleBoxTypeID))
-              fb += StructGet(
-                doubleBoxTypeID,
-                genFieldID.forClassInstanceField(FieldName(DoubleBoxClass, valueFieldSimpleName))
-              )
-              fb += ReturnCall(genFunctionID.doubleGetTypeData)
-            } // end of block notADoubleBoxLabel
-            fb += ctx.getVTableInstr(genTypeID.ObjectStruct)
-          }
-        }
-      }
+    if (hasJSInterop) {
+      fb += ctx.getVTableInstr(genTypeID.ObjectStruct)
+    } else {
+      fb.block(FunctionType(List(ourObjectType), List(ourObjectType))) { notADoubleBoxLabel =>
+        val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
+        fb += BrOnCastFail(notADoubleBoxLabel, ourObjectType, RefType(doubleBoxTypeID))
+        fb += StructGet(
+          doubleBoxTypeID,
+          genFieldID.forClassInstanceField(FieldName(BoxedDoubleClass, valueFieldSimpleName))
+        )
+        fb += ReturnCall(genFunctionID.doubleGetTypeData)
+      } // end of block notADoubleBoxLabel
+      fb += ctx.getVTableInstr(genTypeID.ObjectStruct)
     }
 
     fb.buildAndAddToModule()
@@ -3123,7 +3064,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val objParam = fb.addParam("obj", RefType.anyref)
     fb.setResultType(Int32)
 
-    val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+    val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
 
     val jlObjectType = RefType(genTypeID.ObjectStruct)
     val wasmStringType = RefType(genTypeID.wasmString)
@@ -3169,7 +3110,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
           // Get the underlying value to call jl.Double.hashCode
           fb += StructGet(
             doubleBoxTypeID,
-            genFieldID.forClassInstanceField(FieldName(DoubleBoxClass, valueFieldSimpleName))
+            genFieldID.forClassInstanceField(FieldName(BoxedDoubleClass, valueFieldSimpleName))
           )
           fb += Call(genFunctionID.forMethod(Public, BoxedDoubleClass, hashCodeMethodName))
           fb += LocalSet(resultLocal)
@@ -4205,8 +4146,8 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val xParam = fb.addParam("x", transformPrimType(primType))
     fb.setResultType(RefType.any)
 
-    genStructNewWithVTable(fb, genTypeID.forClass(DoubleBoxClass)) {
-      fb += GlobalGet(genGlobalID.forVTable(DoubleBoxClass))
+    genStructNewWithVTable(fb, genTypeID.forClass(BoxedDoubleClass)) {
+      fb += GlobalGet(genGlobalID.forVTable(BoxedDoubleClass))
     } {
       // hashCode field
       if (primType == IntType)
@@ -4244,9 +4185,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
      * `unbox(IntType)`. It cannot happen here.
      */
 
-    val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+    val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
     val doubleValueField = genFieldID.forClassInstanceField(
-        FieldName(DoubleBoxClass, valueFieldSimpleName))
+        FieldName(BoxedDoubleClass, valueFieldSimpleName))
 
     fb.block() { isNullLabel =>
       fb += LocalGet(xParam)
@@ -4283,10 +4224,10 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val xParam = fb.addParam("x", RefType.anyref)
     fb.setResultType(Float64)
 
-    val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+    val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
     val doubleBoxType = RefType(doubleBoxTypeID)
     val doubleValueField = genFieldID.forClassInstanceField(
-        FieldName(DoubleBoxClass, valueFieldSimpleName))
+        FieldName(BoxedDoubleClass, valueFieldSimpleName))
 
     fb.block() { isNullLabel =>
       fb.block(RefType.i31) { isI31Label =>
@@ -4320,7 +4261,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     fb.setResultType(Int32)
 
     fb += LocalGet(xParam)
-    fb += RefTest(RefType(genTypeID.forClass(BooleanBoxClass)))
+    fb += RefTest(RefType(genTypeID.forClass(BoxedBooleanClass)))
 
     fb.buildAndAddToModule()
   }
@@ -4368,7 +4309,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val xParam = fb.addParam("x", RefType.anyref)
     fb.setResultType(Int32)
 
-    val doubleBoxRef = RefType(genTypeID.forClass(DoubleBoxClass))
+    val doubleBoxRef = RefType(genTypeID.forClass(BoxedDoubleClass))
 
     // (x is i31) || (x is DoubleBox)
     fb += LocalGet(xParam)
@@ -4390,7 +4331,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
     val xParam = fb.addParam("x", RefType.anyref)
     fb.setResultType(Int32)
 
-    val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+    val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
 
     val doubleValue = fb.addLocal("doubleValue", Float64)
 
@@ -4408,7 +4349,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
         fb += BrOnCastFail(notADoubleBox, RefType.anyref, RefType(doubleBoxTypeID))
         fb += StructGet(
           doubleBoxTypeID,
-          genFieldID.forClassInstanceField(FieldName(DoubleBoxClass, valueFieldSimpleName))
+          genFieldID.forClassInstanceField(FieldName(BoxedDoubleClass, valueFieldSimpleName))
         )
         fb += LocalTee(doubleValue)
 
@@ -4468,7 +4409,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       }
       fb += Drop
 
-      val doubleBoxTypeID = genTypeID.forClass(DoubleBoxClass)
+      val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
       val doubleBoxType = RefType(doubleBoxTypeID)
 
       fb.block(doubleBoxType) { aIsDoubleBox =>
@@ -4485,7 +4426,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
         // Extract the value of b and get its bits
         fb += StructGet(
           doubleBoxTypeID,
-          genFieldID.forClassInstanceField(FieldName(DoubleBoxClass, valueFieldSimpleName))
+          genFieldID.forClassInstanceField(FieldName(BoxedDoubleClass, valueFieldSimpleName))
         )
         fb += I64ReinterpretF64
 
@@ -4503,7 +4444,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       // a is DoubleBox; extract its value into doubleA
       fb += StructGet(
         doubleBoxTypeID,
-        genFieldID.forClassInstanceField(FieldName(DoubleBoxClass, valueFieldSimpleName))
+        genFieldID.forClassInstanceField(FieldName(BoxedDoubleClass, valueFieldSimpleName))
       )
       fb += LocalSet(doubleA)
 
@@ -4529,7 +4470,7 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
       // b is also a DoubleBox; extract is value into doubleB
       fb += StructGet(
         doubleBoxTypeID,
-        genFieldID.forClassInstanceField(FieldName(DoubleBoxClass, valueFieldSimpleName))
+        genFieldID.forClassInstanceField(FieldName(BoxedDoubleClass, valueFieldSimpleName))
       )
       fb += LocalTee(doubleB)
 

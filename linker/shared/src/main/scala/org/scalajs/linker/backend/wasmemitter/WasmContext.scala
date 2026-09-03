@@ -55,6 +55,13 @@ final class WasmContext(
   val useCustomDescriptors = coreSpec.wasmFeatures.experimentalUseCustomDescriptors
   val hasJSInterop: Boolean = coreSpec.moduleKind == ModuleKind.ESModule
 
+  val hijackedClassesWithBoxes: Set[ClassName] = {
+    if (hasJSInterop)
+      Set(BoxedCharacterClass, BoxedLongClass)
+    else
+      Set(BoxedCharacterClass, BoxedLongClass, BoxedBooleanClass, BoxedDoubleClass)
+  }
+
   private val tableFunctionTypes = mutable.HashMap.empty[MethodName, wanme.TypeID]
   private val closureDataTypes = LinkedHashMap.empty[List[Type], wanme.TypeID]
   private val typedClosureTypes = LinkedHashMap.empty[ClosureType, (wanme.TypeID, wanme.TypeID)]
