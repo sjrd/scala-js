@@ -1265,11 +1265,9 @@ final class CoreWasmLib(coreSpec: CoreSpec, globalInfo: LinkedGlobalInfo) {
 
         // For char and long, use br_on_cast_fail to test+cast to the box class
         case CharType | LongType =>
-          val boxClass = (primType: @unchecked) match {
-            case CharType    => CharBoxClass
-            case LongType    => LongBoxClass
-            case BooleanType => BooleanBoxClass
-          }
+          val boxClass =
+            if (primType == CharType) CharBoxClass
+            else LongBoxClass
           val structTypeID = genTypeID.forClass(boxClass)
 
           fb.block(RefType.any) { castFailLabel =>
