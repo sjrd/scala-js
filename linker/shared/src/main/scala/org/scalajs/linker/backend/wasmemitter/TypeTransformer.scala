@@ -148,7 +148,12 @@ object TypeTransformer {
 
   def transformPrimType(tpe: PrimType)(implicit ctx: WasmContext): watpe.Type = {
     tpe match {
-      case UndefType   => watpe.RefType.any
+      case UndefType =>
+        if (ctx.hasJSInterop)
+          watpe.RefType.any
+        else
+          watpe.RefType(genTypeID.forClass(BoxedUnitClass))
+
       case BooleanType => watpe.Int32
       case ByteType    => watpe.Int32
       case ShortType   => watpe.Int32

@@ -1246,7 +1246,7 @@ private class FunctionEmitter private (
         } else {
           /* It must be a method of j.l.Object and it can be any value.
            * hashCode() and equals() are overridden in all hijacked classes.
-           * We use `identityHashCode` for `hashCode` and `Object.is` for `equals`,
+           * We use `identityHashCode` for `hashCode` and `===` for `equals`,
            * as they coincide with the respective specifications (on purpose).
            * The other methods are never overridden and can be statically
            * resolved to j.l.Object.
@@ -1256,7 +1256,7 @@ private class FunctionEmitter private (
             case `hashCodeMethodName` =>
               fb += wa.Call(genFunctionID.identityHashCode)
             case `equalsMethodName` =>
-              fb += wa.Call(genFunctionID.is)
+              fb += wa.Call(genFunctionID.sameAnyAny)
             case _ =>
               genHijackedClassCall(ObjectClass)
           }
@@ -1783,6 +1783,19 @@ private class FunctionEmitter private (
   }
 
   private def genBinaryOp(tree: BinaryOp): Type = {
+    if (tree.lhs.tpe == NothingType) {
+      genTree(tree.lhs, NothingType)
+      NothingType
+    } else if (tree.rhs.tpe == NothingType) {
+      genTree(tree.lhs, VoidType)
+      genTree(tree.rhs, NothingType)
+      NothingType
+    } else {
+      genBinaryOpNoNothingOperand(tree)
+    }
+  }
+
+  private def genBinaryOpNoNothingOperand(tree: BinaryOp): Type = {
     import BinaryOp._
 
     val BinaryOp(op, lhs, rhs) = tree
@@ -1820,8 +1833,13 @@ private class FunctionEmitter private (
     }
 
     (op: @switch) match {
-      case === | !== =>
-        genEq(tree)
+      case === =>
+        genEqNoNothingOperand(lhs, rhs, tree.pos)
+        BooleanType
+      case !== =>
+        genEqNoNothingOperand(lhs, rhs, tree.pos)
+        fb.addBooleanNot()
+        BooleanType
 
       case String_+ =>
         genStringConcat(tree)
@@ -1912,17 +1930,28 @@ private class FunctionEmitter private (
     }
   }
 
-  private def genEq(tree: BinaryOp): Type = {
-    import BinaryOp.{===, !==}
+  /** Generates code for `lhs === rhs`, assuming neither operand has type `nothing`. */
+  private def genEqNoNothingOperand(lhs: Tree, rhs: Tree, pos: Position): Unit = {
+    rhs match {
+      // If the rhs is a literal `number` value, perform a dedicated test
+      case ByteLiteral(r) =>
+        genEqNumberLiteral(lhs, r.toDouble, pos)
+      case ShortLiteral(r) =>
+        genEqNumberLiteral(lhs, r.toDouble, pos)
+      case IntLiteral(r) =>
+        genEqNumberLiteral(lhs, r.toDouble, pos)
+      case FloatLiteral(r) =>
+        genEqNumberLiteral(lhs, r.toDouble, pos)
+      case DoubleLiteral(r) =>
+        genEqNumberLiteral(lhs, r, pos)
 
-    val BinaryOp(op, lhs, rhs) = tree
-    assert(op == === || op == !==)
-
-    def maybeGenInvert(): Unit = {
-      if (op == BinaryOp.!==)
-        fb += wa.I32Eqz
+      // Otherwise, further dispatch based on types only
+      case _ =>
+        genEqNoNothingOperandNoNumberLiteral(lhs, rhs, pos)
     }
+  }
 
+  private def genEqNoNothingOperandNoNumberLiteral(lhs: Tree, rhs: Tree, pos: Position): Unit = {
     /* Can we use `ref.eq` for the given type?
      *
      * This is the case if the Wasm encoding of the given type a subtype of
@@ -1952,53 +1981,389 @@ private class FunctionEmitter private (
       case _                                 => false
     }
 
+    def genTreeEnsureBoxed(tree: Tree): Unit = {
+      tree.tpe match {
+        case tpe: PrimType =>
+          genTree(tree, ClassType(PrimTypeToBoxedClass(tpe), nullable = false, exact = false))
+        case tpe =>
+          genTree(tree, tpe)
+      }
+    }
+
     val lhsType = lhs.tpe
     val rhsType = rhs.tpe
 
-    if (lhsType == NothingType) {
-      genTree(lhs, NothingType)
-      NothingType
-    } else if (rhsType == NothingType) {
-      genTree(lhs, VoidType)
-      genTree(rhs, NothingType)
-      NothingType
-    } else if (rhsType == NullType) {
-      /* Note that the optimizer normalizes Literals on the right of `===`,
-       * so testing for the `lhsType == NullType` is not as useful.
-       */
-      genTree(lhs, AnyType)
-      genTree(rhs, VoidType) // no-op if it is actually a Null() literal
-      markPosition(tree)
-      fb += wa.RefIsNull
-      maybeGenInvert()
-      BooleanType
-    } else if (isStringType(lhsType) && isStringType(rhsType)) {
-      genTreeAuto(lhs)
-      genTreeAuto(rhs)
-      markPosition(tree)
-      genStringEquals()
-      maybeGenInvert()
-      BooleanType
-    } else if (canUseRefEq(lhsType) && canUseRefEq(rhsType)) {
-      /* When both types translate to Wasm types that are subtypes of `eqref`,
-       * we can use `ref.eq`. Note that for all possible `eqref`s (in all of
-       * Wasm, not just the subset that we use), `Object.is` coincides with
-       * `ref.eq`. So this is a sound optimization over using `Object.is`.
-       */
-      genTree(lhs, lhsType)
-      genTree(rhs, rhsType)
-      markPosition(tree)
-      fb += wa.RefEq
-      maybeGenInvert()
-      BooleanType
-    } else {
-      // Otherwise, fall back on the `Object.is` helper
-      genTree(lhs, AnyType)
-      genTree(rhs, AnyType)
-      markPosition(tree)
-      fb += wa.Call(genFunctionID.is)
-      maybeGenInvert()
-      BooleanType
+    // Categories of values, depending on what === means for them
+    val CatEq = 1 << 0
+    val CatString = 1 << 1
+    val CatI31 = 1 << 2
+    val CatIntNotI31 = 1 << 3
+    val CatNumberNotInt = 1 << 4
+    val CatNull = 1 << 5
+    val CatJS = 1 << 6
+
+    val CatNothing = 0
+    val CatInt = CatI31 | CatIntNotI31 // can use i32.eq
+    val CatNumber = CatInt | CatNumberNotInt // can be passed to doubleIs
+    val CatStringOrNull = CatString | CatNull // can be passed to stringBuiltins.equals
+    val CatEqref = CatEq | CatI31 | CatNull // can be an argument of ref.eq
+    val CatAnyNotNull = CatEq | CatString | CatNumber | (if (ctx.hasJSInterop) CatJS else 0)
+    val CatAny = CatAnyNotNull | CatNull
+
+    def catFor(tpe: Type): Int = tpe match {
+      case tpe: PrimType =>
+        tpe match {
+          case BooleanType | UndefType => if (ctx.hasJSInterop) CatJS else CatEq
+          case CharType | LongType     => CatEq
+          case ByteType | ShortType    => if (ctx.hasJSInterop) CatI31 else CatInt
+          case IntType                 => CatInt
+          case FloatType | DoubleType  => CatNumber
+          case StringType              => CatString
+          case NullType                => CatNull
+
+          case VoidType | NothingType =>
+            throw new AssertionError(s"unexpected $tpe at $pos")
+        }
+
+      case ClassType(cls, nullable, _) =>
+        val nullableCat = if (nullable) CatNull else 0
+        if (cls == BoxedStringClass)
+          CatString | nullableCat
+        else if (!ctx.getClassInfo(cls).isAncestorOfHijackedClass)
+          CatEq | nullableCat
+        else
+          CatAnyNotNull | nullableCat
+
+      case ArrayType(_, nullable, _) =>
+        if (nullable) CatEq | CatNull
+        else CatEq
+
+      case AnyType =>
+        CatAny
+
+      case AnyNotNullType =>
+        CatAnyNotNull
+
+      case _:ClosureType | _:RecordType =>
+        throw new AssertionError(s"unexpected $tpe at $pos")
+    }
+
+    val lhsCat = catFor(lhsType)
+    val rhsCat = catFor(rhsType)
+    val intersectionCat = lhsCat & rhsCat
+    val unionCat = lhsCat | rhsCat
+
+    def isCoveredBy(cat: Int, set: Int): Boolean =
+      (cat & ~set) == 0
+
+    intersectionCat match {
+      case CatNothing =>
+        genTree(lhs, VoidType)
+        genTree(rhs, VoidType)
+        markPosition(pos)
+        fb += wa.I32Const(0)
+
+      case CatNull =>
+        if (rhsCat == CatNull) {
+          genTree(lhs, AnyType)
+          genTree(rhs, VoidType) // no-op if it is actually a Null() literal
+          markPosition(pos)
+          fb += wa.RefIsNull
+        } else if (lhsCat == CatNull) {
+          genTree(lhs, VoidType) // no-op if it is actually a Null() literal
+          genTree(rhs, AnyType)
+          markPosition(pos)
+          fb += wa.RefIsNull
+        } else {
+          /* They both can be other things than null,
+           * but the only way they're === is when they are both null.
+           */
+          genTree(lhs, AnyType)
+          genTree(rhs, AnyType)
+          markPosition(pos)
+          fb += wa.RefIsNull
+          fb += wa.RefIsNull
+          fb += wa.I32And
+        }
+
+      case _ if isCoveredBy(unionCat, CatInt) =>
+        genTreeAuto(lhs)
+        genTreeAuto(rhs)
+        markPosition(pos)
+        fb += wa.I32Eq
+
+      case _ if isCoveredBy(unionCat, CatNumber) =>
+        // Convert both operands to f64, then use the doubleIs helper
+        def genConvertToF64(tpe: Type): Unit = (tpe: @unchecked) match {
+          case ByteType | ShortType | IntType => fb += wa.F64ConvertI32S
+          case FloatType                      => fb += wa.F64PromoteF32
+          case DoubleType                     => ()
+        }
+        if (isCoveredBy(intersectionCat, CatInt)) {
+          // No need to handle NaN
+          genTreeAuto(lhs)
+          genConvertToF64(lhsType)
+          fb += wa.I64ReinterpretF64
+          genTreeAuto(rhs)
+          genConvertToF64(rhsType)
+          fb += wa.I64ReinterpretF64
+          markPosition(pos)
+          fb += wa.I64Eq
+        } else {
+          // Need the full test that can canonicalizes NaNs
+          genTreeAuto(lhs)
+          genConvertToF64(lhsType)
+          genTreeAuto(rhs)
+          genConvertToF64(rhsType)
+          markPosition(pos)
+          fb += wa.Call(genFunctionID.sameDoubleDouble)
+        }
+
+      case _ if isCoveredBy(unionCat, CatEqref) =>
+        // Use a straightforward ref.eq
+        genTreeEnsureBoxed(lhs)
+        genTreeEnsureBoxed(rhs)
+        markPosition(pos)
+        fb += wa.RefEq
+
+      case _ if isCoveredBy(unionCat, CatStringOrNull) =>
+        // Use stringBuiltins.equals
+        val stringType = ClassType(BoxedStringClass, nullable = true, exact = false)
+        genTree(lhs, stringType)
+        genTree(rhs, stringType)
+        genStringEquals()
+
+      case _ if isCoveredBy(intersectionCat, CatEqref) =>
+        /* The only way they can be === is if we can cast down both arguments
+         * to eqref. Then we can perform a ref.eq.
+         */
+
+        // Compute the smallest Wasm type for the intersection
+        val canBeNull = (intersectionCat & CatNull) != 0
+        val canBeGeneralEq = (intersectionCat & CatEq) != 0
+        val targetWasmType =
+          watpe.RefType(canBeNull, if (canBeGeneralEq) watpe.HeapType.Eq else watpe.HeapType.I31)
+
+        fb.block(watpe.Int32) { doneLabel =>
+          fb.block(watpe.RefType.anyref) { notAnEqrefLabel =>
+            // Put an eqref on the stack, then a non-eqref
+            if (isCoveredBy(lhsCat, CatEqref)) {
+              genTreeEnsureBoxed(lhs)
+              genTree(rhs, AnyType)
+            } else {
+              // Careful, we must evaluate both values first
+              val lhsLocal = addSyntheticLocal(watpe.RefType.anyref)
+              genTree(lhs, AnyType)
+              fb += wa.LocalSet(lhsLocal)
+              genTreeEnsureBoxed(rhs)
+              if (!isCoveredBy(rhsCat, CatEqref)) // pretty sure this is dead code
+                fb += wa.BrOnCastFail(notAnEqrefLabel, watpe.RefType.anyref, targetWasmType)
+              fb += wa.LocalGet(lhsLocal)
+            }
+
+            markPosition(pos)
+
+            // Attempt to cast the non-eqref to eqref, then use ref.eq
+            fb += wa.BrOnCastFail(notAnEqrefLabel, watpe.RefType.anyref, targetWasmType)
+            fb += wa.RefEq
+            fb += wa.Br(doneLabel)
+          }
+
+          fb += wa.Drop
+          fb += wa.I32Const(0)
+        }
+
+      case _ if isCoveredBy(lhsCat, CatStringOrNull) =>
+        genTree(lhs, ClassType(BoxedStringClass, nullable = true, exact = false))
+        genTree(rhs, AnyType)
+        markPosition(pos)
+        fb += wa.Call(genFunctionID.sameStringAny)
+
+      case _ if isCoveredBy(rhsCat, CatStringOrNull) =>
+        genTree(lhs, AnyType)
+        genTree(rhs, ClassType(BoxedStringClass, nullable = true, exact = false))
+        markPosition(pos)
+        fb += wa.Call(genFunctionID.sameAnyString)
+
+      case _ if isCoveredBy(lhsCat, CatInt) =>
+        genTreeAuto(lhs)
+        genTree(rhs, AnyType)
+        markPosition(pos)
+        fb += wa.Call(genFunctionID.sameIntAny)
+
+      case _ if isCoveredBy(rhsCat, CatInt) =>
+        genTree(lhs, AnyType)
+        genTreeAuto(rhs)
+        markPosition(pos)
+        fb += wa.Call(genFunctionID.sameAnyInt)
+
+      case _ if isCoveredBy(lhsCat, CatNumber) =>
+        genTreeAuto(lhs)
+        if (lhsType == FloatType)
+          fb += wa.F64PromoteF32
+        genTree(rhs, AnyType)
+        markPosition(pos)
+        fb += wa.Call(genFunctionID.sameDoubleAny)
+
+      case _ if isCoveredBy(rhsCat, CatNumber) =>
+        genTree(lhs, AnyType)
+        genTreeAuto(rhs)
+        if (rhsType == FloatType)
+          fb += wa.F64PromoteF32
+        markPosition(pos)
+        fb += wa.Call(genFunctionID.sameAnyDouble)
+
+      case _ =>
+        // When all else fails, use the full helper
+        genTree(lhs, AnyType)
+        genTree(rhs, AnyType)
+        markPosition(pos)
+        fb += wa.Call(genFunctionID.sameAnyAny)
+    }
+  }
+
+  /** Generates code for `lhs === doubleValue`. */
+  private def genEqNumberLiteral(lhs: Tree, doubleValue: Double, pos: Position): Unit = {
+    def intFitsInI31(value: Int): Boolean =
+      (value ^ (value << 1)) >= 0 // i.e., the msb and 2nd msb bits are equal
+
+    val lhsType = lhs.tpe
+
+    // First rule out cases where the target value does not fit in the lhs range
+    val isRangePossible = lhsType match {
+      case ByteType  => doubleValue.toByte.toDouble.equals(doubleValue)
+      case ShortType => doubleValue.toShort.toDouble.equals(doubleValue)
+      case IntType   => doubleValue.toInt.toDouble.equals(doubleValue)
+      case FloatType => doubleValue.toFloat.toDouble.equals(doubleValue)
+      case _         => true
+    }
+
+    lhsType match {
+      case _ if !isRangePossible =>
+        genTree(lhs, VoidType)
+        markPosition(pos)
+        fb += wa.I32Const(0)
+
+      case ByteType | ShortType | IntType =>
+        genTreeAuto(lhs)
+        markPosition(pos)
+        fb += wa.I32Const(doubleValue.toInt)
+        fb += wa.I32Eq
+
+      case FloatType | DoubleType =>
+        genTreeAuto(lhs)
+        markPosition(pos)
+        if (doubleValue == 0.0) {
+          // Perform a bitwise comparison to rule out the other zero
+          if (lhsType == FloatType) {
+            fb += wa.I32ReinterpretF32
+            fb += wa.I32Const(java.lang.Float.floatToIntBits(doubleValue.toFloat))
+            fb += wa.I32Eq
+          } else {
+            fb += wa.I64ReinterpretF64
+            fb += wa.I64Const(java.lang.Double.doubleToLongBits(doubleValue))
+            fb += wa.I64Eq
+          }
+        } else if (java.lang.Double.isNaN(doubleValue)) {
+          // Compare against itself
+          val temp = addSyntheticLocal(transformSingleType(lhsType))
+          fb += wa.LocalTee(temp)
+          fb += wa.LocalGet(temp)
+          if (lhsType == FloatType)
+            fb += wa.F32Ne
+          else
+            fb += wa.F64Ne
+        } else {
+          // Regular comparison
+          if (lhsType == FloatType) {
+            fb += wa.F32Const(doubleValue.toFloat)
+            fb += wa.F32Eq
+          } else {
+            fb += wa.F64Const(doubleValue)
+            fb += wa.F64Eq
+          }
+        }
+
+      case _ =>
+        val intValue = doubleValue.toInt
+        val isI31Value = intValue.toDouble.equals(doubleValue) && intFitsInI31(intValue)
+
+        if (ctx.hasJSInterop) {
+          if (isI31Value) {
+            // By construction, only an i31ref can be === a value that fits in i31ref
+            fb.block(watpe.Int32) { doneLabel =>
+              fb.block(watpe.RefType.anyref) { notAnI31RefLabel =>
+                genTree(lhs, AnyType)
+                markPosition(pos)
+                fb += wa.BrOnCastFail(notAnI31RefLabel, watpe.RefType.anyref, watpe.RefType.i31)
+                fb += wa.I32Const(intValue)
+                fb += wa.RefI31
+                fb += wa.RefEq
+                fb += wa.Br(doneLabel)
+              }
+              fb += wa.Drop
+              fb += wa.I32Const(0)
+            }
+          } else {
+            // For other values, use sameDoubleAny
+            fb += wa.F64Const(doubleValue)
+            genTree(lhs, AnyType)
+            markPosition(pos)
+            fb += wa.Call(genFunctionID.sameDoubleAny)
+          }
+        } else {
+          // It can be an i31ref or a Double box
+
+          val doubleBoxTypeID = genTypeID.forClass(BoxedDoubleClass)
+          val doubleBoxType = watpe.RefType(doubleBoxTypeID)
+
+          fb.block(watpe.Int32) { doneLabel =>
+            fb.block(doubleBoxType) { doubleBoxLabel =>
+              if (isI31Value) {
+                // Actually handle both
+
+                fb.block(watpe.RefType.i31) { i31Label =>
+                  genTree(lhs, AnyType)
+                  markPosition(pos)
+                  fb += wa.BrOnCast(i31Label, watpe.RefType.anyref, watpe.RefType.i31)
+                  fb += wa.BrOnCast(doubleBoxLabel, watpe.RefType.anyref, doubleBoxType)
+                  fb += wa.I32Const(0)
+                  fb += wa.Br(doneLabel)
+                }
+
+                // i31
+                fb += wa.I32Const(intValue)
+                fb += wa.RefI31
+                fb += wa.RefEq
+                fb += wa.Br(doneLabel)
+              } else {
+                // It cannot be an i31 if the value does not fit in an i31
+                genTree(lhs, AnyType)
+                markPosition(pos)
+                fb += wa.BrOnCast(doubleBoxLabel, watpe.RefType.anyref, doubleBoxType)
+                fb += wa.I32Const(0)
+                fb += wa.Br(doneLabel)
+              }
+            }
+
+            // double
+            fb += wa.StructGet(doubleBoxTypeID, genFieldID.boxValue)
+            if (doubleValue == 0.0) { // positive or negative
+              // Use bits to avoid the other zero
+              fb += wa.I64ReinterpretF64
+              fb += wa.I64Const(java.lang.Double.doubleToLongBits(doubleValue))
+              fb += wa.I64Eq
+            } else if (java.lang.Double.isNaN(doubleValue)) {
+              val temp = addSyntheticLocal(watpe.Float64)
+              fb += wa.LocalTee(temp)
+              fb += wa.LocalGet(temp)
+              fb += wa.F64Ne
+            } else {
+              fb += wa.F64Const(doubleValue)
+              fb += wa.F64Eq
+            }
+          }
+        }
     }
   }
 

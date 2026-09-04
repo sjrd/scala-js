@@ -4587,6 +4587,42 @@ private[optimizer] abstract class OptimizerCore(
                 finishTransformStat(lhs),
                 BooleanLiteral(op == !==)).toPreTransform
 
+          // Simplify Double literals that fit in an Int
+          /*case (_, PreTransLit(DoubleLiteral(value))) if value.equals(value.toInt.toDouble) =>
+            PreTransBinaryOp(op, lhs, PreTransLit(IntLiteral(value.toInt)(rhs.pos)))
+
+          // Normalize known Bytes and Shorts to Ints
+          case _ if lhs.tpe.base == ByteType =>
+            foldBinaryOp(op, foldUnaryOp(UnaryOp.ByteToInt, lhs), rhs)
+          case _ if lhs.tpe.base == ShortType =>
+            foldBinaryOp(op, foldUnaryOp(UnaryOp.ShortToInt, lhs), rhs)
+          case _ if rhs.tpe.base == ByteType =>
+            foldBinaryOp(op, lhs, foldUnaryOp(UnaryOp.ByteToInt, rhs))
+          case _ if rhs.tpe.base == ShortType =>
+            foldBinaryOp(op, lhs, foldUnaryOp(UnaryOp.ShortToInt, rhs))
+
+          // If both sides are Ints, turn into an Int_== or Int_!=
+          case _ if lhs.tpe.base == IntType && rhs.tpe.base == IntType =>
+            val intOp = if (op == ===) Int_== else Int_!=
+            foldBinaryOp(intOp, lhs, rhs)
+
+          // If both sides are Booleans, turn into a Boolean_== or Boolean_!=
+          case _ if lhs.tpe.base == BooleanType && rhs.tpe.base == BooleanType =>
+            val boolOp = if (op == ===) Boolean_== else Boolean_!=
+            foldBinaryOp(boolOp, lhs, rhs)
+
+          // Other types do not have a dedicated _== operator with the correct semantics
+
+          // If one side is a Float and the other is a Double, normalize to Double
+
+          // Normalize number literals to IntLiteral or DoubleLiteral, to help the (Wasm) backend
+          case (_, PreTransLit(ByteLiteral(value))) =>
+            PreTransBinaryOp(op, lhs, PreTransLit(IntLiteral(value.toInt)(rhs.pos)))
+          case (_, PreTransLit(ShortLiteral(value))) =>
+            PreTransBinaryOp(op, lhs, PreTransLit(IntLiteral(value.toInt)(rhs.pos)))
+          case (_, PreTransLit(FloatLiteral(value))) =>
+            foldBinaryOp(op, lhs, PreTransLit(DoubleLiteral(value.toDouble)(rhs.pos)))*/
+
           case _ =>
             default
         }
