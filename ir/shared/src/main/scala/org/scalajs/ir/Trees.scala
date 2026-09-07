@@ -609,6 +609,9 @@ object Trees {
    *  throw an `ArithmeticException` when their right-hand-side is 0. That
    *  exception is not subject to undefined behavior.
    *
+   *  `String_+` executes arbitrary code as part of `.toString()`, and
+   *  therefore has arbitrary side effects.
+   *
    *  `String_charAt` throws a `StringIndexOutOfBoundsException`.
    *
    *  The `Class_x` operations take a `jl.Class!` as lhs, i.e., a

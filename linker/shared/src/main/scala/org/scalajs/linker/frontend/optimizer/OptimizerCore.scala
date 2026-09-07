@@ -1809,7 +1809,7 @@ private[optimizer] abstract class OptimizerCore(
             finishWithSideEffects
           else
             finishNoSideEffects
-        case Class_newArray =>
+        case String_+ | Class_newArray =>
           finishWithSideEffects
         case _ =>
           finishNoSideEffects
