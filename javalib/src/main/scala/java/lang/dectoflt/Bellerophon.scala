@@ -259,7 +259,10 @@ private[lang] object Bellerophon {
      */
     @tailrec
     def loop(z: fmt.Repr): fmt.Repr = {
-      val (m, exp) = fmt.frexp(z)
+      val mAndExp = fmt.frexp(z)
+      val m = mAndExp.f
+      val exp = mAndExp.e
+
       val mantissa = BigInteger.valueOf(m)
       val (x, y) = {
         if (e >= 0) {

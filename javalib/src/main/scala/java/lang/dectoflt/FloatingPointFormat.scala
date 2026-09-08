@@ -44,7 +44,7 @@ private[dectoflt] sealed trait FloatingPointFormat {
   def div(a: Repr, b: Repr): Repr
 
   /** Decompose the given floating-point value into a normalized mantissa and a power of 2. */
-  def frexp(v: Repr): (Long, Int)
+  def frexp(v: Repr): FloatingPoint
   def fromLong(v: Long): Repr
   def reinterpretBits(v: BigInteger): Repr
   def toIEEE754(v: FloatingPoint): Repr
@@ -92,11 +92,11 @@ private[dectoflt] object Binary32 extends FloatingPointFormat {
   def mul(a: Repr, b: Repr): Repr = ReprImpl(a.toFloat * b.toFloat)
   def div(a: Repr, b: Repr): Repr = ReprImpl(a.toFloat / b.toFloat)
 
-  def frexp(v: Repr): (Long, Int) = {
+  def frexp(v: Repr): FloatingPoint = {
     val bits = java.lang.Float.floatToRawIntBits(v.toFloat)
     val m = (bits & 0x7fffff + (1 << ExplicitSigBits)).toLong
     val exp = ((bits >>> ExplicitSigBits) & 0xff) - ((1 << (ExpBits - 1)) - 1) - ExplicitSigBits
-    (m, exp)
+    FloatingPoint.normalized(m, exp)
   }
 
   def reinterpretBits(v: BigInteger): Repr =
@@ -105,7 +105,10 @@ private[dectoflt] object Binary32 extends FloatingPointFormat {
   def fromLong(v: Long): Repr = ReprImpl(v.toFloat)
 
   def toIEEE754(v: FloatingPoint): Repr = {
-    val (sig, exponent) = v.roundNormal(this)
+    val rounded = v.roundNormal(this)
+    val sig = rounded.f
+    val exponent = rounded.e
+
     // Remove the leading implicit bit
     // It is safe cast sig.toInt, because Float has 23 sig bits
     val encodedSig: Int = sig.toInt - (1 << (ExplicitSigBits))
@@ -160,12 +163,12 @@ private[dectoflt] object Binary64 extends FloatingPointFormat {
   def mul(a: Repr, b: Repr): Repr = ReprImpl(a.toDouble * b.toDouble)
   def div(a: Repr, b: Repr): Repr = ReprImpl(a.toDouble / b.toDouble)
 
-  def frexp(v: Repr): (Long, Int) = {
+  def frexp(v: Repr): FloatingPoint = {
     val bits = java.lang.Double.doubleToLongBits(v.toDouble)
     val m = bits & 0xfffffffffffffL + (1 << ExplicitSigBits)
     val exp =
       ((bits >>> ExplicitSigBits) & 0x7ff).toInt - ((1 << (ExpBits - 1)) - 1) - ExplicitSigBits
-    (m, exp)
+    FloatingPoint.normalized(m, exp)
   }
 
   def reinterpretBits(v: BigInteger): Repr =
@@ -174,7 +177,10 @@ private[dectoflt] object Binary64 extends FloatingPointFormat {
   def fromLong(v: Long): Repr = ReprImpl(v.toDouble)
 
   def toIEEE754(v: FloatingPoint): Repr = {
-    val (sig, exponent) = v.roundNormal(this)
+    val rounded = v.roundNormal(this)
+    val sig = rounded.f
+    val exponent = rounded.e
+
     // Remove the leading implicit bit
     val encodedSig: Long = sig - (1L << (ExplicitSigBits))
     // Adjust the exponent for exponent bias and mantissa shift
