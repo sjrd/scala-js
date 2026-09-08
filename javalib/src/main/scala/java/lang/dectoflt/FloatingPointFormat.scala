@@ -16,7 +16,17 @@ import java.lang.Math
 import java.math.BigInteger
 
 sealed trait FloatingPointFormat {
-  type Repr
+
+  /** Representation for this floating format.
+   *
+   *  In an ideal world, this would be an abstract type member, refined to
+   *  `Float` in `Binary32` and `Double` in `Binary64`. However, that causes
+   *  boxing. Instead, we represent both with a concrete-but-opaque value
+   *  class, which always contains a primitive `Double`. The value class
+   *  ensures we do not accidently apply double operations instead of float
+   *  operations when using `Binary32`.
+   */
+  type Repr = FloatingPointFormat.ReprImpl
 
   val ExpBits: Int
   val SigBits: Int
@@ -40,15 +50,27 @@ sealed trait FloatingPointFormat {
   def toIEEE754(v: FloatingPoint): Repr
 }
 
+object FloatingPointFormat {
+  final class ReprImpl private (private val x: Double) extends AnyVal {
+    @inline def toFloat: Float = x.toFloat
+    @inline def toDouble: Double = x
+  }
+
+  object ReprImpl {
+    @inline def apply(x: Float): ReprImpl = new ReprImpl(x.toDouble)
+    @inline def apply(x: Double): ReprImpl = new ReprImpl(x)
+  }
+}
+
 object Binary32 extends FloatingPointFormat {
-  type Repr = Float
+  import FloatingPointFormat.ReprImpl
 
   final val ExpBits = 8
   final val SigBits = 24
 
   final val MaxSig = (1L << SigBits) - 1
   final val CeilLog5OfMaxSig = 11
-  final val PositiveInfinity = Float.PositiveInfinity
+  final val PositiveInfinity = ReprImpl(Float.PositiveInfinity)
 
   private final val PowerOfTens = Array(
       1.0f,
@@ -64,23 +86,23 @@ object Binary32 extends FloatingPointFormat {
       10000000000.0f
   )
 
-  def powerOfTen(i: Int): Repr = PowerOfTens(i)
-  def nextDown(v: Repr): Repr = Math.nextDown(v)
-  def nextUp(v: Repr): Repr = Math.nextUp(v)
-  def mul(a: Repr, b: Repr): Repr = a * b
-  def div(a: Repr, b: Repr): Repr = a / b
+  def powerOfTen(i: Int): Repr = ReprImpl(PowerOfTens(i))
+  def nextDown(v: Repr): Repr = ReprImpl(Math.nextDown(v.toFloat))
+  def nextUp(v: Repr): Repr = ReprImpl(Math.nextUp(v.toFloat))
+  def mul(a: Repr, b: Repr): Repr = ReprImpl(a.toFloat * b.toFloat)
+  def div(a: Repr, b: Repr): Repr = ReprImpl(a.toFloat / b.toFloat)
 
   def frexp(v: Repr): (Long, Int) = {
-    val bits = java.lang.Float.floatToRawIntBits(v)
+    val bits = java.lang.Float.floatToRawIntBits(v.toFloat)
     val m = (bits & 0x7fffff + (1 << ExplicitSigBits)).toLong
     val exp = ((bits >>> ExplicitSigBits) & 0xff) - ((1 << (ExpBits - 1)) - 1) - ExplicitSigBits
     (m, exp)
   }
 
   def reinterpretBits(v: BigInteger): Repr =
-    java.lang.Float.intBitsToFloat(v.intValue())
+    ReprImpl(java.lang.Float.intBitsToFloat(v.intValue()))
 
-  def fromLong(v: Long): Repr = v.toFloat
+  def fromLong(v: Long): Repr = ReprImpl(v.toFloat)
 
   def toIEEE754(v: FloatingPoint): Repr = {
     val (sig, exponent) = v.roundNormal(this)
@@ -91,12 +113,12 @@ object Binary32 extends FloatingPointFormat {
     val encodedExp: Int = exponent + ((1 << (ExpBits - 1)) - 1) + ExplicitSigBits
     // combine bits
     val bits = (encodedExp << ExplicitSigBits) | encodedSig
-    java.lang.Float.intBitsToFloat(bits)
+    ReprImpl(java.lang.Float.intBitsToFloat(bits))
   }
 }
 
 object Binary64 extends FloatingPointFormat {
-  type Repr = Double
+  import FloatingPointFormat.ReprImpl
 
   final val ExpBits = 11
   // final val ExplicitSigBits = 52
@@ -130,16 +152,16 @@ object Binary64 extends FloatingPointFormat {
       10000000000000000000000.0
   )
 
-  final val PositiveInfinity = Double.PositiveInfinity
+  final val PositiveInfinity = ReprImpl(Double.PositiveInfinity)
 
-  def powerOfTen(i: Int): Repr = PowerOfTens(i)
-  def nextDown(v: Repr): Repr = Math.nextDown(v)
-  def nextUp(v: Repr): Repr = Math.nextUp(v)
-  def mul(a: Repr, b: Repr): Repr = a * b
-  def div(a: Repr, b: Repr): Repr = a / b
+  def powerOfTen(i: Int): Repr = ReprImpl(PowerOfTens(i))
+  def nextDown(v: Repr): Repr = ReprImpl(Math.nextDown(v.toDouble))
+  def nextUp(v: Repr): Repr = ReprImpl(Math.nextUp(v.toDouble))
+  def mul(a: Repr, b: Repr): Repr = ReprImpl(a.toDouble * b.toDouble)
+  def div(a: Repr, b: Repr): Repr = ReprImpl(a.toDouble / b.toDouble)
 
   def frexp(v: Repr): (Long, Int) = {
-    val bits = java.lang.Double.doubleToLongBits(v)
+    val bits = java.lang.Double.doubleToLongBits(v.toDouble)
     val m = bits & 0xfffffffffffffL + (1 << ExplicitSigBits)
     val exp =
       ((bits >>> ExplicitSigBits) & 0x7ff).toInt - ((1 << (ExpBits - 1)) - 1) - ExplicitSigBits
@@ -147,9 +169,9 @@ object Binary64 extends FloatingPointFormat {
   }
 
   def reinterpretBits(v: BigInteger): Repr =
-    java.lang.Double.longBitsToDouble(v.longValue())
+    ReprImpl(java.lang.Double.longBitsToDouble(v.longValue()))
 
-  def fromLong(v: Long): Repr = v.toDouble
+  def fromLong(v: Long): Repr = ReprImpl(v.toDouble)
 
   def toIEEE754(v: FloatingPoint): Repr = {
     val (sig, exponent) = v.roundNormal(this)
@@ -159,6 +181,6 @@ object Binary64 extends FloatingPointFormat {
     val encodedExp: Long = exponent + ((1 << (ExpBits - 1)) - 1) + ExplicitSigBits
     // combine bits
     val bits = encodedExp << ExplicitSigBits | encodedSig
-    java.lang.Double.longBitsToDouble(bits)
+    ReprImpl(java.lang.Double.longBitsToDouble(bits))
   }
 }
