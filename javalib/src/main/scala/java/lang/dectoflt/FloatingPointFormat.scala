@@ -15,7 +15,7 @@ package java.lang.dectoflt
 import java.lang.Math
 import java.math.BigInteger
 
-sealed trait FloatingPointFormat {
+private[dectoflt] sealed trait FloatingPointFormat {
 
   /** Representation for this floating format.
    *
@@ -50,7 +50,7 @@ sealed trait FloatingPointFormat {
   def toIEEE754(v: FloatingPoint): Repr
 }
 
-object FloatingPointFormat {
+private[dectoflt] object FloatingPointFormat {
   final class ReprImpl private (private val x: Double) extends AnyVal {
     @inline def toFloat: Float = x.toFloat
     @inline def toDouble: Double = x
@@ -62,7 +62,7 @@ object FloatingPointFormat {
   }
 }
 
-object Binary32 extends FloatingPointFormat {
+private[dectoflt] object Binary32 extends FloatingPointFormat {
   import FloatingPointFormat.ReprImpl
 
   final val ExpBits = 8
@@ -117,7 +117,7 @@ object Binary32 extends FloatingPointFormat {
   }
 }
 
-object Binary64 extends FloatingPointFormat {
+private[dectoflt] object Binary64 extends FloatingPointFormat {
   import FloatingPointFormat.ReprImpl
 
   final val ExpBits = 11

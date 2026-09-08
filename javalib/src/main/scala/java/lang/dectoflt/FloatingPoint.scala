@@ -70,7 +70,7 @@ private[dectoflt] class FloatingPoint private (val f: Long, val e: Int) {
   }
 
   /** Round the 64-bit significand to target#SigBits bits with half-to-even. */
-  private[dectoflt] def roundNormal(target: FloatingPointFormat): (Long, Int) = {
+  def roundNormal(target: FloatingPointFormat): (Long, Int) = {
     val excess = SigBits - target.SigBits // > 0
     val halfway = 1L << (excess - 1)
     val shiftedF = f >>> excess
@@ -94,7 +94,7 @@ private[dectoflt] class FloatingPoint private (val f: Long, val e: Int) {
   }
 }
 
-object FloatingPoint {
+private[dectoflt] object FloatingPoint {
   private final val SigBits = 64
 
   def apply(f: BigInteger): FloatingPoint = {
