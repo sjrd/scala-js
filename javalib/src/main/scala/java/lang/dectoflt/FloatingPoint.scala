@@ -127,10 +127,11 @@ private[dectoflt] object FloatingPoint {
       val shiftedF = f.shiftRight(shift)
       val remainder = f.and(BigInteger.ZERO.setBit(shift).subtract(BigInteger.ONE))
       val halfway = BigInteger.ZERO.setBit(shift - 1)
+      val cmpToHalfway = remainder.compareTo(halfway)
       val normalizedF = {
-        if (remainder.compareTo(halfway) > 0) { // roundup
+        if (cmpToHalfway > 0) { // roundup
           shiftedF.add(BigInteger.ONE)
-        } else if (remainder.compareTo(halfway) < 0) { // rounddown
+        } else if (cmpToHalfway < 0) { // rounddown
           shiftedF
         } else if (shiftedF.testBit(0)) { // tie, rownddown (shiftedF) is odd (1 at LSB)
           shiftedF.add(BigInteger.ONE) // roundup is even
