@@ -126,7 +126,7 @@ private[dectoflt] object Binary64 extends FloatingPointFormat {
   final val ExpBits = 11
   // final val ExplicitSigBits = 52
   final val SigBits = 53
-  final val MaxSig: Long = (1L << SigBits) - 1;
+  final val MaxSig: Long = (1L << SigBits) - 1
   final val CeilLog5OfMaxSig = 23
 
   private final val PowerOfTens = Array(
