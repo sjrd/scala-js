@@ -73,7 +73,7 @@ class FormatterTest {
       assertF("Infinity", "%," + conversion, PosInf)
 
     if (acceptUpperCase) {
-      val upConversion = conversion.toUpper
+      val upConversion = (conversion + ('A' - 'a')).toChar
       assertF("INFINITY", "%" + upConversion, PosInf)
       assertF("-INFINITY", "%" + upConversion, NegInf)
       assertF("NAN", "%" + upConversion, NaN)
@@ -108,7 +108,7 @@ class FormatterTest {
     }
 
     if (acceptUpperCase) {
-      val upConversion = conversion.toUpper
+      val upConversion = (conversion + ('A' - 'a')).toChar
       assertF("NULL", "%" + upConversion, null)
       assertF("  NULL", "%6" + upConversion, null)
     }
