@@ -33,10 +33,10 @@ private[lang] object Bellerophon {
   private final val ExtendedMaxSig = BigInteger.ZERO.setBit(ExtendedSigBits)
 
   def bellerophonFloat(f: BigInteger, e: Int): scala.Float =
-    bellerophon(f, e, Binary32)
+    bellerophon(f, e, Binary32).toFloat
 
   def bellerophonDouble(f: BigInteger, e: Int): scala.Double =
-    bellerophon(f, e, Binary64)
+    bellerophon(f, e, Binary64).toDouble
 
   /** An implementation of Bellerophon algorithm from
    *  "How to Read Floating Point Numbers Accurately" by William D. Clinger.
@@ -259,7 +259,10 @@ private[lang] object Bellerophon {
      */
     @tailrec
     def loop(z: fmt.Repr): fmt.Repr = {
-      val (m, exp) = fmt.frexp(z)
+      val mAndExp = fmt.frexp(z)
+      val m = mAndExp.f
+      val exp = mAndExp.e
+
       val mantissa = BigInteger.valueOf(m)
       val (x, y) = {
         if (e >= 0) {

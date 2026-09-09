@@ -57,7 +57,9 @@ private[dectoflt] class FloatingPoint private (val f: Long, val e: Int) {
   }
 
   def doesOverflowOnRound(fmt: FloatingPointFormat): Boolean = {
-    val (sig, exponent) = roundNormal(fmt)
+    val rounded = roundNormal(fmt)
+    val sig = rounded.f
+    val exponent = rounded.e
 
     // Remove the leading implicit bit
     val encodedSig: Long = sig - (1L << (fmt.ExplicitSigBits))
@@ -70,7 +72,7 @@ private[dectoflt] class FloatingPoint private (val f: Long, val e: Int) {
   }
 
   /** Round the 64-bit significand to target#SigBits bits with half-to-even. */
-  private[dectoflt] def roundNormal(target: FloatingPointFormat): (Long, Int) = {
+  def roundNormal(target: FloatingPointFormat): FloatingPoint = {
     val excess = SigBits - target.SigBits // > 0
     val halfway = 1L << (excess - 1)
     val shiftedF = f >>> excess
@@ -87,25 +89,21 @@ private[dectoflt] class FloatingPoint private (val f: Long, val e: Int) {
       shiftedF
     }
     if (normalizedF > target.MaxSig) {
-      (normalizedF >> 1, normalizedE + 1)
+      new FloatingPoint(normalizedF >> 1, normalizedE + 1)
     } else {
-      (normalizedF, normalizedE)
+      new FloatingPoint(normalizedF, normalizedE)
     }
   }
 }
 
-object FloatingPoint {
+private[dectoflt] object FloatingPoint {
   private final val SigBits = 64
 
-  def apply(f: BigInteger): FloatingPoint = {
-    val (newF, newE) = normalize(f, 0)
-    new FloatingPoint(newF, newE)
-  }
+  def apply(f: BigInteger): FloatingPoint =
+    normalize(f, 0)
 
-  def apply(f: BigInteger, e: Int): FloatingPoint = {
-    val (newF, newE) = normalize(f, e)
-    new FloatingPoint(newF, newE)
-  }
+  def apply(f: BigInteger, e: Int): FloatingPoint =
+    normalize(f, e)
 
   /** Create a FloatingPoint from normalized f and e. */
   def normalized(f: Long, e: Int): FloatingPoint =
@@ -115,22 +113,23 @@ object FloatingPoint {
    *
    *  A floating point number is normalized iff β^(n-1) <= f < β^n (β=2, n=64)
    */
-  private def normalize(f: BigInteger, e: Int): (Long, Int) = {
+  private def normalize(f: BigInteger, e: Int): FloatingPoint = {
     val shift = f.bitLength() - SigBits
     if (shift == 0) {
-      (f.longValue(), e)
+      new FloatingPoint(f.longValue(), e)
     } else if (shift < 0) {
       // Significand is smaller. Shift left to normalize.
-      (f.shiftLeft(-shift).longValue(), e + shift)
+      new FloatingPoint(f.shiftLeft(-shift).longValue(), e + shift)
     } else {
       // shift > 0, significand is too big, round and shift right using round half to even.
       val shiftedF = f.shiftRight(shift)
       val remainder = f.and(BigInteger.ZERO.setBit(shift).subtract(BigInteger.ONE))
       val halfway = BigInteger.ZERO.setBit(shift - 1)
+      val cmpToHalfway = remainder.compareTo(halfway)
       val normalizedF = {
-        if (remainder.compareTo(halfway) > 0) { // roundup
+        if (cmpToHalfway > 0) { // roundup
           shiftedF.add(BigInteger.ONE)
-        } else if (remainder.compareTo(halfway) < 0) { // rounddown
+        } else if (cmpToHalfway < 0) { // rounddown
           shiftedF
         } else if (shiftedF.testBit(0)) { // tie, rownddown (shiftedF) is odd (1 at LSB)
           shiftedF.add(BigInteger.ONE) // roundup is even
@@ -142,9 +141,9 @@ object FloatingPoint {
 
       // Check for overflow from rounding
       if (normalizedF.bitLength() > SigBits) {
-        (normalizedF.shiftRight(1).longValue(), normalizedE + 1)
+        new FloatingPoint(normalizedF.shiftRight(1).longValue(), normalizedE + 1)
       } else {
-        (normalizedF.longValue(), normalizedE)
+        new FloatingPoint(normalizedF.longValue(), normalizedE)
       }
     }
   }
