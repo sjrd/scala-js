@@ -54,6 +54,9 @@ object ModuleKind {
    *
    *  The resulting module has no JS interop, but can be run in any Wasm
    *  engine.
+   *
+   *  Since the Wasm module uses GC types, it cannot be used in multi-threaded
+   *  setups. This is likely to be enforced by the engines, for safety reasons.
    */
   case object WasmModule extends ModuleKind
 
