@@ -70,8 +70,17 @@ object Boolean {
   @inline def parseBoolean(s: String): scala.Boolean = {
     /* The only code points that case-fold to 't' 'r' 'u' 'e' are their
      * ASCII uppercase counterparts. (This is not true for 'i', for example.)
+     * Assumption check (last checked on JDK 25):
+     *   for (cp <- 0x80 to Character.MAX_CODE_POINT; l <- "true")
+     *     assert(!Character.toString(cp).equalsIgnoreCase(l.toString()), cp.toHexString)
+     * Therefore, we can perform an efficient test that does not need the
+     * Unicode database.
      */
-    (s != null) && _String.fromString("true").asciiCompareToIgnoreCase(s) == 0
+
+    @inline def test(i: Int, c: Char): scala.Boolean =
+      (s.charAt(i) | 0x20) == c.toInt
+
+    s != null && s.length() == 4 && test(0, 't') && test(1, 'r') && test(2, 'u') && test(3, 'e')
   }
 
   @inline def toString(b: scala.Boolean): String =
