@@ -774,6 +774,37 @@ class AnalyzerTest {
   }
 
   @Test
+  def asyncOrAwaitWithoutJSPIBecauseWasmModule(): AsyncResult = await {
+    val results = for {
+      problematicTree <- List(
+        Closure(ClosureFlags.arrow.withAsync(true), Nil, Nil, None, AnyType, int(5), Nil),
+        JSAwait(int(5))
+      )
+    } yield {
+      val classDefs = Seq(
+        mainTestClassDef(problematicTree)
+      )
+
+      val moduleInitializer = MainTestModuleInitializers
+
+      val config = StandardConfig()
+        .withModuleKind(ModuleKind.WasmModule)
+        .withESFeatures(_.withESVersion(ESVersion.ES2022).withUseWebAssembly(true))
+        .withWasmFeatures(_.withUseJSPI(true)) // ignored with WasmModule
+
+      val analysis = computeAnalysis(classDefs,
+          moduleInitializers = MainTestModuleInitializers,
+          config = config)
+
+      assertContainsError("JSInteropInWasmWithoutJS", analysis) {
+        case JSInteropInWasmWithoutJS(_) => true
+      }
+    }
+
+    Future.sequence(results)
+  }
+
+  @Test
   def orphanAwaitWithoutWebAssembly(): AsyncResult = await {
     val classDefs = Seq(
       mainTestClassDef {
