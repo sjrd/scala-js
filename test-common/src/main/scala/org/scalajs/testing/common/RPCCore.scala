@@ -129,17 +129,12 @@ private[testing] abstract class RPCCore {
               val ep: bep.endpoint.type = bep.endpoint
               import ep._
 
-              /* A note about the use of the parasitic EC:
-               * - bep.exec will be called on the thread calling `handleMessage`
-               *   this is what we do for Msg endpoints as well. We only deal
-               *   with a Future because it makes error chaining easier.
-               * - The onComplete callback will be invoked on whichever thread
-               *   completes the bep.exec future. This is OK because makeReply
-               *   is cheap and `send` is async.
-               */
-              Future.fromTry(Try(deserialize[Req](in)))
-                .flatMap(bep.exec)(parasitic)
-                .onComplete(repl => send(makeReply(callID, repl)))(parasitic)
+              // No EC required here; everything happens on the calling thread
+              val respTryFuture = Try(deserialize[Req](in)).map(bep.exec(_))
+              val respFuture = Future.fromTry(respTryFuture).flatten
+
+              // OK to use parasitic here because `makeReply` is cheap and `send` is async
+              respFuture.onComplete(repl => send(makeReply(callID, repl)))(parasitic)
           }
       }
     }
