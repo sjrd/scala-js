@@ -22,6 +22,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.util.Properties
 
+import com.google.common.jimfs.Jimfs
+
 import org.scalajs.ir
 
 import org.scalajs.logging._
@@ -264,7 +266,7 @@ object MyScalaJSPlugin extends AutoPlugin {
 
           case ModuleKind.WasmModule =>
             // !!! Here we deviate from the plugin
-            WasmInput.WasmModule(path)
+            Input.WasmModule(path, Nil)
         }
       },
   )
@@ -294,9 +296,9 @@ object MyScalaJSPlugin extends AutoPlugin {
         } else {
           baseConfig
         }
-        if (scalaJSLinkerConfig.value.moduleKind == ModuleKind.WasmModule)
-          new WasmNodeJSEnv(config)
-        else
+        //if (scalaJSLinkerConfig.value.moduleKind == ModuleKind.WasmModule)
+        //  new WasmNodeJSEnv(config)
+        //else
           new NodeJSEnv(config)
       },
 
@@ -2145,6 +2147,34 @@ object Build {
       Test / headerSources := Nil
   )
 
+  lazy val nonStandardWasmModule: java.nio.file.Path = {
+    val i16ArrayModuleBytes = WasmGCArrayAccessModules.i16ArrayModuleBytes
+    val i16ArrayModuleBytesContent =
+      i16ArrayModuleBytes.map(java.lang.Byte.toUnsignedInt(_)).mkString(",")
+
+    val code = raw"""
+      |const wasmI16ArrayBytes = new Uint8Array([$i16ArrayModuleBytesContent]);
+      |const wasmI16Array =
+      |  await WebAssembly.instantiate(wasmI16ArrayBytes).then(m => m.instance.exports);
+      |
+      |const wasmI16ArrayToJSString = function(array) {
+      |  var len = wasmI16Array.length(array);
+      |  var result = "";
+      |  for (var i = 0; i !== len; i++)
+      |    result += String.fromCharCode(wasmI16Array.get(array, i) & 0xffff);
+      |  return result;
+      |}
+      |
+      |export function println(s) {
+      |  console.log(wasmI16ArrayToJSString(s));
+      |}
+    """.stripMargin
+
+    java.nio.file.Files.write(
+        Jimfs.newFileSystem().getPath("non-standard.js"),
+        code.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+  }
+
   lazy val helloworld: MultiScalaProject = MultiScalaProject(
       id = "helloworld", base = file("examples") / "helloworld"
   ).enablePlugins(
@@ -2153,7 +2183,22 @@ object Build {
       exampleSettings,
       name := "Hello World - Scala.js example",
       moduleName := "helloworld",
-      scalaJSUseMainModuleInitializer := true
+      scalaJSUseMainModuleInitializer := true,
+      Compile / jsEnvInput ~= { prev =>
+        prev.flatMap { item =>
+          item match {
+            case Input.WasmModule(module, imports) =>
+              val nonStandardWasmModuleInput = Input.ESModule(nonStandardWasmModule)
+              List(
+                nonStandardWasmModuleInput,
+                Input.WasmModule(module,
+                    imports :+ ("scalajs:non-standard" -> nonStandardWasmModuleInput))
+              )
+            case _ =>
+              item :: Nil
+          }
+        }
+      },
   ).withScalaJSCompiler.dependsOnLibrary
 
   lazy val reversi: MultiScalaProject = MultiScalaProject(
