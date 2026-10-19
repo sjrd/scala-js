@@ -232,7 +232,8 @@ sealed abstract class Range(
     if (numRangeElements <= 0 && !isEmpty)
       fail()
   }
-  private[this] def fail() = Range.fail(start, end, step, isInclusive)
+  private[this] def description = s"$start ${if (isInclusive) "to" else "until"} $end by $step"
+  private[this] def fail() = throw new IllegalArgumentException(description + ": seqs cannot contain more than Int.MaxValue elements.")
 
   @throws[IndexOutOfBoundsException]
   final def apply(idx: Int): Int = {
@@ -579,13 +580,6 @@ sealed abstract class Range(
 /** Companion object for ranges. */
 object Range {
 
-  private def description(start: Int, end: Int, step: Int, isInclusive: Boolean) =
-    start + (if (isInclusive) " to " else " until ") + end + " by " + step
-
-  private def fail(start: Int, end: Int, step: Int, isInclusive: Boolean) =
-    throw new IllegalArgumentException(description(start, end, step, isInclusive) +
-        ": seqs cannot contain more than Int.MaxValue elements.")
-
   /** Counts the number of range elements.
     *  precondition:  step != 0
     *  If the size of the range exceeds Int.MaxValue, the
@@ -639,13 +633,11 @@ object Range {
   def inclusive(start: Int, end: Int): Range.Inclusive = new Range.Inclusive(start, end, 1)
 
   @SerialVersionUID(4L)
-  @inline
   final class Inclusive(start: Int, end: Int, step: Int) extends Range(start, end, step) {
     def isInclusive: Boolean = true
   }
 
   @SerialVersionUID(4L)
-  @inline
   final class Exclusive(start: Int, end: Int, step: Int) extends Range(start, end, step) {
     def isInclusive: Boolean = false
   }

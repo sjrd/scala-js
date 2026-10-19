@@ -320,6 +320,14 @@ sealed class NumericRange[T](
           }
         ans.asInstanceOf[B]
       }
+      else if ((num eq scala.math.Numeric.BigIntIsIntegral) ||
+        (num eq scala.math.Numeric.BigDecimalAsIfIntegral)) {
+        // No overflow, so we can use arithmetic series formula directly
+        // (not going to worry about running out of memory)
+        val numAsIntegral = num.asInstanceOf[Integral[B]]
+        import numAsIntegral._
+        ((num fromInt size) * (head + last)) / (num fromInt 2)
+      }
       else {
         // User provided custom Numeric, so we cannot rely on arithmetic series formula (e.g. won't work on something like Z_6)
         if (isEmpty) num.zero
@@ -504,11 +512,13 @@ object NumericRange {
     new Inclusive(start, end, step)
 
   private[collection] val defaultOrdering = Map[Numeric[_], Ordering[_]](
+    Numeric.BigIntIsIntegral -> Ordering.BigInt,
     Numeric.IntIsIntegral -> Ordering.Int,
     Numeric.ShortIsIntegral -> Ordering.Short,
     Numeric.ByteIsIntegral -> Ordering.Byte,
     Numeric.CharIsIntegral -> Ordering.Char,
-    Numeric.LongIsIntegral -> Ordering.Long
+    Numeric.LongIsIntegral -> Ordering.Long,
+    Numeric.BigDecimalAsIfIntegral -> Ordering.BigDecimal
   )
 
   @SerialVersionUID(3L)

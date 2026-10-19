@@ -31,6 +31,5 @@ object NoStackTrace {
 
   // two-stage init to make checkinit happy, since sys.SystemProperties.noTraceSuppression.value calls back into NoStackTrace.noSuppression
   final private[this] var _noSuppression = false
-  // !!! Disabled in Scala.js because SystemProperties is not supported
-  //_noSuppression = System.getProperty("scala.control.noTraceSuppression", "").equalsIgnoreCase("true")
+  _noSuppression = System.getProperty("scala.control.noTraceSuppression", "").equalsIgnoreCase("true")
 }

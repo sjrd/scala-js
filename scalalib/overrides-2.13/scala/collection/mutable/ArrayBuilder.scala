@@ -15,11 +15,6 @@ package mutable
 
 import scala.collection.mutable.ArrayBuffer.resizeUp
 import scala.reflect.ClassTag
-import scala.runtime.BoxedUnit
-
-import scala.scalajs.js
-import scala.scalajs.LinkingInfo
-import scala.scalajs.LinkingInfo.linkTimeIf
 
 /** A builder class for arrays.
  *
@@ -91,26 +86,7 @@ object ArrayBuilder {
    *  @tparam T     type of the elements for the array builder, with a `ClassTag` context bound.
    *  @return       a new empty array builder.
    */
-  @inline
-  def make[T: ClassTag]: ArrayBuilder[T] = {
-    linkTimeIf(LinkingInfo.isWebAssembly) {
-      makeForWasm
-    } {
-      makeForJS
-    }
-  }
-
-  /** Implementation of `make` for JS. */
-  @inline
-  private def makeForJS[T: ClassTag]: ArrayBuilder[T] =
-    new ArrayBuilder.generic[T](implicitly[ClassTag[T]].runtimeClass)
-
-  /** Implementation of `make` for Wasm.
-   *
-   *  This is the original upstream implementation.
-   */
-  @inline
-  private def makeForWasm[T: ClassTag]: ArrayBuilder[T] = {
+  @inline def make[T: ClassTag]: ArrayBuilder[T] = {
     val tag = implicitly[ClassTag[T]]
     tag.runtimeClass match {
       case java.lang.Byte.TYPE      => new ArrayBuilder.ofByte().asInstanceOf[ArrayBuilder[T]]
@@ -123,105 +99,6 @@ object ArrayBuilder {
       case java.lang.Boolean.TYPE   => new ArrayBuilder.ofBoolean().asInstanceOf[ArrayBuilder[T]]
       case java.lang.Void.TYPE      => new ArrayBuilder.ofUnit().asInstanceOf[ArrayBuilder[T]]
       case _                        => new ArrayBuilder.ofRef[T with AnyRef]()(tag.asInstanceOf[ClassTag[T with AnyRef]]).asInstanceOf[ArrayBuilder[T]]
-    }
-  }
-
-  /** A generic ArrayBuilder optimized for Scala.js.
-   *
-   *  @tparam T              type of elements for the array builder.
-   *  @param  elementClass   runtime class of the elements in the array.
-   */
-  @inline
-  private final class generic[T](elementClass: Class[_]) extends ArrayBuilder[T] {
-
-    private val isCharArrayBuilder = classOf[Char] == elementClass
-    protected[this] def elems: Array[T] = throw new Error("unreachable")
-    private var jsElems: js.Array[Any] = js.Array()
-
-    override def length: Int = jsElems.length
-
-    override def knownSize: Int = jsElems.length
-
-    def addOne(elem: T): this.type = {
-      val unboxedElem =
-        if (isCharArrayBuilder) elem.asInstanceOf[Char].toInt
-        else if (elem == null) zeroOf(elementClass)
-        else elem
-      jsElems.push(unboxedElem)
-      this
-    }
-
-    /** Add a slice of an array */
-    override def addAll(xs: Array[_ <: T], offset: Int, length: Int): this.type = {
-      val end = offset + length
-      var i = offset
-      while (i < end) {
-        this += xs(i)
-        i += 1
-      }
-      this
-    }
-
-    override def addAll(xs: IterableOnce[T]): this.type = {
-      val it = xs.iterator
-      while (it.hasNext) {
-        this += it.next()
-      }
-      this
-    }
-
-    override def clear(): Unit =
-      jsElems = js.Array()
-
-    protected[this] def resize(size: Int): Unit = ()
-
-    def result(): Array[T] = {
-      val elemRuntimeClass =
-        if (classOf[Unit] == elementClass) classOf[BoxedUnit]
-        else if (classOf[Null] == elementClass || classOf[Nothing] == elementClass) classOf[Object]
-        else elementClass
-      genericArrayBuilderResult(elemRuntimeClass, jsElems)
-    }
-
-    override def toString(): String = "ArrayBuilder.generic"
-  }
-
-  // Intrinsic
-  private def zeroOf(runtimeClass: Class[_]): Any = runtimeClass match {
-    case java.lang.Byte.TYPE      => 0.toByte
-    case java.lang.Short.TYPE     => 0.toShort
-    case java.lang.Character.TYPE => 0 // yes, as an Int
-    case java.lang.Integer.TYPE   => 0
-    case java.lang.Long.TYPE      => 0L
-    case java.lang.Float.TYPE     => 0.0f
-    case java.lang.Double.TYPE    => 0.0
-    case java.lang.Boolean.TYPE   => false
-    case java.lang.Void.TYPE      => ()
-    case _                        => null
-  }
-
-  // Intrinsic
-  private def genericArrayBuilderResult[T](runtimeClass: Class[_],
-      a: js.Array[Any]): Array[T] = {
-    val len = a.length
-
-    if (classOf[Char] == runtimeClass) {
-      val result = new Array[Char](len)
-      var i = 0
-      while (i != len) {
-        result(i) = a(i).asInstanceOf[Int].toChar
-        i += 1
-      }
-      result.asInstanceOf[Array[T]]
-    } else {
-      val result: Array[T] = java.lang.reflect.Array.newInstance(
-          runtimeClass, len).asInstanceOf[Array[T]]
-      var i = 0
-      while (i != len) {
-        result(i) = a(i).asInstanceOf[T]
-        i += 1
-      }
-      result
     }
   }
 

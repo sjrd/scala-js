@@ -108,9 +108,10 @@ object Platform {
 
   /** The default line separator.
    *
-   *  On the JavaScript backend, this is always "\n".
+   * On the JVM, this is equivalent to calling the method:
+   * `java.lang.System.lineSeparator`
    */
-  val EOL = "\n"
+  val EOL = scala.util.Properties.lineSeparator
 
   /** The current time in milliseconds. The time is counted since 1 January 1970
     * UTC.

@@ -39,14 +39,12 @@ import java.lang.InheritableThreadLocal
  *  are independent of those for the original thread.
  */
 class DynamicVariable[T](init: T) {
-  /* Scala.js: replaced InheritableThreadLocal by a simple var.
-   * This removes the dependency on ThreadLocal and InheritableThreadLocal from the
-   * Hello World.
-   */
-  private[this] var v = init
+  private[this] val tl = new InheritableThreadLocal[T] {
+    override def initialValue: T with AnyRef = init.asInstanceOf[T with AnyRef]
+  }
 
   /** Retrieves the current value */
-  def value: T = v
+  def value: T = tl.get.asInstanceOf[T]
 
   /** Sets the value of the variable while executing the specified
     * thunk.
@@ -55,17 +53,17 @@ class DynamicVariable[T](init: T) {
     * @param thunk The code to evaluate under the new setting
     */
   def withValue[S](newval: T)(thunk: => S): S = {
-    val oldval = v
-    v = newval
+    val oldval = value
+    tl set newval
 
     try thunk
-    finally v = oldval
+    finally tl set oldval
   }
 
   /** Changes the currently bound value, discarding the old value.
     * Usually `withValue()` gives better semantics.
     */
-  def value_=(newval: T) = v = newval
+  def value_=(newval: T) = tl set newval
 
   override def toString: String = "DynamicVariable(" + value + ")"
 }

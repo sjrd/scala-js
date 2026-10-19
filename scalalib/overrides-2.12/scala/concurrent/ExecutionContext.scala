@@ -39,7 +39,7 @@ import scala.annotation.implicitNotFound
  * `scala.concurrent.ExecutionContext.Implicits.global`.
  * The recommended approach is to add `(implicit ec: ExecutionContext)` to methods,
  * or class constructor parameters, which need an `ExecutionContext`.
- *
+ * 
  * Then locally import a specific `ExecutionContext` in one place for the entire
  * application or module, passing it implicitly to individual methods.
  * Alternatively define a local implicit val with the required `ExecutionContext`.
@@ -149,8 +149,7 @@ object ExecutionContext {
      * the thread pool uses a target number of worker threads equal to the number of
      * [[https://docs.oracle.com/javase/8/docs/api/java/lang/Runtime.html#availableProcessors-- available processors]].
      */
-    implicit lazy val global: ExecutionContext =
-      scala.scalajs.concurrent.JSExecutionContext.queue
+    implicit lazy val global: ExecutionContext = impl.ExecutionContextImpl.fromExecutor(null: Executor)
   }
 
   /** Creates an `ExecutionContext` from the given `ExecutorService`.
@@ -199,3 +198,5 @@ object ExecutionContext {
    */
   def defaultReporter: Throwable => Unit = _.printStackTrace()
 }
+
+

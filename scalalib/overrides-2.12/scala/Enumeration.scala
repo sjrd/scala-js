@@ -90,21 +90,13 @@ abstract class Enumeration (initial: Int) extends Serializable {
 
   /* Note that `readResolve` cannot be private, since otherwise
      the JVM does not invoke it when deserializing subclasses. */
-  protected def readResolve(): AnyRef = ???
+  protected def readResolve(): AnyRef = thisenum.getClass.getField(MODULE_INSTANCE_NAME).get(null)
 
   /** The name of this enumeration.
    */
-  override def toString = {
-    // original: (getClass.getName.stripSuffix("$").split('.')).last.split('$').last
-    val className = this.getClass().getName()
-    val len = className.length()
-    val end = if (len != 0 && className.charAt(len - 1) == '$') len - 1 else len
-    var start = end
-    while (start != 0 && { val c = className.charAt(start - 1); c != '.' && c != '$' }) {
-      start -= 1
-    }
-    className.substring(start, end)
-  }
+  override def toString =
+    ((getClass.getName stripSuffix MODULE_SUFFIX_STRING split '.').last split
+       Regex.quote(NAME_JOIN_STRING)).last
 
   /** The mapping from the integer used to identify values to the actual
     * values. */
@@ -161,23 +153,8 @@ abstract class Enumeration (initial: Int) extends Serializable {
    * @throws   NoSuchElementException if no `Value` with a matching
    *           name is in this `Enumeration`
    */
-  final def withName(s: String): Value = {
-    val (unnamed, named) = values partition {
-      _.toString().startsWith("<Unknown name for enum field ")
-    }
-
-    named.find(_.toString == s) match {
-      case Some(v) => v
-      // If we have unnamed values, we issue a detailed error message
-      case None if unnamed.nonEmpty =>
-        throw new NoSuchElementException(
-            s"""Couldn't find enum field with name $s.
-               |However, there were the following unnamed fields:
-               |${unnamed.mkString("  ","\n  ","")}""".stripMargin)
-      // Normal case (no unnamed Values)
-      case _ => None.get
-    }
-  }
+  final def withName(s: String): Value = values.byName.getOrElse(s,
+    throw new NoSuchElementException(s"No value found for '$s'"))
 
   /** Creates a fresh value, part of this enumeration. */
   protected final def Value: Value = Value(nextId)
@@ -207,6 +184,32 @@ abstract class Enumeration (initial: Int) extends Serializable {
    * @return     Fresh value with the provided identifier `i` and name `name`.
    */
   protected final def Value(i: Int, name: String): Value = new Val(i, name)
+
+  private def populateNameMap() {
+    val fields: Array[JField] = getClass.getDeclaredFields
+    def isValDef(m: JMethod): Boolean = fields exists (fd => fd.getName == m.getName && fd.getType == m.getReturnType)
+
+    // The list of possible Value methods: 0-args which return a conforming type
+    val methods: Array[JMethod] = getClass.getMethods filter (m => m.getParameterTypes.isEmpty &&
+                                                                   classOf[Value].isAssignableFrom(m.getReturnType) &&
+                                                                   m.getDeclaringClass != classOf[Enumeration] &&
+                                                                   isValDef(m))
+    methods foreach { m =>
+      val name = m.getName
+      // invoke method to obtain actual `Value` instance
+      val value = m.invoke(this).asInstanceOf[Value]
+      // verify that outer points to the correct Enumeration: ticket #3616.
+      if (value.outerEnum eq thisenum) {
+        val id: Int = value.id
+        nmap += ((id, name))
+      }
+    }
+  }
+
+  /* Obtains the name for the value with id `i`. If no name is cached
+   * in `nmap`, it populates `nmap` using reflection.
+   */
+  private def nameOf(i: Int): String = synchronized { nmap.getOrElse(i, { populateNameMap() ; nmap(i) }) }
 
   /** The type of the enumerated values. */
   @SerialVersionUID(7091335633555234129L)
@@ -249,8 +252,8 @@ abstract class Enumeration (initial: Int) extends Serializable {
     def id = i
     override def toString() =
       if (name != null) name
-      // Scala.js specific
-      else s"<Unknown name for enum field #$i of class ${getClass}>"
+      else try thisenum.nameOf(i)
+      catch { case _: NoSuchElementException => "<Invalid enum: no field for #" + i + ">" }
 
     protected def readResolve(): AnyRef = {
       val enum = thisenum.readResolve().asInstanceOf[Enumeration]
@@ -291,6 +294,7 @@ abstract class Enumeration (initial: Int) extends Serializable {
     /** Creates a bit mask for the zero-adjusted ids in this set as a
      *  new array of longs */
     def toBitMask: Array[Long] = nnIds.toBitMask
+    private[Enumeration] lazy val byName: Map[String, Value] = iterator.map( v => v.toString -> v).toMap
   }
 
   /** A factory object for value sets */

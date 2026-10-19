@@ -14,6 +14,7 @@ package scala
 package reflect
 
 import java.lang.{ Class => jClass }
+import java.lang.ref.{WeakReference => jWeakReference}
 
 import scala.collection.mutable
 import scala.runtime.BoxedUnit
@@ -50,19 +51,12 @@ import scala.runtime.BoxedUnit
 @scala.annotation.implicitNotFound(msg = "No ClassTag available for ${T}")
 trait ClassTag[T] extends ClassManifestDeprecatedApis[T] with Equals with Serializable {
 
-  /* Scala.js deviation: emptyArray and emptyWrappedArray are
-   * `@transient lazy val`s on the JVM, but we make them `def`s. On the JVM,
-   * instances of `ClassTag` are cached, so that makes sense. On JS, however,
-   * `ClassTag`s are usually stack-allocated instead, hence the lazy vals
-   * contribute more useless code than actual caching. `def`s are more
-   * appropriate.
-   */
-  private[scala] def emptyArray: Array[T] = {
+  @transient private[scala] lazy val emptyArray       : Array[T]                = {
     val componentType =
       if (runtimeClass eq java.lang.Void.TYPE) classOf[BoxedUnit] else runtimeClass
     java.lang.reflect.Array.newInstance(componentType, 0).asInstanceOf[Array[T]]
   }
-  private[scala] def emptyWrappedArray: mutable.WrappedArray[T] =
+  @transient private[scala] lazy val emptyWrappedArray: mutable.WrappedArray[T] =
     mutable.WrappedArray.make[T](emptyArray)
 
   // please, don't add any APIs here, like it was with `newWrappedArray` and `newArrayBuilder`
@@ -123,51 +117,74 @@ trait ClassTag[T] extends ClassManifestDeprecatedApis[T] with Equals with Serial
  * Class tags corresponding to primitive types and constructor/extractor for ClassTags.
  */
 object ClassTag {
-  val Byte    : ClassTag[scala.Byte]       = ManifestFactory.Byte
-  val Short   : ClassTag[scala.Short]      = ManifestFactory.Short
-  val Char    : ClassTag[scala.Char]       = ManifestFactory.Char
-  val Int     : ClassTag[scala.Int]        = ManifestFactory.Int
-  val Long    : ClassTag[scala.Long]       = ManifestFactory.Long
-  val Float   : ClassTag[scala.Float]      = ManifestFactory.Float
-  val Double  : ClassTag[scala.Double]     = ManifestFactory.Double
-  val Boolean : ClassTag[scala.Boolean]    = ManifestFactory.Boolean
-  val Unit    : ClassTag[scala.Unit]       = ManifestFactory.Unit
-  val Any     : ClassTag[scala.Any]        = ManifestFactory.Any
-  val Object  : ClassTag[java.lang.Object] = ManifestFactory.Object
-  val AnyVal  : ClassTag[scala.AnyVal]     = ManifestFactory.AnyVal
-  val AnyRef  : ClassTag[scala.AnyRef]     = ManifestFactory.AnyRef
-  val Nothing : ClassTag[scala.Nothing]    = ManifestFactory.Nothing
-  val Null    : ClassTag[scala.Null]       = ManifestFactory.Null
+  private val ObjectTYPE = classOf[java.lang.Object]
+  private val NothingTYPE = classOf[scala.runtime.Nothing$]
+  private val NullTYPE = classOf[scala.runtime.Null$]
 
-  @inline
-  @SerialVersionUID(1L)
-  private class GenericClassTag[T](val runtimeClass: jClass[_]) extends ClassTag[T] {
-    override def newArray(len: Int): Array[T] = {
-      java.lang.reflect.Array.newInstance(runtimeClass, len).asInstanceOf[Array[T]]
+  val Byte    : ClassTag[scala.Byte]       = Manifest.Byte
+  val Short   : ClassTag[scala.Short]      = Manifest.Short
+  val Char    : ClassTag[scala.Char]       = Manifest.Char
+  val Int     : ClassTag[scala.Int]        = Manifest.Int
+  val Long    : ClassTag[scala.Long]       = Manifest.Long
+  val Float   : ClassTag[scala.Float]      = Manifest.Float
+  val Double  : ClassTag[scala.Double]     = Manifest.Double
+  val Boolean : ClassTag[scala.Boolean]    = Manifest.Boolean
+  val Unit    : ClassTag[scala.Unit]       = Manifest.Unit
+  val Any     : ClassTag[scala.Any]        = Manifest.Any
+  val Object  : ClassTag[java.lang.Object] = Manifest.Object
+  val AnyVal  : ClassTag[scala.AnyVal]     = Manifest.AnyVal
+  val AnyRef  : ClassTag[scala.AnyRef]     = Manifest.AnyRef
+  val Nothing : ClassTag[scala.Nothing]    = Manifest.Nothing
+  val Null    : ClassTag[scala.Null]       = Manifest.Null
+
+  private val cacheDisabled = java.lang.Boolean.getBoolean("scala.reflect.classtag.cache.disable")
+  private[this] object cache extends ClassValue[jWeakReference[ClassTag[_]]] {
+    override def computeValue(runtimeClass: jClass[_]): jWeakReference[ClassTag[_]] =
+      new jWeakReference(computeTag(runtimeClass))
+
+    def computeTag(runtimeClass: jClass[_]): ClassTag[_] =
+      runtimeClass match {
+        case x if x.isPrimitive => primitiveClassTag(runtimeClass)
+        case ObjectTYPE         => ClassTag.Object
+        case NothingTYPE        => ClassTag.Nothing
+        case NullTYPE           => ClassTag.Null
+        case _                  => new GenericClassTag[AnyRef](runtimeClass)
+     }
+
+    private def primitiveClassTag[T](runtimeClass: Class[_]): ClassTag[_] = runtimeClass match {
+      case java.lang.Byte.TYPE      => ClassTag.Byte
+      case java.lang.Short.TYPE     => ClassTag.Short
+      case java.lang.Character.TYPE => ClassTag.Char
+      case java.lang.Integer.TYPE   => ClassTag.Int
+      case java.lang.Long.TYPE      => ClassTag.Long
+      case java.lang.Float.TYPE     => ClassTag.Float
+      case java.lang.Double.TYPE    => ClassTag.Double
+      case java.lang.Boolean.TYPE   => ClassTag.Boolean
+      case java.lang.Void.TYPE      => ClassTag.Unit
     }
   }
 
-  def apply[T](runtimeClass1: jClass[_]): ClassTag[T] =
-    runtimeClass1 match {
-      case java.lang.Byte.TYPE      => ClassTag.Byte.asInstanceOf[ClassTag[T]]
-      case java.lang.Short.TYPE     => ClassTag.Short.asInstanceOf[ClassTag[T]]
-      case java.lang.Character.TYPE => ClassTag.Char.asInstanceOf[ClassTag[T]]
-      case java.lang.Integer.TYPE   => ClassTag.Int.asInstanceOf[ClassTag[T]]
-      case java.lang.Long.TYPE      => ClassTag.Long.asInstanceOf[ClassTag[T]]
-      case java.lang.Float.TYPE     => ClassTag.Float.asInstanceOf[ClassTag[T]]
-      case java.lang.Double.TYPE    => ClassTag.Double.asInstanceOf[ClassTag[T]]
-      case java.lang.Boolean.TYPE   => ClassTag.Boolean.asInstanceOf[ClassTag[T]]
-      case java.lang.Void.TYPE      => ClassTag.Unit.asInstanceOf[ClassTag[T]]
-      case _                        =>
-        if (classOf[java.lang.Object] == runtimeClass1)
-          ClassTag.Object.asInstanceOf[ClassTag[T]]
-        else if (classOf[scala.runtime.Nothing$] == runtimeClass1)
-          ClassTag.Nothing.asInstanceOf[ClassTag[T]]
-        else if (classOf[scala.runtime.Null$] == runtimeClass1)
-          ClassTag.Null.asInstanceOf[ClassTag[T]]
-        else
-          new GenericClassTag[T](runtimeClass1)
+  @SerialVersionUID(1L)
+  private class GenericClassTag[T](val runtimeClass: jClass[_]) extends ClassTag[T] {
+    override def newArray(len: Int): Array[T] = {
+      if (len == 0) emptyArray
+      else java.lang.reflect.Array.newInstance(runtimeClass, len).asInstanceOf[Array[T]]
     }
+  }
+
+  def apply[T](runtimeClass1: jClass[_]): ClassTag[T] = {
+    if (cacheDisabled) {
+      cache.computeTag(runtimeClass1).asInstanceOf[ClassTag[T]]
+    } else {
+      val ref = cache.get(runtimeClass1).asInstanceOf[jWeakReference[ClassTag[T]]]
+      var tag = ref.get
+      if (tag == null) {
+        cache.remove(runtimeClass1)
+        tag = cache.computeTag(runtimeClass1).asInstanceOf[ClassTag[T]]
+      }
+      tag
+    }
+  }
 
   def unapply[T](ctag: ClassTag[T]): Option[Class[_]] = Some(ctag.runtimeClass)
 }
