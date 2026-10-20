@@ -12,6 +12,9 @@
 
 package scala
 
+import scala.scalajs.js
+import scala.scalajs.LinkingInfo._
+
 /** This class provides a simple way to get unique objects for equal strings.
  *  Since symbols are interned, they can be compared using reference equality.
  */
@@ -26,14 +29,48 @@ final class Symbol private (val name: String) extends Serializable {
   override def equals(other: Any) = this eq other.asInstanceOf[AnyRef]
 }
 
-object Symbol extends UniquenessCache[String, Symbol] {
+// Modified to use Scala.js specific cache
+object Symbol extends JSUniquenessCache[Symbol] {
   override def apply(name: String): Symbol = super.apply(name)
   protected def valueFromKey(name: String): Symbol = new Symbol(name)
   protected def keyFromValue(sym: Symbol): Option[String] = Some(sym.name)
 }
 
+private[scala] abstract class JSUniquenessCache[V]
+{
+  private val cacheJS: js.Dictionary[V] = {
+    linkTimeIf(moduleKind != ModuleKind.WasmModule) {
+      js.Dictionary.empty[V]
+    } {
+      null
+    }
+  }
+
+  private val cacheWasm: java.util.HashMap[String, V] = {
+    linkTimeIf(moduleKind == ModuleKind.WasmModule) {
+      new java.util.HashMap[String, V]()
+    } {
+      null
+    }
+  }
+
+  protected def valueFromKey(k: String): V
+  protected def keyFromValue(v: V): Option[String]
+
+  def apply(name: String): V = {
+    linkTimeIf(moduleKind == ModuleKind.WasmModule) {
+      cacheWasm.computeIfAbsent(name, valueFromKey(_))
+    } {
+      cacheJS.getOrElseUpdate(name, valueFromKey(name))
+    }
+  }
+
+  def unapply(other: V): Option[String] = keyFromValue(other)
+}
+
 /** This is private so it won't appear in the library API, but
   * abstracted to offer some hope of reusability.  */
+/* DELETED for Scala.js
 private[scala] abstract class UniquenessCache[K, V >: Null] {
   import java.lang.ref.WeakReference
   import java.util.WeakHashMap
@@ -82,3 +119,4 @@ private[scala] abstract class UniquenessCache[K, V >: Null] {
   }
   def unapply(other: V): Option[K] = keyFromValue(other)
 }
+*/

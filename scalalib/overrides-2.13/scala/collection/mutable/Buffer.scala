@@ -15,6 +15,10 @@ package mutable
 
 import scala.annotation.nowarn
 
+import scala.scalajs.js
+import scala.scalajs.LinkingInfo
+import scala.scalajs.LinkingInfo.linkTimeIf
+
 
 /** A `Buffer` is a growable and shrinkable `Seq`.
  *
@@ -112,7 +116,7 @@ trait Buffer[A]
   @throws[IndexOutOfBoundsException]
   @throws[IllegalArgumentException]
   def remove(idx: Int, count: Int): Unit
-  
+
   /** Removes a single element from this buffer, at its first occurrence.
     *  If the buffer does not contain that element, it is unchanged.
     *
@@ -309,10 +313,22 @@ trait IndexedBuffer[A] extends IndexedSeq[A]
 }
 
 @SerialVersionUID(3L)
-object Buffer extends SeqFactory.Delegate[Buffer](ArrayBuffer)
+object Buffer extends SeqFactory.Delegate[Buffer](
+  linkTimeIf[SeqFactory[Buffer]](LinkingInfo.isWebAssembly) {
+    ArrayBuffer
+  } {
+    js.WrappedArray
+  }
+)
 
 @SerialVersionUID(3L)
-object IndexedBuffer extends SeqFactory.Delegate[IndexedBuffer](ArrayBuffer)
+object IndexedBuffer extends SeqFactory.Delegate[IndexedBuffer](
+  linkTimeIf[SeqFactory[IndexedBuffer]](LinkingInfo.isWebAssembly) {
+    ArrayBuffer
+  } {
+    js.WrappedArray
+  }
+)
 
 /** Explicit instantiation of the `Buffer` trait to reduce class file size in subclasses. */
 abstract class AbstractBuffer[A] extends AbstractSeq[A] with Buffer[A]

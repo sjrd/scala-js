@@ -16,6 +16,10 @@ package mutable
 
 import generic._
 
+import scala.scalajs.js
+import scala.scalajs.LinkingInfo
+import scala.scalajs.LinkingInfo.linkTimeIf
+
 /** Buffers are used to create sequences of elements incrementally by
  *  appending, prepending, or inserting new elements. It is also
  *  possible to access and modify elements in a random access fashion
@@ -43,7 +47,14 @@ trait Buffer[A] extends Seq[A]
  */
 object Buffer extends SeqFactory[Buffer] {
   implicit def canBuildFrom[A]: CanBuildFrom[Coll, A, Buffer[A]] = ReusableCBF.asInstanceOf[GenericCanBuildFrom[A]]
-  def newBuilder[A]: Builder[A, Buffer[A]] = new ArrayBuffer
+
+  def newBuilder[A]: Builder[A, Buffer[A]] = {
+    linkTimeIf[Builder[A, Buffer[A]]](LinkingInfo.isWebAssembly) {
+      new ArrayBuffer
+    } {
+      new js.WrappedArray[A]
+    }
+  }
 }
 
 /** Explicit instantiation of the `Buffer` trait to reduce class file size in subclasses. */

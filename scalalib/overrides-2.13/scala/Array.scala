@@ -33,15 +33,27 @@ import scala.runtime.ScalaRunTime.{array_apply, array_update}
  *  `Array(1, 2)`, `Array(0, 0)` and `Array(1, 2, 0, 0)`.
  */
 object Array {
-  val emptyBooleanArray = new Array[Boolean](0)
-  val emptyByteArray    = new Array[Byte](0)
-  val emptyCharArray    = new Array[Char](0)
-  val emptyDoubleArray  = new Array[Double](0)
-  val emptyFloatArray   = new Array[Float](0)
-  val emptyIntArray     = new Array[Int](0)
-  val emptyLongArray    = new Array[Long](0)
-  val emptyShortArray   = new Array[Short](0)
-  val emptyObjectArray  = new Array[Object](0)
+  def emptyBooleanArray = EmptyArrays.emptyBooleanArray
+  def emptyByteArray    = EmptyArrays.emptyByteArray
+  def emptyCharArray    = EmptyArrays.emptyCharArray
+  def emptyDoubleArray  = EmptyArrays.emptyDoubleArray
+  def emptyFloatArray   = EmptyArrays.emptyFloatArray
+  def emptyIntArray     = EmptyArrays.emptyIntArray
+  def emptyLongArray    = EmptyArrays.emptyLongArray
+  def emptyShortArray   = EmptyArrays.emptyShortArray
+  def emptyObjectArray  = EmptyArrays.emptyObjectArray
+
+  private object EmptyArrays {
+    val emptyBooleanArray = new Array[Boolean](0)
+    val emptyByteArray    = new Array[Byte](0)
+    val emptyCharArray    = new Array[Char](0)
+    val emptyDoubleArray  = new Array[Double](0)
+    val emptyFloatArray   = new Array[Float](0)
+    val emptyIntArray     = new Array[Int](0)
+    val emptyLongArray    = new Array[Long](0)
+    val emptyShortArray   = new Array[Short](0)
+    val emptyObjectArray  = new Array[Object](0)
+  }
 
   /** Provides an implicit conversion from the Array object to a collection Factory. */
   implicit def toFactory[A : ClassTag](dummy: Array.type): Factory[A, Array[A]] = new ArrayFactory(dummy)
@@ -54,7 +66,7 @@ object Array {
   /**
    * Returns a new [[scala.collection.mutable.ArrayBuilder]].
    */
-  def newBuilder[T](implicit t: ClassTag[T]): ArrayBuilder[T] = ArrayBuilder.make[T](using t)
+  def newBuilder[T](implicit t: ClassTag[T]): ArrayBuilder[T] = ArrayBuilder.make[T](t)
 
   /** Builds an array from the iterable collection.
    *

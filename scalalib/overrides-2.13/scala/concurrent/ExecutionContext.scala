@@ -39,7 +39,7 @@ import scala.annotation.implicitNotFound
  * `scala.concurrent.ExecutionContext.Implicits.global`.
  * The recommended approach is to add `(implicit ec: ExecutionContext)` to methods,
  * or class constructor parameters, which need an `ExecutionContext`.
- * 
+ *
  * Then locally import a specific `ExecutionContext` in one place for the entire
  * application or module, passing it implicitly to individual methods.
  * Alternatively define a local implicit val with the required `ExecutionContext`.
@@ -197,7 +197,8 @@ object ExecutionContext {
    *
    * @return the global [[ExecutionContext]]
    */
-  final lazy val global: ExecutionContextExecutor = impl.ExecutionContextImpl.fromExecutor(null: Executor)
+  final lazy val global: ExecutionContextExecutor =
+    scala.scalajs.concurrent.JSExecutionContext.queue
 
   /**
    * WARNING: Only ever execute logic which will quickly return control to the caller.
@@ -212,7 +213,7 @@ object ExecutionContext {
    *
    * Do *not* call any blocking code in the `Runnable`s submitted to this `ExecutionContext`
    * as it will prevent progress by other enqueued `Runnable`s and the calling `Thread`.
-   * 
+   *
    * Symptoms of misuse of this `ExecutionContext` include, but are not limited to, deadlocks
    * and severe performance problems.
    *
@@ -221,7 +222,25 @@ object ExecutionContext {
   object parasitic extends ExecutionContextExecutor with BatchingExecutor {
     override final def submitForExecution(runnable: Runnable): Unit = runnable.run()
     override final def execute(runnable: Runnable): Unit = submitSyncBatched(runnable)
-    override final def reportFailure(t: Throwable): Unit = defaultReporter(t)
+
+    override final def reportFailure(t: Throwable): Unit = {
+      import scala.scalajs.LinkingInfo.{linkTimeIf, moduleKind, ModuleKind}
+      linkTimeIf(moduleKind == ModuleKind.WasmModule) {
+        /* !!! Hard failure instead of reporting. This should not happen. The
+         * parasitic execution context should only be used for transformation
+         * tasks, which will carry the errors rather than reporting them.
+         * In a WasmModule, we cannot using Throwable.printStackTrace(), so
+         * this is the only recourse if something goes horribly wrong.
+         *
+         * Another approach would be to ignore the failure alltogether. That
+         * would be functionally closer to printing to stderr, but seems less
+         * prudent.
+         */
+        throw new Error("Unexpected call to parasitic.reportFailure", t)
+      } {
+        defaultReporter(t)
+      }
+    }
   }
 
   /**

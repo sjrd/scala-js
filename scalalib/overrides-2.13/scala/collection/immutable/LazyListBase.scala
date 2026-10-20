@@ -12,16 +12,8 @@
 
 package scala.collection.immutable
 
-import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
-import java.util.concurrent.locks.AbstractQueuedSynchronizer
-
 /**
- * Base class for [[LazyList]] to split out code that uses concurrency utilities that are not available
- * on Scala.js. This way, Scala.js does not need to override all of LazyList.
- *
- * This class cannot be a trait because `AtomicReferenceFieldUpdater.newUpdater` checks if the caller
- * class has access to the corresponding field. So it needs to be called in the class where the field is
- * declared (fields are always private in Scala).
+ * Base class for [[LazyList]] to split out code that uses concurrency utilities that are not available on Scala.js.
  */
 abstract class LazyListBase[+A] private[immutable] (initialTail: AnyRef) extends AbstractSeq[A] with Serializable {
   /** See [[LazyList._head]] for the possible states of this field. */
@@ -31,31 +23,30 @@ abstract class LazyListBase[+A] private[immutable] (initialTail: AnyRef) extends
 
   private[immutable] def setRawTail(value: AnyRef): Unit = _tail = value
 
-  @noinline private[immutable] def makeTailUpdater: LazyListBase.TailUpdater =
-    new LazyListBase.TailUpdater(AtomicReferenceFieldUpdater.newUpdater(classOf[LazyListBase[_]], classOf[AnyRef], "_tail"))
+  @noinline private[immutable] def makeTailUpdater: LazyListBase.TailUpdater = new LazyListBase.TailUpdater()
 }
 
 private[immutable] object LazyListBase {
-  final class TailUpdater(u: AtomicReferenceFieldUpdater[LazyListBase[_], AnyRef]) {
-    def compareAndSet(ll: LazyListBase[_], expected: AnyRef, value: AnyRef): Boolean = u.compareAndSet(ll, expected, value)
-    def getAndSet(ll: LazyListBase[_], value: AnyRef): AnyRef = u.getAndSet(ll, value)
+  final class TailUpdater {
+    @inline def compareAndSet(ll: LazyListBase[_], expected: AnyRef, value: AnyRef): Boolean =
+      if (ll._tail eq expected) { ll._tail = value; true } else false
+
+    @inline def getAndSet(ll: LazyListBase[_], value: AnyRef): AnyRef = {
+      val old = ll._tail
+      ll._tail = value
+      old
+    }
   }
 
-  // this utility is constant `true` on Scala.js -> enables DCE in LazyList
-  def isCurrentThread(t: Thread) = t eq Thread.currentThread
-  // also for Scala.js
-  def InRace(t: Thread) = new InRace(t)
+  def isCurrentThread(t: Thread): Boolean = true
 
-  final class InRace private[LazyListBase] (val owner: Thread) {
-    // Implements a one-time latch
-    final private class Sync extends AbstractQueuedSynchronizer {
-      override def tryAcquireShared(unused: Int): Int = if (getState == 0) -1 else 1
-      override def tryReleaseShared(unused: Int): Boolean = getState == 0 && compareAndSetState(0, 1)
-    }
+  def InRace(t: Thread): InRace = throw new Exception("unreachable")
 
-    private val sync = new Sync()
+  final class InRace private[LazyListBase] () {
+    throw new Exception("unreachable")
 
-    def await(): Unit = sync.acquireShared(0)
-    def countDown(): Unit = sync.releaseShared(0)
+    def owner: Thread = throw new Exception("unreachable")
+    def await(): Unit = ()
+    def countDown(): Unit = ()
   }
 }
