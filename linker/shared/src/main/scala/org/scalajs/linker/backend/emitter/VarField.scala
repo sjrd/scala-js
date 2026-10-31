@@ -149,6 +149,9 @@ private[emitter] object VarField {
   /** The alias to file level `this` in the generated JS file. */
   final val fileLevelThis = mk("$fileLevelThis")
 
+  /** The wasmSupport module exports object. */
+  final val wasmSupport = mk("$wasmSupport")
+
   /** The TypeData class. */
   final val TypeData = mk("$TypeData")
 

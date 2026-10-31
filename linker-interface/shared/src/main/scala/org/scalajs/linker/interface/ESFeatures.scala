@@ -45,6 +45,7 @@ final class ESFeatures private (
      */
     _esVersion: ESVersion,
     _useWebAssembly: Boolean,
+    _wasmSupport: Boolean,
     _allowBigIntsForLongs: Boolean,
     _avoidClasses: Boolean,
     _avoidLetsAndsConsts: Boolean
@@ -55,6 +56,7 @@ final class ESFeatures private (
     this(
       _esVersion = ESVersion.ES2015,
       _useWebAssembly = false,
+      _wasmSupport = false,
       _allowBigIntsForLongs = false,
       _avoidClasses = true,
       _avoidLetsAndsConsts = true
@@ -95,6 +97,22 @@ final class ESFeatures private (
    *    All other language features are supported.
    */
   val useWebAssembly: Boolean = _useWebAssembly
+
+  /** Whether to assume that the target runtime supports WebAssembly.
+   *
+   *  This does not affect the overall compilation strategy, nor any observable
+   *  behavior. If true, the linker may rely on Wasm for targeted optimizations.
+   *
+   *  Unlike `useWebAssembly`, which has performance trade-offs, `wasmSupport`
+   *  is supposed to only apply optimizations that are always beneficial on the
+   *  major JS engines.
+   *
+   *  This option has no effect if `useWebAssembly` is true.
+   *
+   *  Currently, this has no effect unless `esVersion >= ESVersion.ES2022`
+   *  _and_ the module kind is `ESModule`.
+   */
+  val wasmSupport: Boolean = _wasmSupport
 
   /** Use the ECMAScript 2015 semantics of Scala.js language features.
    *
@@ -211,6 +229,9 @@ final class ESFeatures private (
   def withUseWebAssembly(useWebAssembly: Boolean): ESFeatures =
     copy(useWebAssembly = useWebAssembly)
 
+  def withWasmSupport(wasmSupport: Boolean): ESFeatures =
+    copy(wasmSupport = wasmSupport)
+
   /** Specifies whether the linker should use ECMAScript 2015 features.
    *
    *  If `false`, this method sets the `esVersion` to `ESVersion.ES5_1`.
@@ -239,6 +260,7 @@ final class ESFeatures private (
     case that: ESFeatures =>
       this.esVersion == that.esVersion &&
       this.useWebAssembly == that.useWebAssembly &&
+      this.wasmSupport == that.wasmSupport &&
       this.allowBigIntsForLongs == that.allowBigIntsForLongs &&
       this.avoidClasses == that.avoidClasses &&
       this.avoidLetsAndConsts == that.avoidLetsAndConsts
@@ -251,16 +273,18 @@ final class ESFeatures private (
     var acc = HashSeed
     acc = mix(acc, esVersion.##)
     acc = mix(acc, useWebAssembly.##)
+    acc = mix(acc, wasmSupport.##)
     acc = mix(acc, allowBigIntsForLongs.##)
     acc = mix(acc, avoidClasses.##)
     acc = mixLast(acc, avoidLetsAndConsts.##)
-    finalizeHash(acc, 5)
+    finalizeHash(acc, 6)
   }
 
   override def toString(): String = {
     s"""ESFeatures(
        |  esVersion = $esVersion,
        |  useWebAssembly = $useWebAssembly,
+       |  wasmSupport = $wasmSupport,
        |  useECMAScript2015Semantics = $useECMAScript2015Semantics,
        |  allowBigIntsForLongs = $allowBigIntsForLongs,
        |  avoidClasses = $avoidClasses,
@@ -271,6 +295,7 @@ final class ESFeatures private (
   private def copy(
       esVersion: ESVersion = this.esVersion,
       useWebAssembly: Boolean = this.useWebAssembly,
+      wasmSupport: Boolean = this.wasmSupport,
       allowBigIntsForLongs: Boolean = this.allowBigIntsForLongs,
       avoidClasses: Boolean = this.avoidClasses,
       avoidLetsAndConsts: Boolean = this.avoidLetsAndConsts
@@ -278,6 +303,7 @@ final class ESFeatures private (
     new ESFeatures(
       _esVersion = esVersion,
       _useWebAssembly = useWebAssembly,
+      _wasmSupport = wasmSupport,
       _allowBigIntsForLongs = allowBigIntsForLongs,
       _avoidClasses = avoidClasses,
       _avoidLetsAndsConsts = avoidLetsAndConsts
@@ -293,6 +319,7 @@ object ESFeatures {
    *
    *  - `esVersion`: `ESVersion.ES2015`
    *  - `useWebAssembly`: false
+   *  - `wasmSupport`: false
    *  - `useECMAScript2015Semantics`: true
    *  - `allowBigIntsForLongs`: false
    *  - `avoidClasses`: true
@@ -306,6 +333,7 @@ object ESFeatures {
       new FingerprintBuilder("ESFeatures")
         .addField("esVersion", esFeatures.esVersion)
         .addField("useWebAssembly", esFeatures.useWebAssembly)
+        .addField("wasmSupport", esFeatures.wasmSupport)
         .addField("allowBigIntsForLongs", esFeatures.allowBigIntsForLongs)
         .addField("avoidClasses", esFeatures.avoidClasses)
         .addField("avoidLetsAndConsts", esFeatures.avoidLetsAndConsts)

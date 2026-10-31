@@ -46,6 +46,12 @@ private[emitter] final class SJSGen(
 
   val useBigIntForLongs = esFeatures.allowBigIntsForLongs
 
+  val useWasmSupport: Boolean = {
+    esFeatures.wasmSupport &&
+    esFeatures.esVersion >= ESVersion.ES2022 &&
+    moduleKind == ModuleKind.ESModule
+  }
+
   /** Core Property Names. */
   object cpn {
     // --- Scala.js objects ---

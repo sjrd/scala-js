@@ -5,12 +5,20 @@
 
 package helloworld
 
+import java.lang.{Float => JFloat}
+
 object HelloWorld {
   def main(args: Array[String]): Unit = {
     // Comment so that scalafmt keeps the braces
 
     println("Hello world!")
+    val x = hide(54.5f)
+    val bits = JFloat.floatToIntBits(x)
+    println(bits)
+    println(JFloat.intBitsToFloat(bits))
   }
+
+  @noinline def hide[A](x: A): A = x
 
   @noinline
   def println(x: Any): Unit = {

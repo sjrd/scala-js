@@ -135,6 +135,7 @@ private[emitter] object CoreJSLib {
       defineCharClass() :::
       defineLongClass() :::
       defineRuntimeFunctions() :::
+      defineWasmSupport() :::
       defineObjectGetClassFunctions() :::
       defineDispatchFunctions() :::
       defineArithmeticOps() :::
@@ -715,6 +716,40 @@ private[emitter] object CoreJSLib {
       )
     )
 
+    private def defineWasmSupport(): List[Tree] = {
+      if (!useWasmSupport) {
+        Nil
+      } else {
+        val wasmSupportDef = {
+          val moduleBytes = WasmSupportLib.moduleBytes
+          val moduleBytesArray = ArrayConstr(moduleBytes.map(IntLiteral(_)).toList)
+          val moduleBuffer = New(Int8ArrayRef, List(moduleBytesArray))
+
+          val instantiateCall = Apply(
+            genIdentBracketSelect(globalRef("WebAssembly"), "instantiate"),
+            List(moduleBuffer)
+          )
+
+          val exportsExpr = genIdentBracketSelect(
+              genIdentBracketSelect(Await(instantiateCall), "instance"),
+              "exports")
+
+          extractWithGlobals(globalVarDef(VarField.wasmSupport, CoreVar, exportsExpr))
+        }
+
+        val wasmSupportVar = globalVar(VarField.wasmSupport, CoreVar)
+
+        def defFromExport(field: VarField, exportName: String): List[Tree] = {
+          extractWithGlobals(globalVarDef(field, CoreVar,
+              genIdentBracketSelect(wasmSupportVar, exportName)))
+        }
+
+        wasmSupportDef :::
+        defFromExport(VarField.floatFromBits, "floatFromBits") :::
+        defFromExport(VarField.floatToBits, "floatToBits")
+      }
+    }
+
     private def defineObjectGetClassFunctions(): List[Tree] = {
       // objectGetClass and objectClassName
 
@@ -943,7 +978,10 @@ private[emitter] object CoreJSLib {
         val dataView = varRef("dataView")
         val dataViewConst = const(dataView, globalVar(VarField.fpBitsDataView, CoreVar))
 
-        if (esVersion >= ESVersion.ES2015) {
+        if (useWasmSupport && (name == VarField.floatFromBits || name == VarField.floatToBits)) {
+          // defined in defineWasmSupport()
+          Nil
+        } else if (esVersion >= ESVersion.ES2015) {
           defineFunction1(name) { x =>
             Block(
               dataViewConst,
