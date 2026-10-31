@@ -314,6 +314,8 @@ private[emitter] object VarField {
   final val floatToBits = mk("$floatToBits")
   final val floatFromBits = mk("$floatFromBits")
   final val doubleToBits = mk("$doubleToBits")
+  final val doubleToBitsLo = mk("$doubleToBitsLo")
+  final val doubleToBitsHi = mk("$doubleToBitsHi")
   final val doubleFromBits = mk("$doubleFromBits")
 
   // Polyfills

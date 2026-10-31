@@ -1242,6 +1242,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
 
               case Transient(ExtractLongHi(longValue)) =>
                 Transient(ExtractLongHi(rec(longValue)))
+              case Transient(WasmSupportDoubleToBits(doubleValue, isHigh)) =>
+                Transient(WasmSupportDoubleToBits(rec(doubleValue), isHigh))
               case Transient(Cast(expr, tpe)) =>
                 Transient(Cast(rec(expr), tpe))
               case Transient(ZeroOf(runtimeClass)) =>
@@ -1503,6 +1505,8 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         // Transients preserving pureness (modulo NPE)
         case Transient(ExtractLongHi(longValue)) =>
           test(longValue)
+        case Transient(WasmSupportDoubleToBits(doubleValue, _)) =>
+          test(doubleValue)
         case Transient(Cast(expr, _)) =>
           test(expr)
         case Transient(ZeroOf(runtimeClass)) =>
@@ -2195,6 +2199,11 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
         case Transient(ExtractLongHi(longValue)) =>
           unnest(longValue) { (newLongValue, env) =>
             redo(Transient(ExtractLongHi(newLongValue)))(env)
+          }
+
+        case Transient(WasmSupportDoubleToBits(doubleValue, isHigh)) =>
+          unnest(doubleValue) { (newDoubleValue, env) =>
+            redo(Transient(WasmSupportDoubleToBits(newDoubleValue, isHigh)))(env)
           }
 
         case Transient(Cast(expr, tpe)) =>
@@ -3443,6 +3452,14 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
             case _ =>
               js.Block(lo, hi)
           }
+
+        case Transient(WasmSupportDoubleToBits(doubleValue, isHigh)) =>
+          assert(useWasmSupport && !useBigIntForLongs, "RuntimeLong with wasmSupport only")
+          val newDoubleValue = transformExprNoChar(doubleValue)
+          if (isHigh)
+            genCallHelper(VarField.doubleToBitsHi, newDoubleValue)
+          else
+            genCallHelper(VarField.doubleToBitsLo, newDoubleValue)
 
         case Transient(Cast(expr, tpe)) =>
           val newExpr = transformExpr(expr, preserveChar = true)

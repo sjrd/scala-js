@@ -747,7 +747,9 @@ private[emitter] object CoreJSLib {
         wasmSupportDef :::
         defFromExport(VarField.floatFromBits, "floatFromBits") :::
         defFromExport(VarField.floatToBits, "floatToBits") :::
-        defFromExport(VarField.doubleFromBits, "doubleFromBits")
+        defFromExport(VarField.doubleFromBits, "doubleFromBits") :::
+        defFromExport(VarField.doubleToBitsLo, "doubleToBitsLo") :::
+        defFromExport(VarField.doubleToBitsHi, "doubleToBitsHi")
       }
     }
 

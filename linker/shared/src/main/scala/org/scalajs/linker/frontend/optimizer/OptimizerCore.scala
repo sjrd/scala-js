@@ -1229,19 +1229,26 @@ private[optimizer] abstract class OptimizerCore(
 
       case Transient(PackLong(lo, hi)) =>
         pretransformExprs(lo, hi) { (tlo, thi) =>
-          val loBinding = Binding.temp(LocalName("lo"), tlo)
-          val hiBinding = Binding.temp(LocalName("hi"), thi)
-          withNewLocalDefs(List(loBinding, hiBinding)) { (localDefs, cont1) =>
-            val List(loLocalDef, hiLocalDef) = localDefs
-            val pairLocalDef = LocalDef(RefinedType(LongType), mutable = false,
-                LongPairReplacement(loLocalDef, hiLocalDef))
-            cont1(pairLocalDef.toPreTransform)
-          }(cont)
+          pretransformPackLong(tlo, thi)(cont)
         }
 
       case _ =>
         cont(transformExpr(tree).toPreTransform)
     }
+  }
+
+  private def pretransformPackLong(tlo: PreTransform, thi: PreTransform)(
+      cont: PreTransCont)(
+      implicit scope: Scope, pos: Position): TailRec[Tree] = {
+
+    val loBinding = Binding.temp(LocalName("lo"), tlo)
+    val hiBinding = Binding.temp(LocalName("hi"), thi)
+    withNewLocalDefs(List(loBinding, hiBinding)) { (localDefs, cont1) =>
+      val List(loLocalDef, hiLocalDef) = localDefs
+      val pairLocalDef = LocalDef(RefinedType(LongType), mutable = false,
+          LongPairReplacement(loLocalDef, hiLocalDef))
+      cont1(pairLocalDef.toPreTransform)
+    }(cont)
   }
 
   private def pretransformBlock(tree: Block)(
@@ -3983,7 +3990,15 @@ private[optimizer] abstract class OptimizerCore(
             expandLongOpSplit1(LongImpl.toFloat, arg)
 
           case Double_toBits =>
-            if (config.coreSpec.esFeatures.esVersion >= ESVersion.ES2015) {
+            if (useWasmSupport) {
+              withNewTempLocalDef(arg) { (argLocalDef, cont1) =>
+                val lo = PreTransTree(Transient(WasmSupportDoubleToBits(
+                    argLocalDef.newReplacement, isHigh = false)))
+                val hi = PreTransTree(Transient(WasmSupportDoubleToBits(
+                    argLocalDef.newReplacement, isHigh = true)))
+                pretransformPackLong(lo, hi)(cont1)
+              }(cont)
+            } else if (config.coreSpec.esFeatures.esVersion >= ESVersion.ES2015) {
               expandLongOp(LongImpl.fromDoubleBits,
                   arg, PreTransTree(Transient(GetFPBitsDataView)))(cont)
             } else {

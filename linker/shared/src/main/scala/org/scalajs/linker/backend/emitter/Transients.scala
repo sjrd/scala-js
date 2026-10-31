@@ -62,6 +62,25 @@ object Transients {
     }
   }
 
+  final case class WasmSupportDoubleToBits(value: Tree, isHigh: Boolean) extends Transient.Value {
+    val tpe = IntType
+
+    def traverse(traverser: Traverser): Unit =
+      traverser.traverse(value)
+
+    def transform(transformer: Transformer)(implicit pos: Position): Tree =
+      Transient(WasmSupportDoubleToBits(transformer.transform(value), isHigh))
+
+    def printIR(out: IRTreePrinter): Unit = {
+      if (isHigh)
+        out.print("<double-to-bits-hi>(")
+      else
+        out.print("<double-to-bits-lo>(")
+      out.print(value)
+      out.print(")")
+    }
+  }
+
   /** Casts `expr` to the given `tpe`, without any check.
    *
    *  `expr.tpe` and `tpe` must be subtypes of `AnyType`.
