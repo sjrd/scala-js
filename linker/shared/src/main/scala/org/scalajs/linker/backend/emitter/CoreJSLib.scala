@@ -746,7 +746,8 @@ private[emitter] object CoreJSLib {
 
         wasmSupportDef :::
         defFromExport(VarField.floatFromBits, "floatFromBits") :::
-        defFromExport(VarField.floatToBits, "floatToBits")
+        defFromExport(VarField.floatToBits, "floatToBits") :::
+        defFromExport(VarField.doubleFromBits, "doubleFromBits")
       }
     }
 
@@ -978,7 +979,7 @@ private[emitter] object CoreJSLib {
         val dataView = varRef("dataView")
         val dataViewConst = const(dataView, globalVar(VarField.fpBitsDataView, CoreVar))
 
-        if (useWasmSupport && (name == VarField.floatFromBits || name == VarField.floatToBits)) {
+        if (useWasmSupport && (name != VarField.doubleToBits)) {
           // defined in defineWasmSupport()
           Nil
         } else if (esVersion >= ESVersion.ES2015) {

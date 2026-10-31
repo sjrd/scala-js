@@ -2961,11 +2961,16 @@ private[emitter] class FunctionEmitter(sjsGen: SJSGen) {
             case Double_toBits =>
               genCallHelper(VarField.doubleToBits, newLhs)
             case Double_fromBits =>
-              /* TODO Ideally we should avoid boxing into a Long pair.
-               * However, when the optimizer is enabled, this only happens when
-               * targeting ES 5.1. It is probably not worth the trouble.
-               */
-              genCallHelper(VarField.doubleFromBits, newLhs)
+              if (useWasmSupport) {
+                val (lo, hi) = transformLongExpr(lhs)
+                genCallHelper(VarField.doubleFromBits, lo, hi)
+              } else {
+                /* TODO Ideally we should avoid boxing into a Long pair.
+                 * However, when the optimizer is enabled, this only happens when
+                 * targeting ES 5.1. It is probably not worth the trouble.
+                 */
+                genCallHelper(VarField.doubleFromBits, newLhs)
+              }
 
             // clz
             case Int_clz =>

@@ -53,6 +53,7 @@ object WasmSupportLib {
     private object funcs {
       val floatToBits = SimpleFunctionID("floatToBits")
       val floatFromBits = SimpleFunctionID("floatFromBits")
+      val doubleFromBits = Builder.SimpleFunctionID("doubleFromBits")
     }
 
     private def newFunctionBuilder(functionID: FunctionID): FunctionBuilder =
@@ -65,7 +66,8 @@ object WasmSupportLib {
 
     private def genFunctions(): Unit = {
       genFloatToBits()
-      genBitsToFloat()
+      genFloatFromBits()
+      genDoubleFromBits()
     }
 
     private def genFloatToBits(): Unit = {
@@ -79,13 +81,31 @@ object WasmSupportLib {
       fb.buildAndAddToModule()
     }
 
-    private def genBitsToFloat(): Unit = {
+    private def genFloatFromBits(): Unit = {
       val fb = newExportedFunctionBuilder(funcs.floatFromBits)
       val x = fb.addParam("x", Int32)
       fb.setResultType(Float32)
 
       fb += LocalGet(x)
       fb += F32ReinterpretI32
+
+      fb.buildAndAddToModule()
+    }
+
+    private def genDoubleFromBits(): Unit = {
+      val fb = newExportedFunctionBuilder(funcs.doubleFromBits)
+      val lo = fb.addParam("lo", Int32)
+      val hi = fb.addParam("hi", Int32)
+      fb.setResultType(Float64)
+
+      fb += LocalGet(lo)
+      fb += I64ExtendI32U
+      fb += LocalGet(hi)
+      fb += I64ExtendI32U
+      fb += I64Const(32L)
+      fb += I64Shl
+      fb += I64Or
+      fb += F64ReinterpretI64
 
       fb.buildAndAddToModule()
     }

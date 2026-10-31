@@ -143,6 +143,14 @@ private[optimizer] abstract class OptimizerCore(
   private val useRuntimeLong =
     !config.coreSpec.esFeatures.allowBigIntsForLongs && !isWasm
 
+  private val useWasmSupport: Boolean = {
+    val esFeatures = config.coreSpec.esFeatures
+
+    esFeatures.wasmSupport &&
+    esFeatures.esVersion >= ESVersion.ES2022 &&
+    config.coreSpec.moduleKind == ModuleKind.ESModule
+  }
+
   private val intrinsics =
     Intrinsics.buildIntrinsics(config.coreSpec)
 
@@ -3983,7 +3991,7 @@ private[optimizer] abstract class OptimizerCore(
             }
 
           case Double_fromBits =>
-            if (config.coreSpec.esFeatures.esVersion >= ESVersion.ES2015) {
+            if (config.coreSpec.esFeatures.esVersion >= ESVersion.ES2015 && !useWasmSupport) {
               expandLongOpSplitLeft(LongImpl.bitsToDouble,
                   arg, PreTransTree(Transient(GetFPBitsDataView)))
             } else {

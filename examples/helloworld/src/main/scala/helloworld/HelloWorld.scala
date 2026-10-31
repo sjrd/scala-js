@@ -5,7 +5,7 @@
 
 package helloworld
 
-import java.lang.{Float => JFloat}
+import java.lang.{Float => JFloat, Double => JDouble}
 
 object HelloWorld {
   def main(args: Array[String]): Unit = {
@@ -16,6 +16,33 @@ object HelloWorld {
     val bits = JFloat.floatToIntBits(x)
     println(bits)
     println(JFloat.intBitsToFloat(bits))
+
+    val y = hide(54.5)
+    val bits2 = JDouble.doubleToLongBits(y)
+    println(bits2)
+    println(JDouble.longBitsToDouble(bits2))
+    bench()
+  }
+
+  @noinline def bench(): Unit = {
+    val rnd = new java.util.SplittableRandom(9049941608525453806L)
+    val xs = Array.fill(32000)(rnd.nextFloat())
+    val out = new Array[Int](xs.length)
+
+    val start = System.nanoTime()
+    for (i <- 0 until 2000) {
+      work(xs, out)
+      if (out(300) != 0)
+        throw new AssertionError("fail: " + out(300))
+    }
+    val end = System.nanoTime()
+    println((end - start) / 1000000L)
+  }
+
+  @noinline def work(xs: Array[Float], out: Array[Int]): Unit = {
+    for (i <- 0 until xs.length)
+      //out(i) = JFloat.floatToIntBits(xs(i) + 1.5f)
+      out(i) = Math.nextUp(xs(i).toDouble).toInt
   }
 
   @noinline def hide[A](x: A): A = x
