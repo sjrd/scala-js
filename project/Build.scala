@@ -36,6 +36,7 @@ import org.scalastyle.sbt.ScalastylePlugin.autoImport.scalastyle
 import Loggers._
 
 import org.scalajs.linker.interface._
+import java.nio.charset.StandardCharsets
 
 /* Things that we want to expose in the sbt command line (and hence also in
  * `ci/matrix.xml`).
@@ -2458,6 +2459,89 @@ object Build {
           "isWebAssembly" -> linkerConfig.esFeatures.useWebAssembly,
           "hasWasmCustomDescriptors" -> linkerConfig.wasmFeatures.experimentalUseCustomDescriptors,
         )
+      },
+
+      /* Fetches the repo https://github.com/ntysdd/core-math-java and extract
+       * its test cases for the methods of java.lang.Math that we implement
+       * for WasmModule
+       */
+      Test / sourceGenerators += Def.task {
+        import org.eclipse.jgit.api._
+
+        val s = streams.value
+        val coreMathJavaDir = target.value / "core-math-java"
+
+        if (!coreMathJavaDir.exists) {
+          s.log.info(s"Fetching core-math-java")
+
+          // Make parent dirs and stuff
+          IO.createDirectory(coreMathJavaDir)
+
+          // Clone scala source code
+          new CloneCommand()
+            .setDirectory(coreMathJavaDir)
+            .setURI("https://github.com/ntysdd/core-math-java.git")
+            .call()
+        }
+
+        // Checkout proper ref. We do this anyway so we fail if something is wrong
+        val git = Git.open(coreMathJavaDir)
+        git.checkout().setName("v0.1.0").call()
+
+        val functionNames = Set(
+          "cbrt",
+          "hypot",
+        )
+
+        val sourceFiles = functionNames.map { f =>
+          coreMathJavaDir / s"src/test/resources/vectors/binary64/$f.txt"
+        }
+
+        // Now generate our sources
+        val testDir = (Test / sourceManaged).value
+        IO.createDirectory(testDir)
+        val targetFile = testDir / "MathFunctionsTestData.scala"
+
+        FileFunction.cached(s.cacheDirectory, FilesInfo.lastModified, FilesInfo.exists) { files =>
+          val vectors: List[(String, Array[Double])] = for {
+            file <- files.toList.sortBy(_.getName())
+          } yield {
+            val functionName = file.getName().stripSuffix(".txt")
+            val vector = IO.read(file, StandardCharsets.UTF_8)
+              .linesIterator
+              .filter(!_.startsWith("#"))
+              .flatMap(_.split(' '))
+              .filter(!_.isEmpty())
+              .map(java.lang.Long.parseUnsignedLong(_, 16))
+              .map(java.lang.Double.longBitsToDouble(_))
+              .toArray
+            (functionName, vector)
+          }
+
+          def doubleToScala(x: Double): String = {
+            if (java.lang.Double.isNaN(x)) "Double.NaN"
+            else if (x == Double.PositiveInfinity) "Double.PositiveInfinity"
+            else if (x == Double.NegativeInfinity) "Double.NegativeInfinity"
+            else java.lang.Double.toString(x)
+          }
+
+          val outputBuilder = new java.lang.StringBuilder()
+          outputBuilder.append("package org.scalajs.testsuite.javalib.lang\n")
+          outputBuilder.append("object MathFunctionsTestData {\n")
+          for ((functionName, vector) <- vectors) {
+            outputBuilder.append(s"  def $functionName(): Array[Double] = Array(\n")
+            for (x <- vector)
+              outputBuilder.append(s"    ${doubleToScala(x)},\n")
+            outputBuilder.append(s"  )\n")
+          }
+          outputBuilder.append("}\n")
+
+          IO.write(targetFile, outputBuilder.toString(), StandardCharsets.UTF_8)
+
+          Set(targetFile)
+        } (sourceFiles)
+
+        Seq(targetFile)
       },
 
       /* Generate a scala source file that throws exceptions in
